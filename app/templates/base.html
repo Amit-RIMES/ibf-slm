@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}IBF App{% endblock %}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f4f6f9; color: #1a1a2e; min-height: 100vh; }
+    a { color: #4f46e5; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      padding: 2rem;
+    }
+    .btn {
+      display: inline-block;
+      padding: .6rem 1.4rem;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: .95rem;
+      font-weight: 600;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-primary { background: #4f46e5; color: #fff; width: 100%; }
+    .form-group { margin-bottom: 1.2rem; }
+    .form-group label { display: block; margin-bottom: .4rem; font-size: .875rem; font-weight: 500; color: #555; }
+    .form-group input {
+      width: 100%; padding: .6rem .85rem; border: 1px solid #d1d5db;
+      border-radius: 8px; font-size: .95rem; outline: none; transition: border-color .15s;
+    }
+    .form-group input:focus { border-color: #4f46e5; }
+    .error { color: #dc2626; font-size: .875rem; margin-bottom: 1rem; background: #fef2f2; padding: .6rem .85rem; border-radius: 8px; }
+  </style>
+  {% block extra_styles %}{% endblock %}
+</head>
+<body>
+  {% block body %}{% endblock %}
+</body>
+</html>

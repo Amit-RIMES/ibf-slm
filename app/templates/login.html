@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Login — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  .auth-wrapper { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1rem; }
+  .auth-card { width: 100%; max-width: 420px; }
+  .auth-card h1 { font-size: 1.6rem; margin-bottom: .4rem; }
+  .auth-card p { color: #6b7280; margin-bottom: 1.6rem; font-size: .9rem; }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="auth-wrapper">
+  <div class="card auth-card">
+    <h1>Welcome back</h1>
+    <p>Sign in to your account</p>
+
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/login">
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" placeholder="you@example.com" required />
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required />
+      </div>
+      <button type="submit" class="btn btn-primary">Sign in</button>
+    </form>
+
+    <p style="margin-top:1.2rem; text-align:center; font-size:.875rem; color:#6b7280;">
+      No account? <a href="/register">Register</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

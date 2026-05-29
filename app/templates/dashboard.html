@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .user-info { display: flex; align-items: center; gap: 1rem; font-size: .875rem; color: #6b7280; }
+  nav .user-info a { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+  .greeting { font-size: 1.5rem; font-weight: 700; margin-bottom: .4rem; }
+  .sub { color: #6b7280; margin-bottom: 2rem; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .stat-card { background: #fff; border-radius: 12px; padding: 1.4rem 1.6rem; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+  .stat-label { font-size: .78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; margin-bottom: .4rem; }
+  .stat-value { font-size: 2rem; font-weight: 700; color: #1a1a2e; }
+
+  .section-title { font-size: 1rem; font-weight: 700; margin-bottom: 1rem; }
+  .profile-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  .profile-table td { padding: .65rem .5rem; border-bottom: 1px solid #f3f4f6; }
+  .profile-table td:first-child { color: #6b7280; width: 140px; font-weight: 500; }
+  .badge { display: inline-block; padding: .2rem .65rem; border-radius: 999px; font-size: .75rem; font-weight: 600; }
+  .badge-green { background: #dcfce7; color: #16a34a; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="user-info">
+    <span>{{ user.username }}</span>
+    <a href="/logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="greeting">Hello, {{ user.username }} 👋</div>
+  <div class="sub">Here's what's going on today.</div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Total Users</div>
+      <div class="stat-value">{{ stats.total_users }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Member Since</div>
+      <div class="stat-value" style="font-size:1.1rem; padding-top:.5rem;">{{ stats.member_since }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Account Status</div>
+      <div class="stat-value" style="font-size:1.1rem; padding-top:.5rem;">
+        <span class="badge badge-green">Active</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Profile</div>
+    <table class="profile-table">
+      <tr><td>Username</td><td>{{ user.username }}</td></tr>
+      <tr><td>Email</td><td>{{ user.email }}</td></tr>
+      <tr><td>User ID</td><td>#{{ user.id }}</td></tr>
+      <tr><td>Member Since</td><td>{{ stats.member_since }}</td></tr>
+      <tr><td>Status</td><td><span class="badge badge-green">Active</span></td></tr>
+    </table>
+  </div>
+</div>
+{% endblock %}
