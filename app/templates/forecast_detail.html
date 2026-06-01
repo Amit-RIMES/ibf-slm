@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Forecast #{{ forecast.id }} — IBF App{% endblock %}
+
+{% block extra_styles %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  nav {
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+  .page-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: .5rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; }
+  .meta { font-size: .85rem; color: #9ca3af; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+  @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .section-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; margin-bottom: 1rem; }
+
+  .stat-row { display: flex; justify-content: space-between; padding: .55rem 0; border-bottom: 1px solid #f3f4f6; font-size: .9rem; }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .label { color: #6b7280; font-weight: 500; }
+  .stat-row .value { font-weight: 600; }
+
+  #map { height: 420px; border-radius: 8px; }
+
+  .legend { margin-top: .75rem; display: flex; align-items: center; gap: .5rem; font-size: .8rem; color: #6b7280; }
+  .legend-bar {
+    flex: 1; height: 12px; border-radius: 6px;
+    background: linear-gradient(to right, #eff6ff, #3b82f6, #1e3a8a);
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts/upload">Upload</a>
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <div>
+      <h1>{{ forecast.filename }}</h1>
+      <div class="meta">Forecast #{{ forecast.id }} &nbsp;·&nbsp; Uploaded {{ forecast.uploaded_at.strftime("%Y-%m-%d %H:%M UTC") }}</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="section-title">Precipitation (mm)</div>
+      <div class="stat-row"><span class="label">Minimum</span><span class="value">{{ forecast.precip_min }}</span></div>
+      <div class="stat-row"><span class="label">Mean</span><span class="value">{{ forecast.precip_mean }}</span></div>
+      <div class="stat-row"><span class="label">Maximum</span><span class="value">{{ forecast.precip_max }}</span></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Coverage</div>
+      <div class="stat-row"><span class="label">Lat range</span><span class="value">{{ forecast.lat_min }}° – {{ forecast.lat_max }}°</span></div>
+      <div class="stat-row"><span class="label">Lon range</span><span class="value">{{ forecast.lon_min }}° – {{ forecast.lon_max }}°</span></div>
+      <div class="stat-row"><span class="label">Time start</span><span class="value">{{ forecast.time_start }}</span></div>
+      <div class="stat-row"><span class="label">Time end</span><span class="value">{{ forecast.time_end }}</span></div>
+      <div class="stat-row"><span class="label">Time steps</span><span class="value">{{ forecast.time_steps }}</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Precipitation Map (time-mean)</div>
+    <div id="map"></div>
+    <div class="legend">
+      <span>Low</span>
+      <div class="legend-bar"></div>
+      <span>High</span>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const geojson = {{ forecast.geojson | safe }};
+  const precipMax = {{ forecast.precip_max }};
+  const precipMin = {{ forecast.precip_min }};
+
+  const map = L.map('map');
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    opacity: 0.6,
+  }).addTo(map);
+
+  function precipColor(intensity) {
+    // white → light blue → deep blue
+    const r = Math.round(239 - intensity * 200);
+    const g = Math.round(246 - intensity * 170);
+    const b = Math.round(255 - intensity * 85);
+    return `rgb(${r},${g},${b})`;
+  }
+
+  const layer = L.geoJSON(geojson, {
+    style: feature => ({
+      fillColor: precipColor(feature.properties.intensity),
+      fillOpacity: 0.75,
+      weight: 0,
+      color: 'transparent',
+    }),
+    onEachFeature: (feature, layer) => {
+      layer.bindTooltip(`${feature.properties.precip} mm`, { sticky: true });
+    },
+  }).addTo(map);
+
+  map.fitBounds(layer.getBounds(), { padding: [20, 20] });
+</script>
+{% endblock %}

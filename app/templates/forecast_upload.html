@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Upload Forecast — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 560px; margin: 3rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: .35rem; }
+  .sub { color: #6b7280; font-size: .9rem; margin-bottom: 2rem; }
+
+  .drop-zone {
+    border: 2px dashed #d1d5db;
+    border-radius: 12px;
+    padding: 2.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    margin-bottom: 1.2rem;
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.dragover { border-color: #4f46e5; background: #f5f3ff; }
+  .drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-icon { font-size: 2rem; margin-bottom: .75rem; }
+  .drop-label { font-size: .95rem; font-weight: 500; color: #374151; }
+  .drop-hint { font-size: .8rem; color: #9ca3af; margin-top: .3rem; }
+  .file-chosen { font-size: .85rem; color: #4f46e5; margin-top: .5rem; font-weight: 500; }
+
+  .btn-upload { background: #4f46e5; color: #fff; border: none; border-radius: 8px; padding: .7rem 1.6rem;
+    font-size: .95rem; font-weight: 600; cursor: pointer; width: 100%; transition: opacity .15s; }
+  .btn-upload:hover { opacity: .85; }
+  .btn-upload:disabled { opacity: .5; cursor: not-allowed; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <h1>Upload Forecast</h1>
+  <p class="sub">Upload a NetCDF (.nc) file to ingest precipitation forecast data.</p>
+
+  {% if error %}
+  <div class="error">{{ error }}</div>
+  {% endif %}
+
+  <div class="card">
+    <form method="post" enctype="multipart/form-data" id="upload-form">
+      <div class="drop-zone" id="drop-zone">
+        <input type="file" name="file" id="file-input" accept=".nc" required />
+        <div class="drop-icon">&#x2601;</div>
+        <div class="drop-label">Drag &amp; drop your .nc file here</div>
+        <div class="drop-hint">or click to browse</div>
+        <div class="file-chosen" id="file-chosen"></div>
+      </div>
+      <button type="submit" class="btn-upload" id="submit-btn" disabled>Upload &amp; Process</button>
+    </form>
+  </div>
+</div>
+
+<script>
+  const input = document.getElementById('file-input');
+  const chosen = document.getElementById('file-chosen');
+  const btn = document.getElementById('submit-btn');
+  const zone = document.getElementById('drop-zone');
+
+  input.addEventListener('change', () => {
+    if (input.files.length) {
+      chosen.textContent = input.files[0].name;
+      btn.disabled = false;
+    }
+  });
+
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) {
+      input.files = e.dataTransfer.files;
+      chosen.textContent = e.dataTransfer.files[0].name;
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('upload-form').addEventListener('submit', () => {
+    btn.disabled = true;
+    btn.textContent = 'Processing…';
+  });
+</script>
+{% endblock %}

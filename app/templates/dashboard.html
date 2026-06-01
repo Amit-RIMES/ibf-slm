@@ -52,6 +52,10 @@
       <div class="stat-value">{{ stats.total_users }}</div>
     </div>
     <div class="stat-card">
+      <div class="stat-label">Forecasts Ingested</div>
+      <div class="stat-value">{{ stats.total_forecasts }}</div>
+    </div>
+    <div class="stat-card">
       <div class="stat-label">Member Since</div>
       <div class="stat-value" style="font-size:1.1rem; padding-top:.5rem;">{{ stats.member_since }}</div>
     </div>
@@ -61,6 +65,39 @@
         <span class="badge badge-green">Active</span>
       </div>
     </div>
+  </div>
+
+  <div class="card" style="margin-bottom:1.25rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+      <div class="section-title" style="margin-bottom:0;">Recent Forecasts</div>
+      <a href="/forecasts/upload" style="font-size:.85rem; font-weight:600; color:#4f46e5;">+ Upload</a>
+    </div>
+    {% if recent_forecasts %}
+    <table class="profile-table" style="font-size:.875rem;">
+      <thead>
+        <tr>
+          <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">File</td>
+          <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">Uploaded</td>
+          <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">Mean Precip (mm)</td>
+          <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">Region</td>
+          <td></td>
+        </tr>
+      </thead>
+      <tbody>
+        {% for fc in recent_forecasts %}
+        <tr>
+          <td style="font-weight:500;">{{ fc.filename }}</td>
+          <td>{{ fc.uploaded_at.strftime("%Y-%m-%d %H:%M") }}</td>
+          <td>{{ fc.precip_mean }}</td>
+          <td style="font-size:.8rem;">{{ fc.lat_min }}°–{{ fc.lat_max }}°N, {{ fc.lon_min }}°–{{ fc.lon_max }}°E</td>
+          <td><a href="/forecasts/{{ fc.id }}" style="font-size:.8rem;">View</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:#9ca3af; font-size:.9rem;">No forecasts uploaded yet. <a href="/forecasts/upload">Upload your first file.</a></p>
+    {% endif %}
   </div>
 
   <div class="card">
