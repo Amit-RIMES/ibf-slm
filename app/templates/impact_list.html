@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Impact Records — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; }
+
+  .btn-new { background: #4f46e5; color: #fff; border-radius: 8px; padding: .5rem 1.2rem;
+    font-size: .875rem; font-weight: 600; }
+  .btn-new:hover { opacity: .85; text-decoration: none; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  th { text-align: left; padding: .6rem .75rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; border-bottom: 1px solid #e5e7eb; }
+  td { padding: .7rem .75rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f9fafb; }
+
+  .hazard-badge { display: inline-block; padding: .2rem .65rem; border-radius: 999px;
+    font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .hazard-flood     { background: #dbeafe; color: #1d4ed8; }
+  .hazard-storm     { background: #f3e8ff; color: #7e22ce; }
+  .hazard-drought   { background: #fef3c7; color: #92400e; }
+  .hazard-landslide { background: #dcfce7; color: #166534; }
+  .hazard-heatwave  { background: #fee2e2; color: #991b1b; }
+  .hazard-cyclone   { background: #e0f2fe; color: #0369a1; }
+  .hazard-other     { background: #f3f4f6; color: #374151; }
+
+  .empty { color: #9ca3af; font-size: .9rem; padding: 2rem 0; text-align: center; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts/upload">Forecasts</a>
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <h1>Impact Records</h1>
+    <a href="/impacts/new" class="btn-new">+ New Record</a>
+  </div>
+
+  <div class="card">
+    {% if impacts %}
+    <table>
+      <thead>
+        <tr>
+          <th>Event</th>
+          <th>Date</th>
+          <th>Hazard</th>
+          <th>Country / Region</th>
+          <th>Affected</th>
+          <th>Casualties</th>
+          <th>Displaced</th>
+          <th>Forecast</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for impact in impacts %}
+        <tr>
+          <td style="font-weight:600;">{{ impact.event_name }}</td>
+          <td>{{ impact.event_date }}</td>
+          <td><span class="hazard-badge hazard-{{ impact.hazard_type }}">{{ impact.hazard_type }}</span></td>
+          <td>{{ impact.country }}{% if impact.region %}, {{ impact.region }}{% endif %}</td>
+          <td>{{ "{:,}".format(impact.affected_population) if impact.affected_population is not none else "—" }}</td>
+          <td>{{ impact.casualties if impact.casualties is not none else "—" }}</td>
+          <td>{{ "{:,}".format(impact.displaced) if impact.displaced is not none else "—" }}</td>
+          <td>
+            {% if impact.forecast %}
+            <a href="/forecasts/{{ impact.forecast_id }}" style="font-size:.8rem;">{{ impact.forecast.filename }}</a>
+            {% else %}—{% endif %}
+          </td>
+          <td><a href="/impacts/{{ impact.id }}" style="font-size:.8rem;">View</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No impact records yet. <a href="/impacts/new">Add the first one.</a></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

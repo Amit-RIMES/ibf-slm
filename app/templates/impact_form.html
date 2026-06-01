@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}New Impact Record — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 700px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: .35rem; }
+  .sub { color: #6b7280; font-size: .9rem; margin-bottom: 2rem; }
+
+  .section-heading { font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: #9ca3af; margin: 1.5rem 0 .75rem; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 540px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .form-group { margin-bottom: 1rem; }
+  .form-group label { display: block; margin-bottom: .35rem; font-size: .875rem; font-weight: 500; color: #555; }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; padding: .6rem .85rem; border: 1px solid #d1d5db;
+    border-radius: 8px; font-size: .95rem; outline: none; transition: border-color .15s;
+    font-family: inherit; background: #fff;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: #4f46e5; }
+  .form-group textarea { resize: vertical; min-height: 80px; }
+  .optional { color: #9ca3af; font-weight: 400; font-size: .8rem; }
+
+  .btn-submit { background: #4f46e5; color: #fff; border: none; border-radius: 8px;
+    padding: .7rem 1.6rem; font-size: .95rem; font-weight: 600; cursor: pointer;
+    width: 100%; margin-top: .5rem; transition: opacity .15s; }
+  .btn-submit:hover { opacity: .85; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/impacts">Impact Records</a>
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <h1>New Impact Record</h1>
+  <p class="sub">Log an observed impact event and optionally link it to an ingested forecast.</p>
+
+  {% if error %}
+  <div class="error">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="/impacts/new">
+    <div class="card">
+      <div class="section-heading">Event</div>
+      <div class="form-group">
+        <label>Event name</label>
+        <input type="text" name="event_name" placeholder="e.g. Mozambique Cyclone Idai" required />
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Event date</label>
+          <input type="date" name="event_date" required />
+        </div>
+        <div class="form-group">
+          <label>Hazard type</label>
+          <select name="hazard_type" required>
+            <option value="" disabled selected>Select…</option>
+            {% for h in hazard_types %}
+            <option value="{{ h }}">{{ h | capitalize }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="section-heading">Location</div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Country</label>
+          <input type="text" name="country" placeholder="e.g. Mozambique" required />
+        </div>
+        <div class="form-group">
+          <label>Region <span class="optional">(optional)</span></label>
+          <input type="text" name="region" placeholder="e.g. Sofala Province" />
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Latitude <span class="optional">(optional)</span></label>
+          <input type="number" step="any" name="lat" placeholder="e.g. -19.8" />
+        </div>
+        <div class="form-group">
+          <label>Longitude <span class="optional">(optional)</span></label>
+          <input type="number" step="any" name="lon" placeholder="e.g. 34.8" />
+        </div>
+      </div>
+
+      <div class="section-heading">Impact Figures <span class="optional" style="text-transform:none; letter-spacing:0;">(leave blank if unknown)</span></div>
+      <div class="grid-2">
+        <div class="form-group">
+          <label>Affected population</label>
+          <input type="number" min="0" name="affected_population" placeholder="e.g. 1500000" />
+        </div>
+        <div class="form-group">
+          <label>Casualties</label>
+          <input type="number" min="0" name="casualties" placeholder="e.g. 1000" />
+        </div>
+        <div class="form-group">
+          <label>Displaced</label>
+          <input type="number" min="0" name="displaced" placeholder="e.g. 400000" />
+        </div>
+        <div class="form-group">
+          <label>Estimated damage (USD)</label>
+          <input type="number" min="0" step="any" name="damage_usd" placeholder="e.g. 2000000000" />
+        </div>
+      </div>
+
+      <div class="section-heading">Notes</div>
+      <div class="form-group">
+        <label>Description <span class="optional">(optional)</span></label>
+        <textarea name="description" placeholder="Any additional context about the event or its impacts…"></textarea>
+      </div>
+
+      <div class="section-heading">Link to Forecast <span class="optional" style="text-transform:none; letter-spacing:0;">(optional)</span></div>
+      <div class="form-group">
+        <label>Forecast file</label>
+        <select name="forecast_id">
+          <option value="">— None —</option>
+          {% for fc in forecasts %}
+          <option value="{{ fc.id }}">{{ fc.filename }} ({{ fc.time_start[:10] }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <button type="submit" class="btn-submit">Save Impact Record</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

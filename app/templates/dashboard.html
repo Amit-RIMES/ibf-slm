@@ -56,6 +56,10 @@
       <div class="stat-value">{{ stats.total_forecasts }}</div>
     </div>
     <div class="stat-card">
+      <div class="stat-label">Impact Records</div>
+      <div class="stat-value">{{ stats.total_impacts }}</div>
+    </div>
+    <div class="stat-card">
       <div class="stat-label">Member Since</div>
       <div class="stat-value" style="font-size:1.1rem; padding-top:.5rem;">{{ stats.member_since }}</div>
     </div>
@@ -97,6 +101,41 @@
     </table>
     {% else %}
     <p style="color:#9ca3af; font-size:.9rem;">No forecasts uploaded yet. <a href="/forecasts/upload">Upload your first file.</a></p>
+    {% endif %}
+  </div>
+
+  <div class="card" style="margin-bottom:1.25rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+      <div class="section-title" style="margin-bottom:0;">Recent Impact Records</div>
+      <a href="/impacts/new" style="font-size:.85rem; font-weight:600; color:#4f46e5;">+ New Record</a>
+    </div>
+    {% if recent_impacts %}
+    <table class="profile-table" style="font-size:.875rem;">
+      <thead>
+        <tr>
+          <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">Event</td>
+          <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">Date</td>
+          <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">Hazard</td>
+          <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">Country</td>
+          <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">Affected</td>
+          <td></td>
+        </tr>
+      </thead>
+      <tbody>
+        {% for impact in recent_impacts %}
+        <tr>
+          <td style="font-weight:500;">{{ impact.event_name }}</td>
+          <td>{{ impact.event_date }}</td>
+          <td style="text-transform:capitalize;">{{ impact.hazard_type }}</td>
+          <td>{{ impact.country }}</td>
+          <td>{{ "{:,}".format(impact.affected_population) if impact.affected_population is not none else "—" }}</td>
+          <td><a href="/impacts/{{ impact.id }}" style="font-size:.8rem;">View</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:#9ca3af; font-size:.9rem;">No impact records yet. <a href="/impacts/new">Add the first one.</a></p>
     {% endif %}
   </div>
 

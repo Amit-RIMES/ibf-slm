@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import decode_access_token
 from app.models.forecast import ForecastUpload
+from app.models.impact import ImpactRecord
 from app.models.user import User
 
 router = APIRouter()
@@ -32,11 +33,17 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
 
     total_users = await db.scalar(select(func.count()).select_from(User))
     total_forecasts = await db.scalar(select(func.count()).select_from(ForecastUpload))
+    total_impacts = await db.scalar(select(func.count()).select_from(ImpactRecord))
 
-    recent_result = await db.execute(
+    recent_forecasts_result = await db.execute(
         select(ForecastUpload).order_by(desc(ForecastUpload.uploaded_at)).limit(5)
     )
-    recent_forecasts = recent_result.scalars().all()
+    recent_forecasts = recent_forecasts_result.scalars().all()
+
+    recent_impacts_result = await db.execute(
+        select(ImpactRecord).order_by(desc(ImpactRecord.event_date)).limit(5)
+    )
+    recent_impacts = recent_impacts_result.scalars().all()
 
     return templates.TemplateResponse(
         "dashboard.html",
@@ -46,8 +53,10 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "stats": {
                 "total_users": total_users,
                 "total_forecasts": total_forecasts,
+                "total_impacts": total_impacts,
                 "member_since": user.created_at.strftime("%B %d, %Y"),
             },
             "recent_forecasts": recent_forecasts,
+            "recent_impacts": recent_impacts,
         },
     )

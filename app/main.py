@@ -4,8 +4,8 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
 from app.core.database import Base, engine
-from app.models import forecast  # noqa: F401 — registers ForecastUpload with Base
-from app.routers import auth, dashboard, forecasts
+from app.models import forecast, impact  # noqa: F401 — registers models with Base
+from app.routers import auth, dashboard, forecasts, impacts
 
 
 @asynccontextmanager
@@ -20,6 +20,7 @@ app = FastAPI(title="IBF App", lifespan=lifespan)
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(forecasts.router)
+app.include_router(impacts.router)
 
 
 @app.get("/")
