@@ -2,32 +2,21 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
 from app.core.database import get_db
-from app.core.security import decode_access_token
+from app.core.deps import get_current_user
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
-from app.models.user import User
 
 router = APIRouter(prefix="/impacts")
 templates = Jinja2Templates(directory="app/templates")
 
 HAZARD_TYPES = ["flood", "storm", "drought", "landslide", "heatwave", "cyclone", "other"]
-
-
-async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User | None:
-    token = request.cookies.get("access_token")
-    if not token:
-        return None
-    payload = decode_access_token(token)
-    if not payload:
-        return None
-    result = await db.execute(select(User).where(User.id == int(payload["sub"])))
-    return result.scalar_one_or_none()
 
 
 @router.get("", response_class=HTMLResponse)
@@ -127,3 +116,98 @@ async def impact_detail(impact_id: int, request: Request, db: AsyncSession = Dep
     return templates.TemplateResponse(
         "impact_detail.html", {"request": request, "user": user, "impact": impact}
     )
+
+
+@router.get("/{impact_id}/edit", response_class=HTMLResponse)
+async def impact_edit_page(impact_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    result = await db.execute(select(ImpactRecord).where(ImpactRecord.id == impact_id))
+    impact = result.scalar_one_or_none()
+    if not impact:
+        return RedirectResponse("/impacts")
+
+    forecasts_result = await db.execute(
+        select(ForecastUpload).order_by(desc(ForecastUpload.uploaded_at))
+    )
+    forecasts = forecasts_result.scalars().all()
+
+    return templates.TemplateResponse(
+        "impact_form.html",
+        {
+            "request": request,
+            "user": user,
+            "impact": impact,
+            "forecasts": forecasts,
+            "hazard_types": HAZARD_TYPES,
+        },
+    )
+
+
+@router.post("/{impact_id}/edit")
+async def impact_update(
+    impact_id: int,
+    request: Request,
+    event_name: str = Form(...),
+    event_date: date = Form(...),
+    hazard_type: str = Form(...),
+    country: str = Form(...),
+    region: str = Form(""),
+    lat: str = Form(""),
+    lon: str = Form(""),
+    affected_population: str = Form(""),
+    casualties: str = Form(""),
+    displaced: str = Form(""),
+    damage_usd: str = Form(""),
+    description: str = Form(""),
+    forecast_id: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    result = await db.execute(select(ImpactRecord).where(ImpactRecord.id == impact_id))
+    impact = result.scalar_one_or_none()
+    if not impact:
+        return RedirectResponse("/impacts")
+
+    def _int(v: str) -> Optional[int]:
+        return int(v) if v.strip() else None
+
+    def _float(v: str) -> Optional[float]:
+        return float(v) if v.strip() else None
+
+    impact.event_name = event_name
+    impact.event_date = event_date
+    impact.hazard_type = hazard_type
+    impact.country = country
+    impact.region = region or None
+    impact.lat = _float(lat)
+    impact.lon = _float(lon)
+    impact.affected_population = _int(affected_population)
+    impact.casualties = _int(casualties)
+    impact.displaced = _int(displaced)
+    impact.damage_usd = _float(damage_usd)
+    impact.description = description or None
+    impact.forecast_id = _int(forecast_id)
+
+    await db.commit()
+    return RedirectResponse(f"/impacts/{impact_id}", status_code=303)
+
+
+@router.post("/{impact_id}/delete")
+async def impact_delete(impact_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    result = await db.execute(select(ImpactRecord).where(ImpactRecord.id == impact_id))
+    impact = result.scalar_one_or_none()
+    if impact:
+        await db.delete(impact)
+        await db.commit()
+
+    return RedirectResponse("/impacts", status_code=303)

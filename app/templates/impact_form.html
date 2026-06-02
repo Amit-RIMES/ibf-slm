@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}New Impact Record — IBF App{% endblock %}
+{% block title %}{% if impact %}Edit Impact Record{% else %}New Impact Record{% endif %} — IBF App{% endblock %}
 
 {% block extra_styles %}
 <style>
@@ -32,10 +32,15 @@
   .form-group textarea { resize: vertical; min-height: 80px; }
   .optional { color: #9ca3af; font-weight: 400; font-size: .8rem; }
 
+  .form-actions { display: flex; gap: .75rem; margin-top: .5rem; }
   .btn-submit { background: #4f46e5; color: #fff; border: none; border-radius: 8px;
     padding: .7rem 1.6rem; font-size: .95rem; font-weight: 600; cursor: pointer;
-    width: 100%; margin-top: .5rem; transition: opacity .15s; }
+    flex: 1; transition: opacity .15s; }
   .btn-submit:hover { opacity: .85; }
+  .btn-cancel { display: flex; align-items: center; justify-content: center;
+    border: 1px solid #d1d5db; border-radius: 8px; padding: .7rem 1.2rem;
+    font-size: .95rem; font-weight: 500; color: #6b7280; background: #fff; cursor: pointer; transition: background .15s; }
+  .btn-cancel:hover { background: #f9fafb; text-decoration: none; }
 </style>
 {% endblock %}
 
@@ -50,31 +55,33 @@
 </nav>
 
 <div class="main">
-  <h1>New Impact Record</h1>
-  <p class="sub">Log an observed impact event and optionally link it to an ingested forecast.</p>
+  <h1>{% if impact %}Edit Impact Record{% else %}New Impact Record{% endif %}</h1>
+  <p class="sub">{% if impact %}Update the details for this impact event.{% else %}Log an observed impact event and optionally link it to an ingested forecast.{% endif %}</p>
 
   {% if error %}
   <div class="error">{{ error }}</div>
   {% endif %}
 
-  <form method="post" action="/impacts/new">
+  <form method="post" action="{% if impact %}/impacts/{{ impact.id }}/edit{% else %}/impacts/new{% endif %}">
     <div class="card">
       <div class="section-heading">Event</div>
       <div class="form-group">
         <label>Event name</label>
-        <input type="text" name="event_name" placeholder="e.g. Mozambique Cyclone Idai" required />
+        <input type="text" name="event_name" placeholder="e.g. Mozambique Cyclone Idai" required
+          value="{{ impact.event_name if impact else '' }}" />
       </div>
       <div class="grid-2">
         <div class="form-group">
           <label>Event date</label>
-          <input type="date" name="event_date" required />
+          <input type="date" name="event_date" required
+            value="{{ impact.event_date if impact else '' }}" />
         </div>
         <div class="form-group">
           <label>Hazard type</label>
           <select name="hazard_type" required>
-            <option value="" disabled selected>Select…</option>
+            <option value="" disabled {% if not impact %}selected{% endif %}>Select…</option>
             {% for h in hazard_types %}
-            <option value="{{ h }}">{{ h | capitalize }}</option>
+            <option value="{{ h }}" {% if impact and impact.hazard_type == h %}selected{% endif %}>{{ h | capitalize }}</option>
             {% endfor %}
           </select>
         </div>
@@ -84,21 +91,25 @@
       <div class="grid-2">
         <div class="form-group">
           <label>Country</label>
-          <input type="text" name="country" placeholder="e.g. Mozambique" required />
+          <input type="text" name="country" placeholder="e.g. Mozambique" required
+            value="{{ impact.country if impact else '' }}" />
         </div>
         <div class="form-group">
           <label>Region <span class="optional">(optional)</span></label>
-          <input type="text" name="region" placeholder="e.g. Sofala Province" />
+          <input type="text" name="region" placeholder="e.g. Sofala Province"
+            value="{{ impact.region if impact and impact.region else '' }}" />
         </div>
       </div>
       <div class="grid-2">
         <div class="form-group">
           <label>Latitude <span class="optional">(optional)</span></label>
-          <input type="number" step="any" name="lat" placeholder="e.g. -19.8" />
+          <input type="number" step="any" name="lat" placeholder="e.g. -19.8"
+            value="{{ impact.lat if impact and impact.lat is not none else '' }}" />
         </div>
         <div class="form-group">
           <label>Longitude <span class="optional">(optional)</span></label>
-          <input type="number" step="any" name="lon" placeholder="e.g. 34.8" />
+          <input type="number" step="any" name="lon" placeholder="e.g. 34.8"
+            value="{{ impact.lon if impact and impact.lon is not none else '' }}" />
         </div>
       </div>
 
@@ -106,40 +117,47 @@
       <div class="grid-2">
         <div class="form-group">
           <label>Affected population</label>
-          <input type="number" min="0" name="affected_population" placeholder="e.g. 1500000" />
+          <input type="number" min="0" name="affected_population" placeholder="e.g. 1500000"
+            value="{{ impact.affected_population if impact and impact.affected_population is not none else '' }}" />
         </div>
         <div class="form-group">
           <label>Casualties</label>
-          <input type="number" min="0" name="casualties" placeholder="e.g. 1000" />
+          <input type="number" min="0" name="casualties" placeholder="e.g. 1000"
+            value="{{ impact.casualties if impact and impact.casualties is not none else '' }}" />
         </div>
         <div class="form-group">
           <label>Displaced</label>
-          <input type="number" min="0" name="displaced" placeholder="e.g. 400000" />
+          <input type="number" min="0" name="displaced" placeholder="e.g. 400000"
+            value="{{ impact.displaced if impact and impact.displaced is not none else '' }}" />
         </div>
         <div class="form-group">
           <label>Estimated damage (USD)</label>
-          <input type="number" min="0" step="any" name="damage_usd" placeholder="e.g. 2000000000" />
+          <input type="number" min="0" step="any" name="damage_usd" placeholder="e.g. 2000000000"
+            value="{{ impact.damage_usd if impact and impact.damage_usd is not none else '' }}" />
         </div>
       </div>
 
       <div class="section-heading">Notes</div>
       <div class="form-group">
         <label>Description <span class="optional">(optional)</span></label>
-        <textarea name="description" placeholder="Any additional context about the event or its impacts…"></textarea>
+        <textarea name="description" placeholder="Any additional context about the event or its impacts…">{{ impact.description if impact and impact.description else '' }}</textarea>
       </div>
 
       <div class="section-heading">Link to Forecast <span class="optional" style="text-transform:none; letter-spacing:0;">(optional)</span></div>
       <div class="form-group">
         <label>Forecast file</label>
         <select name="forecast_id">
-          <option value="">— None —</option>
+          <option value="" {% if not impact or not impact.forecast_id %}selected{% endif %}>— None —</option>
           {% for fc in forecasts %}
-          <option value="{{ fc.id }}">{{ fc.filename }} ({{ fc.time_start[:10] }})</option>
+          <option value="{{ fc.id }}" {% if impact and impact.forecast_id == fc.id %}selected{% endif %}>{{ fc.filename }} ({{ fc.time_start[:10] }})</option>
           {% endfor %}
         </select>
       </div>
 
-      <button type="submit" class="btn-submit">Save Impact Record</button>
+      <div class="form-actions">
+        <button type="submit" class="btn-submit">{% if impact %}Save Changes{% else %}Save Impact Record{% endif %}</button>
+        <a href="{% if impact %}/impacts/{{ impact.id }}{% else %}/impacts{% endif %}" class="btn-cancel">Cancel</a>
+      </div>
     </div>
   </form>
 </div>

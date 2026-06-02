@@ -11,25 +11,13 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security import decode_access_token
+from app.core.deps import get_current_user
 from app.models.forecast import ForecastUpload
-from app.models.user import User
 
 router = APIRouter(prefix="/forecasts")
 templates = Jinja2Templates(directory="app/templates")
 
 PRECIP_VARS = ["precipitation", "precip", "pr", "tp", "rain", "rainfall"]
-
-
-async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User | None:
-    token = request.cookies.get("access_token")
-    if not token:
-        return None
-    payload = decode_access_token(token)
-    if not payload:
-        return None
-    result = await db.execute(select(User).where(User.id == int(payload["sub"])))
-    return result.scalar_one_or_none()
 
 
 def _find_precip_var(ds: xr.Dataset) -> str:
@@ -147,6 +135,22 @@ def _process_netcdf(path: str) -> dict:
         "precip_mean": round(float(flat.mean()), 3) if len(flat) else 0.0,
         "geojson": geojson,
     }
+
+
+@router.get("", response_class=HTMLResponse)
+async def forecast_list(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    result = await db.execute(
+        select(ForecastUpload).order_by(desc(ForecastUpload.uploaded_at))
+    )
+    forecasts = result.scalars().all()
+
+    return templates.TemplateResponse(
+        "forecast_list.html", {"request": request, "user": user, "forecasts": forecasts}
+    )
 
 
 @router.get("/upload", response_class=HTMLResponse)

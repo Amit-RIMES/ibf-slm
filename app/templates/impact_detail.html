@@ -71,6 +71,12 @@
       </h1>
       <div class="meta">Record #{{ impact.id }} &nbsp;·&nbsp; Logged {{ impact.created_at.strftime("%Y-%m-%d %H:%M UTC") }}</div>
     </div>
+    <div style="display:flex; gap:.6rem;">
+      <a href="/impacts/{{ impact.id }}/edit" style="display:inline-block; padding:.45rem 1rem; background:#4f46e5; color:#fff; border-radius:8px; font-size:.85rem; font-weight:600;">Edit</a>
+      <form method="post" action="/impacts/{{ impact.id }}/delete" style="display:inline;" onsubmit="return confirm('Delete this impact record?')">
+        <button type="submit" style="padding:.45rem 1rem; background:#fff; border:1px solid #d1d5db; border-radius:8px; font-size:.85rem; font-weight:600; color:#dc2626; cursor:pointer;">Delete</button>
+      </form>
+    </div>
   </div>
 
   <div class="impact-numbers">

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Forecasts — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; }
+
+  .btn-new { background: #4f46e5; color: #fff; border-radius: 8px; padding: .5rem 1.2rem;
+    font-size: .875rem; font-weight: 600; }
+  .btn-new:hover { opacity: .85; text-decoration: none; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  th { text-align: left; padding: .6rem .75rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; border-bottom: 1px solid #e5e7eb; }
+  td { padding: .7rem .75rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f9fafb; }
+
+  .precip-bar-wrap { width: 80px; height: 6px; background: #e5e7eb; border-radius: 3px; display: inline-block; vertical-align: middle; }
+  .precip-bar { height: 6px; background: #3b82f6; border-radius: 3px; }
+
+  .empty { color: #9ca3af; font-size: .9rem; padding: 2rem 0; text-align: center; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/impacts">Impact Records</a>
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <h1>Forecasts</h1>
+    <a href="/forecasts/upload" class="btn-new">+ Upload</a>
+  </div>
+
+  <div class="card">
+    {% if forecasts %}
+    <table>
+      <thead>
+        <tr>
+          <th>File</th>
+          <th>Uploaded</th>
+          <th>Time range</th>
+          <th>Steps</th>
+          <th>Mean precip (mm)</th>
+          <th>Spatial extent</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for fc in forecasts %}
+        <tr>
+          <td style="font-weight:600;">{{ fc.filename }}</td>
+          <td>{{ fc.uploaded_at.strftime("%Y-%m-%d %H:%M") }}</td>
+          <td style="font-size:.8rem;">{{ fc.time_start[:10] }} – {{ fc.time_end[:10] }}</td>
+          <td>{{ fc.time_steps }}</td>
+          <td>
+            {{ fc.precip_mean }}
+            <span class="precip-bar-wrap">
+              {% set pct = ((fc.precip_mean - fc.precip_min) / (fc.precip_max - fc.precip_min + 0.001) * 100) | round | int %}
+              <span class="precip-bar" style="width:{{ pct }}%;"></span>
+            </span>
+          </td>
+          <td style="font-size:.8rem;">{{ fc.lat_min }}°–{{ fc.lat_max }}°N, {{ fc.lon_min }}°–{{ fc.lon_max }}°E</td>
+          <td><a href="/forecasts/{{ fc.id }}" style="font-size:.8rem;">View</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No forecasts uploaded yet. <a href="/forecasts/upload">Upload your first file.</a></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
