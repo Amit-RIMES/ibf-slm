@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}Import Forecast — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 620px; margin: 2.5rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: .35rem; }
+  .sub { color: #6b7280; font-size: .9rem; margin-bottom: 2rem; }
+
+  .form-group { margin-bottom: 1.25rem; }
+  .form-group label { display: block; margin-bottom: .4rem; font-size: .875rem; font-weight: 500; color: #555; }
+  .form-group select {
+    width: 100%; padding: .6rem .85rem; border: 1px solid #d1d5db;
+    border-radius: 8px; font-size: .95rem; outline: none; transition: border-color .15s; background: #fff;
+  }
+  .form-group select:focus { border-color: #4f46e5; }
+
+  .url-preview {
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+    padding: .75rem 1rem; font-size: .8rem; font-family: monospace;
+    color: #475569; word-break: break-all; margin-bottom: 1.5rem;
+    display: none;
+  }
+  .url-preview.visible { display: block; }
+  .url-preview .label { font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: #94a3b8; margin-bottom: .3rem; }
+
+  .portal-badge {
+    display: inline-flex; align-items: center; gap: .4rem;
+    background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px;
+    padding: .3rem .75rem; font-size: .8rem; color: #15803d; font-weight: 500;
+    margin-bottom: 1.5rem;
+  }
+
+  .error { color: #dc2626; font-size: .875rem; background: #fef2f2;
+    padding: .6rem .85rem; border-radius: 8px; margin-bottom: 1.25rem; }
+  .warn  { color: #92400e; font-size: .875rem; background: #fffbeb;
+    padding: .6rem .85rem; border-radius: 8px; margin-bottom: 1.25rem; }
+
+  .btn-import {
+    background: #4f46e5; color: #fff; border: none; border-radius: 8px;
+    padding: .75rem 1.6rem; font-size: .95rem; font-weight: 600; cursor: pointer;
+    width: 100%; transition: opacity .15s;
+  }
+  .btn-import:hover { opacity: .85; }
+  .btn-import:disabled { opacity: .5; cursor: not-allowed; }
+
+  .spinner { display: none; }
+  .btn-import.loading .spinner { display: inline; }
+  .btn-import.loading .btn-text { display: none; }
+
+  optgroup { font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <h1>Import Forecast</h1>
+  <p class="sub">Pull total precipitation (tp.nc) directly from the RIMES open data portal.</p>
+
+  <div class="portal-badge">
+    <span>&#x2022;</span> Connected to open-data.rimes.int
+  </div>
+
+  {% if error %}
+  <div class="error">{{ error }}</div>
+  {% endif %}
+
+  {% if portal_error %}
+  <div class="warn">{{ portal_error }}</div>
+  {% endif %}
+
+  <div class="card">
+    <form method="post" action="/forecasts/import" id="import-form">
+
+      <div class="form-group">
+        <label>Region / Country</label>
+        <select name="source" id="sel-source" required {% if not dates %}disabled{% endif %}>
+          <option value="" disabled selected>Select a source…</option>
+          <optgroup label="Regional">
+            {% for s in sources %}
+            {% if s.value.startswith("regional_") %}
+            <option value="{{ s.value }}">{{ s.label }}</option>
+            {% endif %}
+            {% endfor %}
+          </optgroup>
+          <optgroup label="Countries">
+            {% for s in sources %}
+            {% if s.value.startswith("country_") %}
+            <option value="{{ s.value }}">{{ s.label }}</option>
+            {% endif %}
+            {% endfor %}
+          </optgroup>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Forecast date</label>
+        <select name="date" id="sel-date" required {% if not dates %}disabled{% endif %}>
+          <option value="" disabled selected>Select a date…</option>
+          {% for d in dates %}
+          <option value="{{ d }}">{{ d[:4] }}-{{ d[4:6] }}-{{ d[6:] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="url-preview" id="url-preview">
+        <div class="label">Will fetch</div>
+        <span id="preview-url"></span>
+      </div>
+
+      <button type="submit" class="btn-import" id="import-btn" disabled>
+        <span class="btn-text">Import from RIMES Portal</span>
+        <span class="spinner">Downloading &amp; processing…</span>
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+  const sourcePaths = {
+    {% for s in sources %}
+    "{{ s.value }}": "{{ s.path }}",
+    {% endfor %}
+  };
+  const portalBase = "{{ portal_base }}";
+  const selSource = document.getElementById('sel-source');
+  const selDate   = document.getElementById('sel-date');
+  const btn       = document.getElementById('import-btn');
+  const preview   = document.getElementById('url-preview');
+  const previewUrl = document.getElementById('preview-url');
+
+  function update() {
+    const src  = selSource.value;
+    const date = selDate.value;
+    if (src && date) {
+      const url = `${portalBase}/${sourcePaths[src]}/${date}/tp.nc`;
+      previewUrl.textContent = url;
+      preview.classList.add('visible');
+      btn.disabled = false;
+    } else {
+      preview.classList.remove('visible');
+      btn.disabled = true;
+    }
+  }
+
+  selSource.addEventListener('change', update);
+  selDate.addEventListener('change', update);
+
+  document.getElementById('import-form').addEventListener('submit', () => {
+    btn.disabled = true;
+    btn.classList.add('loading');
+  });
+</script>
+{% endblock %}

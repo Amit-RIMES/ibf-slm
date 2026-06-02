@@ -1,10 +1,12 @@
 import json
+import re
 import tempfile
 import os
 
+import httpx
 import numpy as np
 import xarray as xr
-from fastapi import APIRouter, Depends, Request, UploadFile, File
+from fastapi import APIRouter, Depends, Form, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, desc
@@ -14,6 +16,43 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.forecast import ForecastUpload
 from app.routers.triggers import evaluate_triggers
+
+PORTAL_BASE = "https://open-data.rimes.int"
+
+COUNTRY_NAMES = {
+    "ae": "United Arab Emirates", "af": "Afghanistan",  "ao": "Angola",
+    "bd": "Bangladesh",           "bf": "Burkina Faso", "bt": "Bhutan",
+    "bw": "Botswana",             "cd": "DR Congo",     "cg": "Congo",
+    "cm": "Cameroon",             "dj": "Djibouti",     "fj": "Fiji",
+    "in": "India",                "jm": "Jamaica",      "ke": "Kenya",
+    "kh": "Cambodia",             "km": "Comoros",      "la": "Laos",
+    "lk": "Sri Lanka",            "ls": "Lesotho",      "mg": "Madagascar",
+    "mm": "Myanmar",              "mn": "Mongolia",     "mu": "Mauritius",
+    "mv": "Maldives",             "mw": "Malawi",       "mz": "Mozambique",
+    "na": "Namibia",              "ng": "Nigeria",      "np": "Nepal",
+    "pg": "Papua New Guinea",     "ph": "Philippines",  "pk": "Pakistan",
+    "sc": "Seychelles",           "so": "Somalia",      "sz": "Eswatini",
+    "td": "Chad",                 "th": "Thailand",     "tl": "Timor-Leste",
+    "to": "Tonga",                "tz": "Tanzania",     "ws": "Samoa",
+    "ye": "Yemen",                "za": "South Africa", "zm": "Zambia",
+    "zw": "Zimbabwe",
+}
+
+SOURCES = [
+    {"value": "regional_rimes", "label": "Regional — RIMES",          "path": "Regional/rimes/ECMWF/ifs15"},
+    {"value": "regional_sea",   "label": "Regional — South-East Asia", "path": "Regional/sea/ECMWF/ifs15"},
+] + [
+    {"value": f"country_{cc}", "label": f"{name} ({cc.upper()})", "path": f"Countries/{cc}/ECMWF/ifs15"}
+    for cc, name in sorted(COUNTRY_NAMES.items(), key=lambda x: x[1])
+]
+_SOURCE_MAP = {s["value"]: s for s in SOURCES}
+
+
+async def _fetch_portal_dates() -> list[str]:
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(f"{PORTAL_BASE}/Regional/rimes/ECMWF/ifs15/", timeout=10)
+        resp.raise_for_status()
+    return sorted(re.findall(r'href="(\d{8})/"', resp.text), reverse=True)
 
 router = APIRouter(prefix="/forecasts")
 templates = Jinja2Templates(directory="app/templates")
@@ -202,6 +241,81 @@ async def upload_forecast(
 
     await evaluate_triggers(forecast, db)
 
+    return RedirectResponse(f"/forecasts/{forecast.id}", status_code=303)
+
+
+@router.get("/import", response_class=HTMLResponse)
+async def import_page(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    try:
+        dates = await _fetch_portal_dates()
+        portal_error = None
+    except Exception as exc:
+        dates = []
+        portal_error = f"Could not reach RIMES portal: {exc}"
+
+    return templates.TemplateResponse(
+        "forecast_import.html",
+        {"request": request, "user": user, "sources": SOURCES,
+         "dates": dates, "portal_error": portal_error, "portal_base": PORTAL_BASE},
+    )
+
+
+@router.post("/import")
+async def import_forecast(
+    request: Request,
+    source: str = Form(...),
+    date: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    source_entry = _SOURCE_MAP.get(source)
+    if not source_entry or not re.fullmatch(r"\d{8}", date):
+        return RedirectResponse("/forecasts/import")
+
+    url = f"{PORTAL_BASE}/{source_entry['path']}/{date}/tp.nc"
+    source_key = source.replace("regional_", "").replace("country_", "")
+    filename = f"ecmwf_tp_{source_key}_{date}.nc"
+
+    tmp_path = None
+    try:
+        async with httpx.AsyncClient() as client:
+            async with client.stream("GET", url, timeout=120) as resp:
+                if resp.status_code == 404:
+                    raise ValueError(f"No data available for {date} / {source_entry['label']}")
+                resp.raise_for_status()
+                with tempfile.NamedTemporaryFile(suffix=".nc", delete=False) as tmp:
+                    async for chunk in resp.aiter_bytes(chunk_size=65536):
+                        tmp.write(chunk)
+                    tmp_path = tmp.name
+
+        stats = _process_netcdf(tmp_path)
+    except Exception as exc:
+        try:
+            dates = await _fetch_portal_dates()
+        except Exception:
+            dates = []
+        return templates.TemplateResponse(
+            "forecast_import.html",
+            {"request": request, "user": user, "sources": SOURCES,
+             "dates": dates, "portal_error": None,
+             "error": f"Import failed: {exc}", "portal_base": PORTAL_BASE},
+        )
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+    forecast = ForecastUpload(filename=filename, **stats)
+    db.add(forecast)
+    await db.commit()
+    await db.refresh(forecast)
+    await evaluate_triggers(forecast, db)
     return RedirectResponse(f"/forecasts/{forecast.id}", status_code=303)
 
 

@@ -36,7 +36,10 @@
 {% block body %}
 <nav>
   <span class="brand">IBF App</span>
-  <div class="user-info">
+  <div class="user-info" style="gap:1.5rem;">
+    <a href="/forecasts" style="color:#6b7280; font-size:.875rem;">Forecasts</a>
+    <a href="/impacts" style="color:#6b7280; font-size:.875rem;">Impacts</a>
+    <a href="/triggers" style="color:#6b7280; font-size:.875rem;">Triggers</a>
     <span>{{ user.username }}</span>
     <a href="/logout">Logout</a>
   </div>
