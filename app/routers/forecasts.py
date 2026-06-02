@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.forecast import ForecastUpload
+from app.routers.triggers import evaluate_triggers
 
 router = APIRouter(prefix="/forecasts")
 templates = Jinja2Templates(directory="app/templates")
@@ -198,6 +199,8 @@ async def upload_forecast(
     db.add(forecast)
     await db.commit()
     await db.refresh(forecast)
+
+    await evaluate_triggers(forecast, db)
 
     return RedirectResponse(f"/forecasts/{forecast.id}", status_code=303)
 

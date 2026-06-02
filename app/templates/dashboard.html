@@ -43,6 +43,33 @@
 </nav>
 
 <div class="main">
+  {% if active_activations %}
+  <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:12px; padding:1.1rem 1.4rem; margin-bottom:1.5rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem;">
+      <div style="display:flex; align-items:center; gap:.6rem;">
+        <span style="font-size:1.1rem;">⚠️</span>
+        <span style="font-weight:700; color:#991b1b; font-size:.95rem;">
+          {{ active_activations | length }} unacknowledged trigger activation{{ 's' if active_activations | length != 1 else '' }}
+        </span>
+      </div>
+      <a href="/triggers" style="font-size:.85rem; font-weight:600; color:#dc2626;">View triggers →</a>
+    </div>
+    <ul style="margin:.65rem 0 0 1.5rem; font-size:.875rem; color:#7f1d1d;">
+      {% for a in active_activations[:5] %}
+      <li style="margin-bottom:.2rem;">
+        <a href="/triggers/{{ a.trigger.id }}" style="color:#991b1b; font-weight:600;">{{ a.trigger.name }}</a>
+        — {{ a.value }} mm observed in
+        <a href="/forecasts/{{ a.forecast_id }}" style="color:#991b1b;">{{ a.forecast.filename if a.forecast else "unknown forecast" }}</a>
+        <span style="color:#b91c1c; font-size:.8rem;">({{ a.triggered_at.strftime("%Y-%m-%d %H:%M") }})</span>
+      </li>
+      {% endfor %}
+      {% if active_activations | length > 5 %}
+      <li style="color:#b91c1c; font-size:.82rem;">…and {{ active_activations | length - 5 }} more</li>
+      {% endif %}
+    </ul>
+  </div>
+  {% endif %}
+
   <div class="greeting">Hello, {{ user.username }} 👋</div>
   <div class="sub">Here's what's going on today.</div>
 

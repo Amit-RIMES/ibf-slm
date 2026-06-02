@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}{% if trigger %}Edit Trigger{% else %}New Trigger{% endif %} — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 620px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: .35rem; }
+  .sub { color: #6b7280; font-size: .9rem; margin-bottom: 2rem; }
+
+  .section-heading { font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: #9ca3af; margin: 1.5rem 0 .75rem; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+  @media (max-width: 560px) { .grid-3 { grid-template-columns: 1fr; } }
+
+  .form-group { margin-bottom: 1rem; }
+  .form-group label { display: block; margin-bottom: .35rem; font-size: .875rem; font-weight: 500; color: #555; }
+  .form-group input, .form-group select {
+    width: 100%; padding: .6rem .85rem; border: 1px solid #d1d5db;
+    border-radius: 8px; font-size: .95rem; outline: none; transition: border-color .15s;
+    background: #fff;
+  }
+  .form-group input:focus, .form-group select:focus { border-color: #4f46e5; }
+
+  .toggle-row { display: flex; align-items: center; gap: .75rem; padding: .75rem 0; }
+  .toggle-row label { font-size: .9rem; font-weight: 500; color: #374151; cursor: pointer; }
+  input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; accent-color: #4f46e5; }
+
+  .rule-preview { background: #f5f3ff; border: 1px solid #e0d9ff; border-radius: 8px;
+    padding: .85rem 1rem; font-size: .9rem; color: #4338ca; margin-bottom: 1.5rem; display: none; }
+  .rule-preview.visible { display: block; }
+  .rule-preview strong { font-family: monospace; }
+
+  .form-actions { display: flex; gap: .75rem; margin-top: .5rem; }
+  .btn-submit { background: #4f46e5; color: #fff; border: none; border-radius: 8px;
+    padding: .7rem 1.6rem; font-size: .95rem; font-weight: 600; cursor: pointer;
+    flex: 1; transition: opacity .15s; }
+  .btn-submit:hover { opacity: .85; }
+  .btn-cancel { display: flex; align-items: center; justify-content: center;
+    border: 1px solid #d1d5db; border-radius: 8px; padding: .7rem 1.2rem;
+    font-size: .95rem; font-weight: 500; color: #6b7280; background: #fff; cursor: pointer; transition: background .15s; }
+  .btn-cancel:hover { background: #f9fafb; text-decoration: none; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <h1>{% if trigger %}Edit Trigger{% else %}New Trigger{% endif %}</h1>
+  <p class="sub">{% if trigger %}Update the threshold rule for this trigger.{% else %}Define a threshold rule — it will be evaluated automatically whenever a new forecast is uploaded.{% endif %}</p>
+
+  <form method="post" action="{% if trigger %}/triggers/{{ trigger.id }}/edit{% else %}/triggers/new{% endif %}">
+    <div class="card">
+      <div class="form-group">
+        <label>Trigger name</label>
+        <input type="text" name="name" placeholder="e.g. East Africa Heavy Rain Alert" required
+          value="{{ trigger.name if trigger else '' }}" />
+      </div>
+
+      <div class="form-group">
+        <label>Hazard type</label>
+        <select name="hazard_type" required>
+          <option value="" disabled {% if not trigger %}selected{% endif %}>Select…</option>
+          {% for h in hazard_types %}
+          <option value="{{ h }}" {% if trigger and trigger.hazard_type == h %}selected{% endif %}>{{ h | capitalize }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="section-heading">Threshold Rule</div>
+      <p style="font-size:.85rem; color:#6b7280; margin-bottom:1rem;">
+        Trigger fires when the selected forecast statistic crosses the threshold.
+      </p>
+
+      <div class="grid-3">
+        <div class="form-group">
+          <label>Forecast variable</label>
+          <select name="variable" id="sel-var" required>
+            <option value="" disabled {% if not trigger %}selected{% endif %}>Select…</option>
+            {% for v in variables %}
+            <option value="{{ v }}" {% if trigger and trigger.variable == v %}selected{% endif %}>{{ variable_labels[v] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Operator</label>
+          <select name="operator" id="sel-op" required>
+            <option value="" disabled {% if not trigger %}selected{% endif %}>Select…</option>
+            {% for op in operators %}
+            <option value="{{ op }}" {% if trigger and trigger.operator == op %}selected{% endif %}>{{ operator_labels[op] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Threshold (mm)</label>
+          <input type="number" step="any" name="threshold" id="inp-threshold" placeholder="e.g. 50" required
+            value="{{ trigger.threshold if trigger else '' }}" />
+        </div>
+      </div>
+
+      <div class="rule-preview" id="rule-preview">
+        Fire when <strong id="preview-text"></strong>
+      </div>
+
+      <div class="toggle-row">
+        <input type="checkbox" name="is_active" id="is_active" value="on"
+          {% if not trigger or trigger.is_active %}checked{% endif %} />
+        <label for="is_active">Active — evaluate this trigger on new forecasts</label>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn-submit">{% if trigger %}Save Changes{% else %}Create Trigger{% endif %}</button>
+        <a href="{% if trigger %}/triggers/{{ trigger.id }}{% else %}/triggers{% endif %}" class="btn-cancel">Cancel</a>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+  const varLabels = {{ variable_labels | tojson }};
+  const opSymbols = {"gt": ">", "gte": "≥", "lt": "<", "lte": "≤"};
+  const selVar = document.getElementById('sel-var');
+  const selOp = document.getElementById('sel-op');
+  const inpThreshold = document.getElementById('inp-threshold');
+  const preview = document.getElementById('rule-preview');
+  const previewText = document.getElementById('preview-text');
+
+  function updatePreview() {
+    const v = selVar.value, op = selOp.value, t = inpThreshold.value;
+    if (v && op && t) {
+      previewText.textContent = `${varLabels[v]} ${opSymbols[op]} ${t} mm`;
+      preview.classList.add('visible');
+    } else {
+      preview.classList.remove('visible');
+    }
+  }
+  selVar.addEventListener('change', updatePreview);
+  selOp.addEventListener('change', updatePreview);
+  inpThreshold.addEventListener('input', updatePreview);
+  updatePreview();
+</script>
+{% endblock %}

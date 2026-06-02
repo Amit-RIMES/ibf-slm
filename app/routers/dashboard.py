@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
+from app.models.trigger import TriggerActivation
 from app.models.user import User
 
 router = APIRouter()
@@ -35,6 +36,13 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     )
     recent_impacts = recent_impacts_result.scalars().all()
 
+    active_activations_result = await db.execute(
+        select(TriggerActivation)
+        .where(TriggerActivation.status == "active")
+        .order_by(desc(TriggerActivation.triggered_at))
+    )
+    active_activations = active_activations_result.scalars().all()
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
@@ -48,5 +56,6 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             },
             "recent_forecasts": recent_forecasts,
             "recent_impacts": recent_impacts,
+            "active_activations": active_activations,
         },
     )

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Forecasts — IBF App{% endblock %}
+{% block title %}Triggers — IBF App{% endblock %}
 
 {% block extra_styles %}
 <style>
@@ -27,9 +27,13 @@
   tr:last-child td { border-bottom: none; }
   tr:hover td { background: #f9fafb; }
 
-  .precip-bar-wrap { width: 80px; height: 6px; background: #e5e7eb; border-radius: 3px; display: inline-block; vertical-align: middle; }
-  .precip-bar { height: 6px; background: #3b82f6; border-radius: 3px; }
+  .badge { display: inline-block; padding: .2rem .65rem; border-radius: 999px;
+    font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .badge-active   { background: #dcfce7; color: #16a34a; }
+  .badge-inactive { background: #f3f4f6; color: #6b7280; }
+  .badge-alert    { background: #fee2e2; color: #991b1b; }
 
+  .rule { font-family: monospace; font-size: .82rem; background: #f3f4f6; padding: .2rem .5rem; border-radius: 4px; }
   .empty { color: #9ca3af; font-size: .9rem; padding: 2rem 0; text-align: center; }
 </style>
 {% endblock %}
@@ -39,54 +43,59 @@
   <span class="brand">IBF App</span>
   <div class="nav-links">
     <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
     <a href="/impacts">Impact Records</a>
-    <a href="/triggers">Triggers</a>
     <a href="/logout" class="logout">Logout</a>
   </div>
 </nav>
 
 <div class="main">
   <div class="page-header">
-    <h1>Forecasts</h1>
-    <a href="/forecasts/upload" class="btn-new">+ Upload</a>
+    <h1>Triggers</h1>
+    <a href="/triggers/new" class="btn-new">+ New Trigger</a>
   </div>
 
   <div class="card">
-    {% if forecasts %}
+    {% if triggers %}
     <table>
       <thead>
         <tr>
-          <th>File</th>
-          <th>Uploaded</th>
-          <th>Time range</th>
-          <th>Steps</th>
-          <th>Mean precip (mm)</th>
-          <th>Spatial extent</th>
+          <th>Name</th>
+          <th>Hazard</th>
+          <th>Rule</th>
+          <th>Status</th>
+          <th>Activations</th>
+          <th>Active alerts</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
-        {% for fc in forecasts %}
+        {% for t in triggers %}
+        {% set active_count = t.activations | selectattr("status", "equalto", "active") | list | length %}
         <tr>
-          <td style="font-weight:600;">{{ fc.filename }}</td>
-          <td>{{ fc.uploaded_at.strftime("%Y-%m-%d %H:%M") }}</td>
-          <td style="font-size:.8rem;">{{ fc.time_start[:10] }} – {{ fc.time_end[:10] }}</td>
-          <td>{{ fc.time_steps }}</td>
+          <td style="font-weight:600;">{{ t.name }}</td>
+          <td style="text-transform:capitalize;">{{ t.hazard_type }}</td>
+          <td><span class="rule">{{ VARIABLE_LABELS[t.variable] }} {{ OPERATOR_SYMBOLS[t.operator] }} {{ t.threshold }} mm</span></td>
           <td>
-            {{ fc.precip_mean }}
-            <span class="precip-bar-wrap">
-              {% set pct = ((fc.precip_mean - fc.precip_min) / (fc.precip_max - fc.precip_min + 0.001) * 100) | round | int %}
-              <span class="precip-bar" style="width:{{ pct }}%;"></span>
-            </span>
+            {% if t.is_active %}
+            <span class="badge badge-active">Active</span>
+            {% else %}
+            <span class="badge badge-inactive">Inactive</span>
+            {% endif %}
           </td>
-          <td style="font-size:.8rem;">{{ fc.lat_min }}°–{{ fc.lat_max }}°N, {{ fc.lon_min }}°–{{ fc.lon_max }}°E</td>
-          <td><a href="/forecasts/{{ fc.id }}" style="font-size:.8rem;">View</a></td>
+          <td>{{ t.activations | length }}</td>
+          <td>
+            {% if active_count > 0 %}
+            <span class="badge badge-alert">{{ active_count }} unacknowledged</span>
+            {% else %}—{% endif %}
+          </td>
+          <td><a href="/triggers/{{ t.id }}" style="font-size:.8rem;">View</a></td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
     {% else %}
-    <div class="empty">No forecasts uploaded yet. <a href="/forecasts/upload">Upload your first file.</a></div>
+    <div class="empty">No triggers defined yet. <a href="/triggers/new">Create your first trigger.</a></div>
     {% endif %}
   </div>
 </div>

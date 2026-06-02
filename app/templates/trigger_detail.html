@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}{{ trigger.name }} — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+  .page-header { display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 1.5rem; flex-wrap: wrap; gap: .75rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; }
+  .meta { font-size: .85rem; color: #9ca3af; margin-top: .2rem; }
+
+  .badge { display: inline-block; padding: .2rem .65rem; border-radius: 999px;
+    font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .badge-active      { background: #dcfce7; color: #16a34a; }
+  .badge-inactive    { background: #f3f4f6; color: #6b7280; }
+  .badge-alert       { background: #fee2e2; color: #991b1b; }
+  .badge-acknowledged { background: #e0f2fe; color: #0369a1; }
+
+  .rule-box { background: #f5f3ff; border: 1px solid #e0d9ff; border-radius: 8px;
+    padding: .85rem 1.2rem; font-size: .95rem; color: #4338ca; margin-bottom: 1.5rem; }
+  .rule-box strong { font-family: monospace; }
+
+  .section-title { font-size: .78rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: #9ca3af; margin-bottom: 1rem; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  th { text-align: left; padding: .6rem .75rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; border-bottom: 1px solid #e5e7eb; }
+  td { padding: .7rem .75rem; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+
+  .ack-form { margin-top: .5rem; }
+  .ack-form textarea { width: 100%; padding: .4rem .6rem; border: 1px solid #d1d5db;
+    border-radius: 6px; font-size: .8rem; font-family: inherit; resize: none; height: 52px;
+    outline: none; }
+  .ack-form textarea:focus { border-color: #4f46e5; }
+  .btn-ack { background: #4f46e5; color: #fff; border: none; border-radius: 6px;
+    padding: .35rem .9rem; font-size: .8rem; font-weight: 600; cursor: pointer; margin-top: .35rem; }
+  .btn-ack:hover { opacity: .85; }
+
+  .empty { color: #9ca3af; font-size: .9rem; padding: 1.5rem 0; text-align: center; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <div>
+      <h1>
+        {{ trigger.name }}
+        {% if trigger.is_active %}
+        <span class="badge badge-active" style="vertical-align:middle; font-size:.7rem;">Active</span>
+        {% else %}
+        <span class="badge badge-inactive" style="vertical-align:middle; font-size:.7rem;">Inactive</span>
+        {% endif %}
+      </h1>
+      <div class="meta">Trigger #{{ trigger.id }} &nbsp;·&nbsp; Created {{ trigger.created_at.strftime("%Y-%m-%d") }} &nbsp;·&nbsp; Hazard: {{ trigger.hazard_type | capitalize }}</div>
+    </div>
+    <div style="display:flex; gap:.6rem;">
+      <a href="/triggers/{{ trigger.id }}/edit"
+        style="display:inline-block; padding:.45rem 1rem; background:#4f46e5; color:#fff; border-radius:8px; font-size:.85rem; font-weight:600;">Edit</a>
+      <form method="post" action="/triggers/{{ trigger.id }}/delete" style="display:inline;"
+        onsubmit="return confirm('Delete this trigger and all its activations?')">
+        <button type="submit"
+          style="padding:.45rem 1rem; background:#fff; border:1px solid #d1d5db; border-radius:8px; font-size:.85rem; font-weight:600; color:#dc2626; cursor:pointer;">Delete</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="rule-box">
+    Fire when <strong>{{ VARIABLE_LABELS[trigger.variable] }} {{ OPERATOR_SYMBOLS[trigger.operator] }} {{ trigger.threshold }} mm</strong>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Activation History ({{ activations | length }})</div>
+    {% if activations %}
+    <table>
+      <thead>
+        <tr>
+          <th>Forecast</th>
+          <th>Observed value</th>
+          <th>Triggered at</th>
+          <th>Status</th>
+          <th>Notes / Acknowledge</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in activations %}
+        <tr>
+          <td>
+            {% if a.forecast %}
+            <a href="/forecasts/{{ a.forecast_id }}" style="font-weight:500;">{{ a.forecast.filename }}</a>
+            {% else %}—{% endif %}
+          </td>
+          <td style="font-weight:600; font-family:monospace;">{{ a.value }} mm</td>
+          <td style="font-size:.82rem; color:#6b7280;">{{ a.triggered_at.strftime("%Y-%m-%d %H:%M UTC") }}</td>
+          <td>
+            {% if a.status == "active" %}
+            <span class="badge badge-alert">Unacknowledged</span>
+            {% else %}
+            <span class="badge badge-acknowledged">Acknowledged</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if a.status == "active" %}
+            <form method="post" action="/triggers/activations/{{ a.id }}/acknowledge" class="ack-form">
+              <textarea name="notes" placeholder="Optional notes on response taken…"></textarea>
+              <button type="submit" class="btn-ack">Acknowledge</button>
+            </form>
+            {% else %}
+            <span style="font-size:.82rem; color:#6b7280;">
+              {{ a.acknowledged_at.strftime("%Y-%m-%d %H:%M") if a.acknowledged_at else "" }}
+              {% if a.notes %}<br><em>{{ a.notes }}</em>{% endif %}
+            </span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No activations yet — this trigger will fire automatically when a matching forecast is uploaded.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
