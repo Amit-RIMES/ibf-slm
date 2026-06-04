@@ -73,3 +73,44 @@ async def logout():
     response = RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
     response.delete_cookie("access_token")
     return response
+
+
+@router.get("/account/password", response_class=HTMLResponse)
+async def change_password_page(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core.deps import get_current_user
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    return templates.TemplateResponse("change_password.html", {"request": request, "user": user})
+
+
+@router.post("/account/password", response_class=HTMLResponse)
+async def change_password(
+    request: Request,
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.core.deps import get_current_user
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    def err(msg):
+        return templates.TemplateResponse(
+            "change_password.html", {"request": request, "user": user, "error": msg}
+        )
+
+    if not verify_password(current_password, user.hashed_password):
+        return err("Current password is incorrect.")
+    if len(new_password) < 6:
+        return err("New password must be at least 6 characters.")
+    if new_password != confirm_password:
+        return err("New passwords do not match.")
+
+    user.hashed_password = hash_password(new_password)
+    await db.commit()
+    return templates.TemplateResponse(
+        "change_password.html", {"request": request, "user": user, "success": True}
+    )
