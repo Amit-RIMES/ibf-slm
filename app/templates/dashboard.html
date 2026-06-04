@@ -102,6 +102,22 @@
     </div>
   </div>
 
+  <!-- Charts -->
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.25rem;">
+    <div class="card" style="grid-column:1/-1;">
+      <div class="section-title">Precipitation Trend — Last 30 Forecasts (mm mean)</div>
+      <canvas id="precipChart" height="90"></canvas>
+    </div>
+    <div class="card">
+      <div class="section-title">Impacts by Hazard Type</div>
+      <canvas id="hazardChart" height="200"></canvas>
+    </div>
+    <div class="card">
+      <div class="section-title">Forecasts Ingested (last 6 months)</div>
+      <canvas id="monthlyChart" height="200"></canvas>
+    </div>
+  </div>
+
   <div class="card" style="margin-bottom:1.25rem;">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
       <div class="section-title" style="margin-bottom:0;">Recent Forecasts</div>
@@ -181,4 +197,106 @@
     </table>
   </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  const PURPLE = '#4f46e5';
+  const PURPLE_LIGHT = 'rgba(79,70,229,0.12)';
+  const PALETTE = [
+    '#4f46e5','#0ea5e9','#10b981','#f59e0b','#ef4444',
+    '#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1',
+  ];
+
+  const precip = {{ precip_chart | safe }};
+  const hazard = {{ hazard_chart | safe }};
+  const monthly = {{ monthly_chart | safe }};
+
+  // 1. Precipitation trend
+  if (precip.labels.length) {
+    new Chart(document.getElementById('precipChart'), {
+      type: 'line',
+      data: {
+        labels: precip.labels,
+        datasets: [{
+          label: 'Mean precip (mm)',
+          data: precip.values,
+          borderColor: PURPLE,
+          backgroundColor: PURPLE_LIGHT,
+          borderWidth: 2,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          fill: true,
+          tension: 0.3,
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: (items) => precip.filenames[items[0].dataIndex],
+              label: (item) => ` ${item.raw} mm`,
+            },
+          },
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { font: { size: 11 } }, grid: { color: '#f3f4f6' } },
+          x: { ticks: { font: { size: 11 }, maxRotation: 45 }, grid: { display: false } },
+        },
+      },
+    });
+  } else {
+    document.getElementById('precipChart').parentElement.innerHTML +=
+      '<p style="color:#9ca3af;font-size:.875rem;margin-top:.5rem;">No forecast data yet.</p>';
+    document.getElementById('precipChart').remove();
+  }
+
+  // 2. Hazard type doughnut
+  if (hazard.labels.length) {
+    new Chart(document.getElementById('hazardChart'), {
+      type: 'doughnut',
+      data: {
+        labels: hazard.labels,
+        datasets: [{ data: hazard.values, backgroundColor: PALETTE, borderWidth: 2, borderColor: '#fff' }],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 12 } },
+        },
+        cutout: '60%',
+      },
+    });
+  } else {
+    document.getElementById('hazardChart').parentElement.innerHTML +=
+      '<p style="color:#9ca3af;font-size:.875rem;margin-top:.5rem;">No impact records yet.</p>';
+    document.getElementById('hazardChart').remove();
+  }
+
+  // 3. Monthly ingestion bar
+  new Chart(document.getElementById('monthlyChart'), {
+    type: 'bar',
+    data: {
+      labels: monthly.labels,
+      datasets: [{
+        label: 'Forecasts',
+        data: monthly.values,
+        backgroundColor: PURPLE,
+        borderRadius: 6,
+        borderSkipped: false,
+      }],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: '#f3f4f6' } },
+        x: { ticks: { font: { size: 11 } }, grid: { display: false } },
+      },
+    },
+  });
+})();
+</script>
 {% endblock %}
