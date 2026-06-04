@@ -31,6 +31,25 @@
   .precip-bar { height: 6px; background: #3b82f6; border-radius: 3px; }
 
   .empty { color: #9ca3af; font-size: .9rem; padding: 2rem 0; text-align: center; }
+
+  .filter-bar {
+    display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+    margin-bottom: 1.25rem; background: #fff; border-radius: 10px;
+    padding: 1rem 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  }
+  .filter-bar input[type=text], .filter-bar input[type=date] {
+    padding: .45rem .75rem; border: 1px solid #d1d5db; border-radius: 7px;
+    font-size: .875rem; outline: none; transition: border-color .15s;
+  }
+  .filter-bar input:focus { border-color: #4f46e5; }
+  .filter-bar input[type=text] { width: 220px; }
+  .btn-filter {
+    background: #4f46e5; color: #fff; border: none; border-radius: 7px;
+    padding: .45rem 1rem; font-size: .875rem; font-weight: 600; cursor: pointer;
+  }
+  .btn-filter:hover { opacity: .85; }
+  .btn-clear { font-size: .82rem; color: #6b7280; }
+  .result-count { font-size: .82rem; color: #9ca3af; margin-left: auto; }
 </style>
 {% endblock %}
 
@@ -51,6 +70,18 @@
     <h1>Forecasts</h1>
     <a href="/forecasts/import" class="btn-new">+ Import from RIMES</a>
   </div>
+
+  <!-- Filter bar -->
+  <form method="get" action="/forecasts" class="filter-bar">
+    <input type="text" name="q" placeholder="Search filename…" value="{{ q }}">
+    <input type="date" name="date_from" value="{{ date_from }}" title="Uploaded from">
+    <input type="date" name="date_to"   value="{{ date_to }}"   title="Uploaded to">
+    <button type="submit" class="btn-filter">Filter</button>
+    {% if q or date_from or date_to %}
+    <a href="/forecasts" class="btn-clear">✕ Clear</a>
+    {% endif %}
+    <span class="result-count">{{ forecasts | length }} result{{ 's' if forecasts | length != 1 else '' }}</span>
+  </form>
 
   <div class="card">
     {% if forecasts %}
@@ -87,7 +118,13 @@
       </tbody>
     </table>
     {% else %}
-    <div class="empty">No forecasts uploaded yet. <a href="/forecasts/upload">Upload your first file.</a></div>
+    <div class="empty">
+      {% if q or date_from or date_to %}
+        No forecasts match your filters. <a href="/forecasts">Clear filters</a>
+      {% else %}
+        No forecasts uploaded yet. <a href="/forecasts/upload">Upload your first file.</a>
+      {% endif %}
+    </div>
     {% endif %}
   </div>
 </div>

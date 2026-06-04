@@ -178,18 +178,45 @@ def _process_netcdf(path: str) -> dict:
 
 
 @router.get("", response_class=HTMLResponse)
-async def forecast_list(request: Request, db: AsyncSession = Depends(get_db)):
+async def forecast_list(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    q: str = "",
+    date_from: str = "",
+    date_to: str = "",
+):
     user = await get_current_user(request, db)
     if not user:
         return RedirectResponse("/login")
 
-    result = await db.execute(
-        select(ForecastUpload).order_by(desc(ForecastUpload.uploaded_at))
-    )
+    from datetime import date as date_type, timedelta
+    from sqlalchemy import and_
+
+    stmt = select(ForecastUpload)
+    filters = []
+    if q:
+        filters.append(ForecastUpload.filename.ilike(f"%{q}%"))
+    if date_from:
+        try:
+            filters.append(ForecastUpload.uploaded_at >= date_type.fromisoformat(date_from))
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            filters.append(ForecastUpload.uploaded_at < date_type.fromisoformat(date_to) + timedelta(days=1))
+        except ValueError:
+            pass
+    if filters:
+        stmt = stmt.where(and_(*filters))
+    stmt = stmt.order_by(desc(ForecastUpload.uploaded_at))
+
+    result = await db.execute(stmt)
     forecasts = result.scalars().all()
 
     return templates.TemplateResponse(
-        "forecast_list.html", {"request": request, "user": user, "forecasts": forecasts}
+        "forecast_list.html",
+        {"request": request, "user": user, "forecasts": forecasts,
+         "q": q, "date_from": date_from, "date_to": date_to},
     )
 
 
@@ -354,6 +381,20 @@ async def forecast_detail(forecast_id: int, request: Request, db: AsyncSession =
         "forecast_detail.html",
         {"request": request, "user": user, "forecast": forecast},
     )
+
+
+@router.post("/{forecast_id}/delete")
+async def delete_forecast(forecast_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    result = await db.execute(select(ForecastUpload).where(ForecastUpload.id == forecast_id))
+    forecast = result.scalar_one_or_none()
+    if forecast:
+        await db.delete(forecast)
+        await db.commit()
+    return RedirectResponse("/forecasts", status_code=303)
 
 
 async def get_recent_forecasts(db: AsyncSession, limit: int = 5):

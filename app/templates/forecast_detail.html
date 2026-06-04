@@ -61,6 +61,15 @@
       <h1>{{ forecast.filename }}</h1>
       <div class="meta">Forecast #{{ forecast.id }} &nbsp;·&nbsp; Uploaded {{ forecast.uploaded_at.strftime("%Y-%m-%d %H:%M UTC") }}</div>
     </div>
+    <form method="post" action="/forecasts/{{ forecast.id }}/delete"
+          onsubmit="return confirm('Delete this forecast? Any linked trigger activations will also be removed.')">
+      <button type="submit" style="
+        background: #fff; border: 1px solid #fca5a5; color: #dc2626;
+        border-radius: 8px; padding: .45rem 1rem; font-size: .875rem;
+        font-weight: 600; cursor: pointer;">
+        Delete
+      </button>
+    </form>
   </div>
 
   <div class="grid-2">
