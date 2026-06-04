@@ -264,6 +264,48 @@ async def import_page(request: Request, db: AsyncSession = Depends(get_db)):
     )
 
 
+async def do_import(source: str, date: str, db: AsyncSession) -> ForecastUpload:
+    """Fetch a forecast from the RIMES portal and persist it. Raises on failure."""
+    source_entry = _SOURCE_MAP.get(source)
+    if not source_entry:
+        raise ValueError(f"Unknown source: {source}")
+
+    source_key = source.replace("regional_", "").replace("country_", "")
+    filename = f"ecmwf_tp_{source_key}_{date}.nc"
+
+    # Skip if already imported
+    existing = await db.execute(
+        select(ForecastUpload).where(ForecastUpload.filename == filename)
+    )
+    if existing.scalar_one_or_none():
+        raise FileExistsError(f"Already imported: {filename}")
+
+    url = f"{PORTAL_BASE}/{source_entry['path']}/{date}/tp.nc"
+    tmp_path = None
+    try:
+        async with httpx.AsyncClient() as client:
+            async with client.stream("GET", url, timeout=120) as resp:
+                if resp.status_code == 404:
+                    raise ValueError(f"No data for {date} / {source_entry['label']}")
+                resp.raise_for_status()
+                with tempfile.NamedTemporaryFile(suffix=".nc", delete=False) as tmp:
+                    async for chunk in resp.aiter_bytes(chunk_size=65536):
+                        tmp.write(chunk)
+                    tmp_path = tmp.name
+
+        stats = _process_netcdf(tmp_path)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+    forecast = ForecastUpload(filename=filename, **stats)
+    db.add(forecast)
+    await db.commit()
+    await db.refresh(forecast)
+    await evaluate_triggers(forecast, db)
+    return forecast
+
+
 @router.post("/import")
 async def import_forecast(
     request: Request,
@@ -279,23 +321,10 @@ async def import_forecast(
     if not source_entry or not re.fullmatch(r"\d{8}", date):
         return RedirectResponse("/forecasts/import")
 
-    url = f"{PORTAL_BASE}/{source_entry['path']}/{date}/tp.nc"
-    source_key = source.replace("regional_", "").replace("country_", "")
-    filename = f"ecmwf_tp_{source_key}_{date}.nc"
-
-    tmp_path = None
     try:
-        async with httpx.AsyncClient() as client:
-            async with client.stream("GET", url, timeout=120) as resp:
-                if resp.status_code == 404:
-                    raise ValueError(f"No data available for {date} / {source_entry['label']}")
-                resp.raise_for_status()
-                with tempfile.NamedTemporaryFile(suffix=".nc", delete=False) as tmp:
-                    async for chunk in resp.aiter_bytes(chunk_size=65536):
-                        tmp.write(chunk)
-                    tmp_path = tmp.name
-
-        stats = _process_netcdf(tmp_path)
+        forecast = await do_import(source, date, db)
+    except FileExistsError:
+        return RedirectResponse("/forecasts/import")
     except Exception as exc:
         try:
             dates = await _fetch_portal_dates()
@@ -307,15 +336,6 @@ async def import_forecast(
              "dates": dates, "portal_error": None,
              "error": f"Import failed: {exc}", "portal_base": PORTAL_BASE},
         )
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-
-    forecast = ForecastUpload(filename=filename, **stats)
-    db.add(forecast)
-    await db.commit()
-    await db.refresh(forecast)
-    await evaluate_triggers(forecast, db)
     return RedirectResponse(f"/forecasts/{forecast.id}", status_code=303)
 
 
