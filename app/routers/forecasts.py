@@ -179,6 +179,23 @@ def _process_netcdf(path: str) -> dict:
     }
 
 
+PAGE_SIZE = 20
+
+
+def _build_page_range(current: int, total_pages: int) -> list:
+    if total_pages <= 7:
+        return list(range(1, total_pages + 1))
+    pages: list = []
+    shown = sorted({1, total_pages, *range(max(1, current - 2), min(total_pages, current + 2) + 1)})
+    prev = 0
+    for p in shown:
+        if p - prev > 1:
+            pages.append(None)
+        pages.append(p)
+        prev = p
+    return pages
+
+
 @router.get("", response_class=HTMLResponse)
 async def forecast_list(
     request: Request,
@@ -186,15 +203,16 @@ async def forecast_list(
     q: str = "",
     date_from: str = "",
     date_to: str = "",
+    page: int = 1,
 ):
     user = await get_current_user(request, db)
     if not user:
         return RedirectResponse("/login")
 
     from datetime import date as date_type, timedelta
-    from sqlalchemy import and_
+    from sqlalchemy import and_, func
 
-    stmt = select(ForecastUpload)
+    page = max(1, page)
     filters = []
     if q:
         filters.append(ForecastUpload.filename.ilike(f"%{q}%"))
@@ -208,17 +226,28 @@ async def forecast_list(
             filters.append(ForecastUpload.uploaded_at < date_type.fromisoformat(date_to) + timedelta(days=1))
         except ValueError:
             pass
-    if filters:
-        stmt = stmt.where(and_(*filters))
-    stmt = stmt.order_by(desc(ForecastUpload.uploaded_at))
 
+    base = select(ForecastUpload)
+    if filters:
+        from sqlalchemy import and_
+        base = base.where(and_(*filters))
+
+    total = await db.scalar(select(func.count()).select_from(base.subquery()))
+    total_pages = max(1, -(-total // PAGE_SIZE))  # ceiling division
+    page = min(page, total_pages)
+
+    stmt = base.order_by(desc(ForecastUpload.uploaded_at)).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)
     result = await db.execute(stmt)
     forecasts = result.scalars().all()
 
     return templates.TemplateResponse(
         "forecast_list.html",
-        {"request": request, "user": user, "forecasts": forecasts,
-         "q": q, "date_from": date_from, "date_to": date_to},
+        {
+            "request": request, "user": user, "forecasts": forecasts,
+            "q": q, "date_from": date_from, "date_to": date_to,
+            "page": page, "total": total, "total_pages": total_pages,
+            "page_size": PAGE_SIZE, "page_range": _build_page_range(page, total_pages),
+        },
     )
 
 

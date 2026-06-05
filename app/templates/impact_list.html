@@ -39,6 +39,15 @@
   .hazard-other     { background: #f3f4f6; color: #374151; }
 
   .empty { color: #9ca3af; font-size: .9rem; padding: 2rem 0; text-align: center; }
+
+  .pagination { display:flex; align-items:center; gap:.35rem; margin-top:1.25rem; justify-content:center; flex-wrap:wrap; }
+  .page-btn { display:inline-flex; align-items:center; justify-content:center; min-width:2rem; height:2rem;
+    padding:0 .6rem; border-radius:6px; font-size:.875rem; border:1px solid #e5e7eb;
+    background:#fff; color:#374151; text-decoration:none; }
+  .page-btn:hover { background:#f3f4f6; text-decoration:none; }
+  .page-btn.active { background:#4f46e5; color:#fff; border-color:#4f46e5; font-weight:600; pointer-events:none; }
+  .page-btn.disabled { color:#d1d5db; pointer-events:none; border-color:#f3f4f6; }
+  .page-ellipsis { color:#9ca3af; padding:0 .2rem; }
 </style>
 {% endblock %}
 
@@ -109,5 +118,31 @@
     <div class="empty">No impact records yet. <a href="/impacts/new">Add the first one.</a></div>
     {% endif %}
   </div>
+
+  {% if total_pages > 1 %}
+  <div class="pagination">
+    {% if page > 1 %}
+      <a class="page-btn" href="/impacts?page={{ page - 1 }}">← Prev</a>
+    {% else %}
+      <span class="page-btn disabled">← Prev</span>
+    {% endif %}
+
+    {% for p in page_range %}
+      {% if p is none %}
+        <span class="page-ellipsis">…</span>
+      {% elif p == page %}
+        <span class="page-btn active">{{ p }}</span>
+      {% else %}
+        <a class="page-btn" href="/impacts?page={{ p }}">{{ p }}</a>
+      {% endif %}
+    {% endfor %}
+
+    {% if page < total_pages %}
+      <a class="page-btn" href="/impacts?page={{ page + 1 }}">Next →</a>
+    {% else %}
+      <span class="page-btn disabled">Next →</span>
+    {% endif %}
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

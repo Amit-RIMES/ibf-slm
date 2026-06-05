@@ -20,19 +20,49 @@ templates = Jinja2Templates(directory="app/templates")
 HAZARD_TYPES = ["flood", "storm", "drought", "landslide", "heatwave", "cyclone", "other"]
 
 
+PAGE_SIZE = 20
+
+
+def _build_page_range(current: int, total_pages: int) -> list:
+    if total_pages <= 7:
+        return list(range(1, total_pages + 1))
+    pages: list = []
+    shown = sorted({1, total_pages, *range(max(1, current - 2), min(total_pages, current + 2) + 1)})
+    prev = 0
+    for p in shown:
+        if p - prev > 1:
+            pages.append(None)
+        pages.append(p)
+        prev = p
+    return pages
+
+
 @router.get("", response_class=HTMLResponse)
-async def impact_list(request: Request, db: AsyncSession = Depends(get_db)):
+async def impact_list(request: Request, db: AsyncSession = Depends(get_db), page: int = 1):
     user = await get_current_user(request, db)
     if not user:
         return RedirectResponse("/login")
 
+    from sqlalchemy import func
+
+    page = max(1, page)
+    total = await db.scalar(select(func.count()).select_from(ImpactRecord))
+    total_pages = max(1, -(-total // PAGE_SIZE))
+    page = min(page, total_pages)
+
     result = await db.execute(
         select(ImpactRecord).order_by(desc(ImpactRecord.event_date))
+        .offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)
     )
     impacts = result.scalars().all()
 
     return templates.TemplateResponse(
-        "impact_list.html", {"request": request, "user": user, "impacts": impacts}
+        "impact_list.html",
+        {
+            "request": request, "user": user, "impacts": impacts,
+            "page": page, "total": total, "total_pages": total_pages,
+            "page_size": PAGE_SIZE, "page_range": _build_page_range(page, total_pages),
+        },
     )
 
 
