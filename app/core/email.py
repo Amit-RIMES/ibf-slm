@@ -117,6 +117,36 @@ def _build_trigger_html(
     </div>"""
 
 
+async def send_new_registration_email(admin_emails: list[str], username: str, email: str, base_url: str) -> None:
+    subject = f"[IBF] New registration pending approval — {username}"
+    html = f"""
+    <div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto;padding:2rem;">
+      <h2 style="color:#1a1a2e">New registration pending approval</h2>
+      <p style="color:#4b5563">A new user has registered and is waiting for your approval.</p>
+      <table style="width:100%;border-collapse:collapse;font-size:.9rem;margin:1rem 0;">
+        <tr><td style="padding:.4rem 0;color:#6b7280;width:80px">Username</td><td style="font-weight:600">{username}</td></tr>
+        <tr><td style="padding:.4rem 0;color:#6b7280">Email</td><td>{email}</td></tr>
+      </table>
+      <a href="{base_url}/admin/users"
+         style="display:inline-block;margin-top:.5rem;padding:.65rem 1.25rem;
+                background:#4f46e5;color:#fff;border-radius:8px;
+                text-decoration:none;font-weight:600;">
+        Review in Admin Panel
+      </a>
+    </div>
+    """
+
+    if not settings.SMTP_HOST:
+        logger.warning("SMTP not configured. New registration pending: %s <%s>", username, email)
+        return
+
+    for admin_email in admin_emails:
+        try:
+            await asyncio.to_thread(_send_sync, admin_email, subject, html)
+        except Exception as exc:
+            logger.error("Failed to send registration alert to %s: %s", admin_email, exc)
+
+
 async def send_trigger_activation_email(
     admin_emails: list[str],
     fired: list[tuple["Trigger", "TriggerActivation", "ForecastUpload"]],

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.email import send_password_reset_email
+from app.core.email import send_new_registration_email, send_password_reset_email
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.reset_token import PasswordResetToken
 from app.models.user import User
@@ -39,10 +39,16 @@ async def register(
             status_code=400,
         )
 
-    user = User(email=email, username=username, hashed_password=hash_password(password))
+    user = User(email=email, username=username, hashed_password=hash_password(password), is_active=False)
     db.add(user)
     await db.commit()
-    return RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
+
+    import asyncio
+    admins = await db.execute(select(User.email).where(User.role == "admin", User.is_active == True))  # noqa: E712
+    admin_emails = [r[0] for r in admins.all()]
+    asyncio.create_task(send_new_registration_email(admin_emails, username, email, settings.APP_BASE_URL))
+
+    return RedirectResponse("/login?pending=1", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -66,6 +72,13 @@ async def login(
             "login.html",
             {"request": request, "error": "Invalid email or password."},
             status_code=401,
+        )
+
+    if not user.is_active:
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": "Your account is pending admin approval."},
+            status_code=403,
         )
 
     token = create_access_token({"sub": str(user.id)})

@@ -25,11 +25,41 @@ async def admin_users(request: Request, db: AsyncSession = Depends(get_db)):
     if user.role != "admin":
         return _FORBIDDEN
 
-    result = await db.execute(select(User).order_by(User.id))
-    users = result.scalars().all()
-    return templates.TemplateResponse(
-        "admin/users.html", {"request": request, "user": user, "users": users}
+    pending_result = await db.execute(
+        select(User).where(User.is_active == False).order_by(User.created_at)  # noqa: E712
     )
+    active_result = await db.execute(
+        select(User).where(User.is_active == True).order_by(User.id)  # noqa: E712
+    )
+    return templates.TemplateResponse(
+        "admin/users.html",
+        {
+            "request": request,
+            "user": user,
+            "pending_users": pending_result.scalars().all(),
+            "users": active_result.scalars().all(),
+        },
+    )
+
+
+@router.post("/users/{target_id}/approve")
+async def admin_approve_user(
+    request: Request,
+    target_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    if user.role != "admin":
+        return _FORBIDDEN
+
+    result = await db.execute(select(User).where(User.id == target_id))
+    target = result.scalar_one_or_none()
+    if target:
+        target.is_active = True
+        await db.commit()
+    return RedirectResponse("/admin/users", status_code=303)
 
 
 @router.post("/users/{target_id}/role")

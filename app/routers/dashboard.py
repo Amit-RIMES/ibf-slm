@@ -26,8 +26,9 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     if not user:
         return RedirectResponse("/login")
 
-    total_users = await db.scalar(select(func.count()).select_from(User))
-    admin_count = await db.scalar(select(func.count()).select_from(User).where(User.role == "admin"))
+    total_users = await db.scalar(select(func.count()).select_from(User).where(User.is_active == True))  # noqa: E712
+    pending_count = await db.scalar(select(func.count()).select_from(User).where(User.is_active == False))  # noqa: E712
+    admin_count = await db.scalar(select(func.count()).select_from(User).where(User.role == "admin", User.is_active == True))  # noqa: E712
     total_forecasts = await db.scalar(select(func.count()).select_from(ForecastUpload))
     total_impacts = await db.scalar(select(func.count()).select_from(ImpactRecord))
 
@@ -110,6 +111,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "user": user,
             "stats": {
                 "total_users": total_users,
+                "pending_count": pending_count,
                 "admin_count": admin_count,
                 "user_count": total_users - admin_count,
                 "total_forecasts": total_forecasts,
