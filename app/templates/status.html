@@ -4,6 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta http-equiv="refresh" content="300" />
+  <script>
+    (function(){
+      var t = localStorage.getItem('ibf-theme') ||
+        (window.matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light');
+      if (t === 'dark') document.documentElement.setAttribute('data-theme','dark');
+    })();
+  </script>
   <title>IBF Alert Status — RIMES</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
@@ -73,6 +80,17 @@
       margin-top: 1rem;
     }
     footer a { color: #6b7280; }
+
+    /* Dark mode */
+    [data-theme="dark"] body    { background: #0f172a; color: #e2e8f0; }
+    [data-theme="dark"] header  { background: #0f172a; border-bottom: 1px solid #334155; }
+    [data-theme="dark"] .status-banner.clear { background: #052e16 !important; border-color: #166534 !important; }
+    [data-theme="dark"] .status-banner.active { background: #450a0a !important; border-color: #7f1d1d !important; }
+    [data-theme="dark"] .alert-card { background: #1e293b !important; }
+    [data-theme="dark"] .alert-card .region { color: #94a3b8 !important; }
+    [data-theme="dark"] .alert-card .since  { color: #64748b !important; }
+    [data-theme="dark"] footer  { color: #475569; border-color: #334155; }
+    [data-theme="dark"] footer a { color: #64748b; }
 
     @media (max-width: 700px) {
       header { padding: .85rem 1rem; }
