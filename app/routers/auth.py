@@ -108,6 +108,68 @@ async def logout():
     return response
 
 
+@router.get("/account/profile", response_class=HTMLResponse)
+async def edit_profile_page(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core.deps import get_current_user
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    return templates.TemplateResponse(
+        "edit_profile.html",
+        {"request": request, "user": user, "username": user.username, "email": user.email},
+    )
+
+
+@router.post("/account/profile", response_class=HTMLResponse)
+async def edit_profile(
+    request: Request,
+    username: str = Form(...),
+    email: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.core.deps import get_current_user
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    def err(msg):
+        return templates.TemplateResponse(
+            "edit_profile.html",
+            {"request": request, "user": user, "username": username, "email": email, "error": msg},
+        )
+
+    username = username.strip()
+    email = email.strip().lower()
+
+    if not username:
+        return err("Username cannot be empty.")
+    if not email:
+        return err("Email cannot be empty.")
+
+    if username != user.username:
+        taken = await db.scalar(
+            select(User).where(User.username == username, User.id != user.id)
+        )
+        if taken:
+            return err("That username is already taken.")
+
+    if email != user.email:
+        taken = await db.scalar(
+            select(User).where(User.email == email, User.id != user.id)
+        )
+        if taken:
+            return err("That email address is already registered.")
+
+    user.username = username
+    user.email = email
+    await db.commit()
+
+    return templates.TemplateResponse(
+        "edit_profile.html",
+        {"request": request, "user": user, "username": username, "email": email, "success": True},
+    )
+
+
 @router.get("/account/password", response_class=HTMLResponse)
 async def change_password_page(request: Request, db: AsyncSession = Depends(get_db)):
     from app.core.deps import get_current_user
