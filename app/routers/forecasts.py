@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import re
 import tempfile
@@ -7,7 +9,7 @@ import httpx
 import numpy as np
 import xarray as xr
 from fastapi import APIRouter, Depends, Form, Request, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -217,6 +219,66 @@ async def forecast_list(
         "forecast_list.html",
         {"request": request, "user": user, "forecasts": forecasts,
          "q": q, "date_from": date_from, "date_to": date_to},
+    )
+
+
+@router.get("/export.csv")
+async def forecast_export(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    q: str = "",
+    date_from: str = "",
+    date_to: str = "",
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    from datetime import date as date_type, timedelta
+    from sqlalchemy import and_
+
+    stmt = select(ForecastUpload)
+    filters = []
+    if q:
+        filters.append(ForecastUpload.filename.ilike(f"%{q}%"))
+    if date_from:
+        try:
+            filters.append(ForecastUpload.uploaded_at >= date_type.fromisoformat(date_from))
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            filters.append(ForecastUpload.uploaded_at < date_type.fromisoformat(date_to) + timedelta(days=1))
+        except ValueError:
+            pass
+    if filters:
+        stmt = stmt.where(and_(*filters))
+    stmt = stmt.order_by(desc(ForecastUpload.uploaded_at))
+
+    result = await db.execute(stmt)
+    forecasts = result.scalars().all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "id", "filename", "uploaded_at",
+        "lat_min", "lat_max", "lon_min", "lon_max",
+        "time_start", "time_end", "time_steps",
+        "precip_min_mm", "precip_max_mm", "precip_mean_mm",
+    ])
+    for fc in forecasts:
+        writer.writerow([
+            fc.id, fc.filename, fc.uploaded_at.strftime("%Y-%m-%d %H:%M:%S"),
+            fc.lat_min, fc.lat_max, fc.lon_min, fc.lon_max,
+            fc.time_start, fc.time_end, fc.time_steps,
+            fc.precip_min, fc.precip_max, fc.precip_mean,
+        ])
+
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=forecasts.csv"},
     )
 
 

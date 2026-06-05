@@ -1,12 +1,13 @@
+import csv
+import io
 from datetime import date
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
-
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -32,6 +33,41 @@ async def impact_list(request: Request, db: AsyncSession = Depends(get_db)):
 
     return templates.TemplateResponse(
         "impact_list.html", {"request": request, "user": user, "impacts": impacts}
+    )
+
+
+@router.get("/export.csv")
+async def impact_export(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    result = await db.execute(select(ImpactRecord).order_by(desc(ImpactRecord.event_date)))
+    impacts = result.scalars().all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "id", "event_name", "event_date", "hazard_type",
+        "country", "region", "lat", "lon",
+        "affected_population", "casualties", "displaced", "damage_usd",
+        "description", "forecast_id", "created_at",
+    ])
+    for imp in impacts:
+        writer.writerow([
+            imp.id, imp.event_name, imp.event_date, imp.hazard_type,
+            imp.country, imp.region or "", imp.lat or "", imp.lon or "",
+            imp.affected_population or "", imp.casualties or "",
+            imp.displaced or "", imp.damage_usd or "",
+            imp.description or "", imp.forecast_id or "",
+            imp.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+        ])
+
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=impacts.csv"},
     )
 
 

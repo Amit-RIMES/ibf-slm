@@ -71,7 +71,14 @@
 <div class="main">
   <div class="page-header">
     <h1>Forecasts</h1>
-    <a href="/forecasts/import" class="btn-new">+ Import from RIMES</a>
+    <div style="display:flex;gap:.6rem;align-items:center;">
+      <a href="/forecasts/export.csv{% if q or date_from or date_to %}?q={{ q }}&date_from={{ date_from }}&date_to={{ date_to }}{% endif %}"
+         style="font-size:.85rem;font-weight:600;color:#6b7280;border:1px solid #d1d5db;
+                border-radius:7px;padding:.45rem .9rem;text-decoration:none;">
+        ↓ Export CSV
+      </a>
+      <a href="/forecasts/import" class="btn-new">+ Import from RIMES</a>
+    </div>
   </div>
 
   <!-- Filter bar -->
