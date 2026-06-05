@@ -52,6 +52,7 @@
     <a href="/dashboard">Dashboard</a>
     <a href="/impacts" class="active">Impact Records</a>
     <a href="/sync">Auto-Sync</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
     <a href="/logout" class="logout">Logout</a>
   </div>
 </nav>

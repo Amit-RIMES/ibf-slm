@@ -16,3 +16,7 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
         return None
     result = await db.execute(select(User).where(User.id == int(payload["sub"])))
     return result.scalar_one_or_none()
+
+
+def is_admin(user: User | None) -> bool:
+    return user is not None and user.role == "admin"

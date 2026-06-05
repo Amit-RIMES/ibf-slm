@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Admin — Users{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.active { color: #7c3aed; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 1.5rem; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; background: #fff;
+    border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07); overflow: hidden; }
+  th { text-align: left; padding: .65rem .9rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; border-bottom: 1px solid #e5e7eb; }
+  td { padding: .75rem .9rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafafa; }
+
+  .badge { display: inline-block; padding: .2rem .65rem; border-radius: 999px; font-size: .75rem; font-weight: 600; }
+  .badge-admin { background: #ede9fe; color: #6d28d9; }
+  .badge-user  { background: #f3f4f6; color: #6b7280; }
+
+  .btn-role {
+    padding: .3rem .85rem; border-radius: 6px; border: 1px solid #d1d5db;
+    font-size: .8rem; font-weight: 600; cursor: pointer; background: #fff;
+    transition: background .15s;
+  }
+  .btn-role:hover { background: #f3f4f6; }
+  .btn-promote { border-color: #a78bfa; color: #6d28d9; }
+  .btn-promote:hover { background: #ede9fe; }
+  .btn-demote  { border-color: #d1d5db; color: #6b7280; }
+
+  .you-tag { font-size: .78rem; color: #9ca3af; font-style: italic; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/admin/users" class="active">Admin</a>
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <h1>User Management</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Username</th>
+        <th>Email</th>
+        <th>Role</th>
+        <th>Joined</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td style="color:#9ca3af">{{ u.id }}</td>
+        <td style="font-weight:600">{{ u.username }}</td>
+        <td>{{ u.email }}</td>
+        <td>
+          {% if u.role == "admin" %}
+            <span class="badge badge-admin">Admin</span>
+          {% else %}
+            <span class="badge badge-user">User</span>
+          {% endif %}
+        </td>
+        <td style="color:#6b7280">{{ u.created_at.strftime("%b %d, %Y") }}</td>
+        <td>
+          {% if u.id == user.id %}
+            <span class="you-tag">you</span>
+          {% elif u.role == "user" %}
+            <form method="post" action="/admin/users/{{ u.id }}/role" style="display:inline">
+              <input type="hidden" name="new_role" value="admin">
+              <button type="submit" class="btn-role btn-promote">Make Admin</button>
+            </form>
+          {% else %}
+            <form method="post" action="/admin/users/{{ u.id }}/role" style="display:inline">
+              <input type="hidden" name="new_role" value="user">
+              <button type="submit" class="btn-role btn-demote">Demote to User</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
