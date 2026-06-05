@@ -9,11 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.email import send_trigger_activation_email
 from app.models.forecast import ForecastUpload
 from app.models.trigger import (
     OPERATOR_LABELS, OPERATOR_SYMBOLS, OPERATORS, VARIABLES,
     Trigger, TriggerActivation,
 )
+from app.models.user import User
 
 router = APIRouter(prefix="/triggers")
 templates = Jinja2Templates(directory="app/templates")
@@ -43,21 +45,30 @@ async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
         "lte": lambda v, t: v <= t,
     }
 
-    fired = 0
+    fired_rows: list[tuple[Trigger, TriggerActivation, ForecastUpload]] = []
     for trigger in triggers:
         value = value_map.get(trigger.variable, 0.0)
         if ops[trigger.operator](value, trigger.threshold):
-            db.add(TriggerActivation(
+            activation = TriggerActivation(
                 trigger_id=trigger.id,
                 forecast_id=forecast.id,
                 value=value,
                 status="active",
-            ))
-            fired += 1
+            )
+            db.add(activation)
+            fired_rows.append((trigger, activation, forecast))
 
-    if fired:
+    if fired_rows:
         await db.commit()
-    return fired
+        # Notify all admins — fire-and-forget, errors are logged not raised
+        admins_result = await db.execute(
+            select(User.email).where(User.role == "admin")
+        )
+        admin_emails = [row[0] for row in admins_result.all()]
+        import asyncio
+        asyncio.create_task(send_trigger_activation_email(admin_emails, fired_rows))
+
+    return len(fired_rows)
 
 
 @router.get("", response_class=HTMLResponse)
