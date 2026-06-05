@@ -27,8 +27,14 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         return RedirectResponse("/login")
 
     total_users = await db.scalar(select(func.count()).select_from(User))
+    admin_count = await db.scalar(select(func.count()).select_from(User).where(User.role == "admin"))
     total_forecasts = await db.scalar(select(func.count()).select_from(ForecastUpload))
     total_impacts = await db.scalar(select(func.count()).select_from(ImpactRecord))
+
+    recent_users_result = await db.execute(
+        select(User).order_by(desc(User.created_at)).limit(5)
+    )
+    recent_users = recent_users_result.scalars().all()
 
     recent_forecasts_result = await db.execute(
         select(ForecastUpload).order_by(desc(ForecastUpload.uploaded_at)).limit(5)
@@ -104,10 +110,13 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             "user": user,
             "stats": {
                 "total_users": total_users,
+                "admin_count": admin_count,
+                "user_count": total_users - admin_count,
                 "total_forecasts": total_forecasts,
                 "total_impacts": total_impacts,
                 "member_since": user.created_at.strftime("%B %d, %Y"),
             },
+            "recent_users": recent_users,
             "recent_forecasts": recent_forecasts,
             "recent_impacts": recent_impacts,
             "active_activations": active_activations,

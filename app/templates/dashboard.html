@@ -31,6 +31,9 @@
   .profile-table td:first-child { color: #6b7280; width: 140px; font-weight: 500; }
   .badge { display: inline-block; padding: .2rem .65rem; border-radius: 999px; font-size: .75rem; font-weight: 600; }
   .badge-green { background: #dcfce7; color: #16a34a; }
+  .badge-admin { background: #ede9fe; color: #6d28d9; }
+  .badge-user  { background: #f3f4f6; color: #6b7280; }
+  .stat-sub { font-size: .78rem; color: #9ca3af; margin-top: .3rem; }
 </style>
 {% endblock %}
 
@@ -80,9 +83,12 @@
   <div class="sub">Here's what's going on today.</div>
 
   <div class="stats-grid">
-    <div class="stat-card">
+    <div class="stat-card" {% if user.role == "admin" %}style="cursor:pointer;" onclick="location.href='/admin/users'"{% endif %}>
       <div class="stat-label">Total Users</div>
       <div class="stat-value">{{ stats.total_users }}</div>
+      {% if user.role == "admin" %}
+      <div class="stat-sub">{{ stats.admin_count }} admin · {{ stats.user_count }} user{{ 's' if stats.user_count != 1 else '' }}</div>
+      {% endif %}
     </div>
     <div class="stat-card">
       <div class="stat-label">Forecasts Ingested</div>
@@ -188,12 +194,54 @@
     {% endif %}
   </div>
 
+  {% if user.role == "admin" %}
+  <div class="card" style="margin-bottom:1.25rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+      <div class="section-title" style="margin-bottom:0;">Registered Users</div>
+      <a href="/admin/users" style="font-size:.85rem; font-weight:600; color:#7c3aed;">Manage →</a>
+    </div>
+    <table class="profile-table" style="font-size:.875rem;">
+      <thead>
+        <tr>
+          <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">Username</td>
+          <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">Email</td>
+          <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">Role</td>
+          <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">Joined</td>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in recent_users %}
+        <tr>
+          <td style="font-weight:500;">{{ u.username }}{% if u.id == user.id %} <span style="font-size:.75rem;color:#9ca3af;">(you)</span>{% endif %}</td>
+          <td>{{ u.email }}</td>
+          <td>
+            {% if u.role == "admin" %}
+              <span class="badge badge-admin">Admin</span>
+            {% else %}
+              <span class="badge badge-user">User</span>
+            {% endif %}
+          </td>
+          <td style="color:#6b7280;">{{ u.created_at.strftime("%Y-%m-%d") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
   <div class="card">
     <div class="section-title">Profile</div>
     <table class="profile-table">
       <tr><td>Username</td><td>{{ user.username }}</td></tr>
       <tr><td>Email</td><td>{{ user.email }}</td></tr>
       <tr><td>User ID</td><td>#{{ user.id }}</td></tr>
+      <tr><td>Role</td><td>
+        {% if user.role == "admin" %}
+          <span class="badge badge-admin">Admin</span>
+        {% else %}
+          <span class="badge badge-user">User</span>
+        {% endif %}
+      </td></tr>
       <tr><td>Member Since</td><td>{{ stats.member_since }}</td></tr>
       <tr><td>Status</td><td><span class="badge badge-green">Active</span></td></tr>
       <tr><td>Password</td><td><a href="/account/password" style="font-size:.875rem;">Change password</a></td></tr>
