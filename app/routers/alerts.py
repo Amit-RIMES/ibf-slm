@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -14,27 +15,22 @@ router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
 
-@router.get("/alerts", response_class=HTMLResponse)
-async def alert_map(request: Request, db: AsyncSession = Depends(get_db)):
-    user = await get_current_user(request, db)
-    if not user:
-        return RedirectResponse("/login")
-
+async def _get_active_alerts(db: AsyncSession) -> list[dict]:
     result = await db.execute(
         select(TriggerActivation)
         .where(TriggerActivation.status == "active")
         .order_by(TriggerActivation.triggered_at.desc())
     )
     activations = result.scalars().all()
-
-    alerts_json = []
+    from app.models.trigger import OPERATOR_SYMBOLS
+    from app.routers.triggers import VARIABLE_LABELS
+    alerts = []
     for a in activations:
         if not a.forecast:
             continue
         fc = a.forecast
         t = a.trigger
-        from app.models.trigger import OPERATOR_SYMBOLS, VARIABLE_LABELS
-        alerts_json.append({
+        alerts.append({
             "id": a.id,
             "trigger_id": t.id,
             "trigger_name": t.name,
@@ -51,6 +47,16 @@ async def alert_map(request: Request, db: AsyncSession = Depends(get_db)):
             "lon_min": fc.lon_min,
             "lon_max": fc.lon_max,
         })
+    return alerts, activations
+
+
+@router.get("/alerts", response_class=HTMLResponse)
+async def alert_map(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    alerts_json, activations = await _get_active_alerts(db)
 
     return templates.TemplateResponse(
         "alerts.html",
@@ -59,5 +65,33 @@ async def alert_map(request: Request, db: AsyncSession = Depends(get_db)):
             "user": user,
             "activations": activations,
             "alerts_json": json.dumps(alerts_json),
+        },
+    )
+
+
+@router.get("/status", response_class=HTMLResponse)
+async def public_status(request: Request, db: AsyncSession = Depends(get_db)):
+    alerts_json, activations = await _get_active_alerts(db)
+
+    # Public view: strip internal fields
+    public_alerts = [
+        {
+            "hazard_type": a["hazard_type"],
+            "triggered_at": a["triggered_at"],
+            "lat_min": a["lat_min"],
+            "lat_max": a["lat_max"],
+            "lon_min": a["lon_min"],
+            "lon_max": a["lon_max"],
+        }
+        for a in alerts_json
+    ]
+
+    return templates.TemplateResponse(
+        "status.html",
+        {
+            "request": request,
+            "alert_count": len(public_alerts),
+            "alerts_json": json.dumps(public_alerts),
+            "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         },
     )

@@ -79,13 +79,15 @@
     <div>
       <h1>Alert Map</h1>
     </div>
-    <div style="font-size:.875rem;color:#6b7280;">
+    <div style="display:flex;align-items:center;gap:1.25rem;font-size:.875rem;color:#6b7280;">
+      <a href="/status" target="_blank" style="font-size:.8rem;color:#6b7280;">↗ Public status page</a>
       {% if activations %}
         <span style="color:#dc2626;font-weight:700;">{{ activations|length }}</span>
         active alert{{ 's' if activations|length != 1 else '' }}
       {% else %}
         No active alerts
       {% endif %}
+    </div>
     </div>
   </div>
 

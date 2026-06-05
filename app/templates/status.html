@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="refresh" content="300" />
+  <title>IBF Alert Status — RIMES</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f4f6f9; color: #1a1a2e; min-height: 100vh; }
+
+    header {
+      background: #1a1a2e; color: #fff; padding: 1.1rem 2rem;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem;
+    }
+    header .brand { font-size: 1.1rem; font-weight: 700; letter-spacing: .02em; }
+    header .brand span { color: #818cf8; }
+    header .meta { font-size: .8rem; color: #94a3b8; }
+
+    .main { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+
+    /* Status banner */
+    .status-banner {
+      border-radius: 12px; padding: 1.25rem 1.6rem; margin-bottom: 1.5rem;
+      display: flex; align-items: center; gap: 1rem;
+    }
+    .status-banner.clear { background: #f0fdf4; border: 1px solid #86efac; }
+    .status-banner.active { background: #fef2f2; border: 1px solid #fecaca; }
+    .status-banner .icon { font-size: 1.8rem; }
+    .status-banner .label { font-size: 1.1rem; font-weight: 700; }
+    .status-banner.clear .label { color: #166534; }
+    .status-banner.active .label { color: #991b1b; }
+    .status-banner .sub { font-size: .85rem; margin-top: .2rem; }
+    .status-banner.clear .sub { color: #4ade80; }
+    .status-banner.active .sub { color: #b91c1c; }
+
+    /* Map */
+    #status-map { height: 480px; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.1); margin-bottom: 1.5rem; }
+
+    /* Alert cards */
+    .alerts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .alert-card {
+      background: #fff; border-radius: 12px; padding: 1.1rem 1.25rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07); border-left: 4px solid #e5e7eb;
+    }
+    .alert-card .hazard { font-size: .72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; margin-bottom: .5rem; }
+    .alert-card .region { font-size: .82rem; color: #6b7280; margin-bottom: .35rem; }
+    .alert-card .since { font-size: .78rem; color: #9ca3af; }
+
+    .hazard-flood     { border-color: #3b82f6; } .hazard-flood .hazard     { color: #1d4ed8; }
+    .hazard-storm     { border-color: #8b5cf6; } .hazard-storm .hazard     { color: #7e22ce; }
+    .hazard-drought   { border-color: #f59e0b; } .hazard-drought .hazard   { color: #92400e; }
+    .hazard-landslide { border-color: #22c55e; } .hazard-landslide .hazard { color: #166534; }
+    .hazard-heatwave  { border-color: #ef4444; } .hazard-heatwave .hazard  { color: #991b1b; }
+    .hazard-cyclone   { border-color: #06b6d4; } .hazard-cyclone .hazard   { color: #0369a1; }
+    .hazard-other     { border-color: #6b7280; } .hazard-other .hazard     { color: #374151; }
+
+    /* Legend */
+    .legend-panel {
+      position: absolute; bottom: 2rem; right: .75rem; z-index: 1000;
+      background: rgba(255,255,255,.95); border-radius: 10px; padding: .75rem 1rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15); font-size: .8rem; min-width: 130px;
+    }
+    .legend-panel .legend-title { font-weight: 700; font-size: .72rem; text-transform: uppercase;
+      letter-spacing: .06em; color: #9ca3af; margin-bottom: .5rem; }
+    .legend-item { display: flex; align-items: center; gap: .5rem; margin-bottom: .3rem; }
+    .legend-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+
+    footer {
+      text-align: center; padding: 2rem 1rem; font-size: .8rem; color: #9ca3af; border-top: 1px solid #e5e7eb;
+      margin-top: 1rem;
+    }
+    footer a { color: #6b7280; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">IBF <span>Alert Status</span> — RIMES</div>
+  <div class="meta">Last updated: {{ updated_at }} &nbsp;·&nbsp; Auto-refreshes every 5 min</div>
+</header>
+
+<div class="main">
+
+  <!-- Status banner -->
+  {% if alert_count == 0 %}
+  <div class="status-banner clear">
+    <div class="icon">✅</div>
+    <div>
+      <div class="label">All Clear</div>
+      <div class="sub">No active weather alerts at this time.</div>
+    </div>
+  </div>
+  {% else %}
+  <div class="status-banner active">
+    <div class="icon">⚠️</div>
+    <div>
+      <div class="label">{{ alert_count }} Active Alert{{ 's' if alert_count != 1 else '' }}</div>
+      <div class="sub">{{ alert_count }} threshold trigger{{ 's are' if alert_count != 1 else ' is' }} currently active.</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Map -->
+  <div style="position:relative;">
+    <div id="status-map"></div>
+  </div>
+
+  <!-- Alert cards -->
+  {% if alert_count > 0 %}
+  <div class="alerts-grid">
+    {% set ns = namespace(alerts=[]) %}
+    <!-- Rendered by JS below -->
+  </div>
+  <div id="alert-cards" class="alerts-grid"></div>
+  {% endif %}
+
+</div>
+
+<footer>
+  Powered by <strong>RIMES IBF System</strong> &nbsp;·&nbsp;
+  <a href="/login">Staff login</a>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const alerts = {{ alerts_json | safe }};
+
+const HAZARD_COLORS = {
+  flood:     '#3b82f6',
+  storm:     '#8b5cf6',
+  drought:   '#f59e0b',
+  landslide: '#22c55e',
+  heatwave:  '#ef4444',
+  cyclone:   '#06b6d4',
+  other:     '#6b7280',
+};
+
+const map = L.map('status-map');
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors',
+  opacity: 0.65,
+}).addTo(map);
+
+if (alerts.length) {
+  const bounds = [];
+  alerts.forEach(a => {
+    const color = HAZARD_COLORS[a.hazard_type] || HAZARD_COLORS.other;
+    const rect = L.rectangle(
+      [[a.lat_min, a.lon_min], [a.lat_max, a.lon_max]],
+      { color, weight: 2, fillColor: color, fillOpacity: 0.3 }
+    );
+    const latRange = `${a.lat_min}°–${a.lat_max}°N`;
+    const lonRange = `${a.lon_min}°–${a.lon_max}°E`;
+    rect.bindPopup(`
+      <div style="font-family:system-ui;min-width:180px;">
+        <div style="font-weight:700;text-transform:capitalize;margin-bottom:.3rem;">
+          ${a.hazard_type} alert
+        </div>
+        <div style="font-size:.82rem;color:#6b7280;">${latRange}, ${lonRange}</div>
+        <div style="font-size:.78rem;color:#9ca3af;margin-top:.3rem;">Since ${a.triggered_at}</div>
+      </div>`);
+    rect.addTo(map);
+    bounds.push([a.lat_min, a.lon_min]);
+    bounds.push([a.lat_max, a.lon_max]);
+  });
+  map.fitBounds(bounds, { padding: [40, 40] });
+
+  // Render alert cards
+  const container = document.getElementById('alert-cards');
+  if (container) {
+    alerts.forEach(a => {
+      const color = HAZARD_COLORS[a.hazard_type] || HAZARD_COLORS.other;
+      const card = document.createElement('div');
+      card.className = `alert-card hazard-${a.hazard_type}`;
+      card.innerHTML = `
+        <div class="hazard">${a.hazard_type}</div>
+        <div class="region">${a.lat_min}°–${a.lat_max}°N, ${a.lon_min}°–${a.lon_max}°E</div>
+        <div class="since">Active since ${a.triggered_at}</div>`;
+      container.appendChild(card);
+    });
+  }
+
+  // Legend
+  const legend = L.control({ position: 'bottomright' });
+  legend.onAdd = () => {
+    const div = L.DomUtil.create('div', 'legend-panel');
+    const hazards = [...new Set(alerts.map(a => a.hazard_type))];
+    div.innerHTML = '<div class="legend-title">Hazard</div>' +
+      hazards.map(h =>
+        `<div class="legend-item">
+          <div class="legend-swatch" style="background:${HAZARD_COLORS[h]||'#6b7280'};opacity:.7;"></div>
+          <span style="text-transform:capitalize;">${h}</span>
+        </div>`).join('');
+    return div;
+  };
+  legend.addTo(map);
+} else {
+  map.setView([20, 90], 4);
+}
+</script>
+</body>
+</html>
