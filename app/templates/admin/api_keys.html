@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}API Keys — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.active { color: #7c3aed; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 1.5rem; }
+
+  .new-key-box {
+    background: #f0fdf4; border: 1px solid #86efac; border-radius: 10px;
+    padding: 1rem 1.25rem; margin-bottom: 1.5rem;
+  }
+  .new-key-box .title { font-weight: 700; color: #166534; margin-bottom: .5rem; font-size: .95rem; }
+  .new-key-box .warn { font-size: .82rem; color: #166534; margin-bottom: .65rem; }
+  .key-display {
+    font-family: monospace; font-size: .9rem; background: #fff;
+    border: 1px solid #86efac; border-radius: 6px; padding: .5rem .85rem;
+    user-select: all; word-break: break-all; color: #1a1a2e;
+  }
+
+  .generate-form {
+    background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    padding: 1.25rem; margin-bottom: 1.5rem; display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap;
+  }
+  .generate-form label { font-size: .875rem; font-weight: 500; color: #555; display: block; margin-bottom: .3rem; }
+  .generate-form input[type=text] {
+    padding: .55rem .85rem; border: 1px solid #d1d5db; border-radius: 8px;
+    font-size: .95rem; outline: none; transition: border-color .15s; width: 280px;
+  }
+  .generate-form input:focus { border-color: #4f46e5; }
+  .btn-generate {
+    background: #4f46e5; color: #fff; border: none; border-radius: 8px;
+    padding: .6rem 1.25rem; font-size: .875rem; font-weight: 600; cursor: pointer;
+  }
+  .btn-generate:hover { opacity: .85; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; background: #fff;
+    border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07); overflow: hidden; }
+  th { text-align: left; padding: .65rem .9rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; border-bottom: 1px solid #e5e7eb; }
+  td { padding: .75rem .9rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+
+  .badge-active   { background: #dcfce7; color: #166534; display:inline-block; padding:.18rem .55rem; border-radius:999px; font-size:.75rem; font-weight:700; }
+  .badge-revoked  { background: #f3f4f6; color: #9ca3af; display:inline-block; padding:.18rem .55rem; border-radius:999px; font-size:.75rem; font-weight:700; }
+
+  .btn-revoke {
+    padding: .3rem .75rem; border-radius: 6px; border: 1px solid #fca5a5;
+    font-size: .8rem; font-weight: 600; cursor: pointer; background: #fff; color: #dc2626;
+  }
+  .btn-revoke:hover { background: #fef2f2; }
+
+  .key-prefix { font-family: monospace; font-size: .85rem; color: #374151; }
+
+  @media (max-width: 700px) {
+    table { display: block; overflow-x: auto; }
+    .generate-form input[type=text] { width: 100%; }
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/admin/users">Admin</a>
+    <a href="/admin/audit">Audit Log</a>
+    <a href="/admin/api-keys" class="active">API Keys</a>
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <h1>API Keys</h1>
+
+  {% if new_key %}
+  <div class="new-key-box">
+    <div class="title">✅ Key generated — {{ new_key_name }}</div>
+    <div class="warn">Copy this key now. It will never be shown again.</div>
+    <div class="key-display" onclick="this.select()">{{ new_key }}</div>
+  </div>
+  {% endif %}
+
+  <div class="generate-form">
+    <form method="post" action="/admin/api-keys/generate" style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;width:100%;">
+      <div>
+        <label>Key name</label>
+        <input type="text" name="name" placeholder="e.g. RIMES Dashboard Script" required maxlength="100">
+      </div>
+      <button type="submit" class="btn-generate">Generate new key</button>
+    </form>
+  </div>
+
+  {% if keys %}
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Prefix</th>
+        <th>Status</th>
+        <th>Created by</th>
+        <th>Created</th>
+        <th>Last used</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for k in keys %}
+      <tr>
+        <td style="font-weight:600;">{{ k.name }}</td>
+        <td><span class="key-prefix">{{ k.key_prefix }}…</span></td>
+        <td>
+          {% if k.is_active %}
+            <span class="badge-active">Active</span>
+          {% else %}
+            <span class="badge-revoked">Revoked</span>
+          {% endif %}
+        </td>
+        <td style="color:#6b7280;">{{ k.user.username if k.user else '—' }}</td>
+        <td style="color:#6b7280;font-size:.82rem;">{{ k.created_at.strftime("%Y-%m-%d") }}</td>
+        <td style="color:#6b7280;font-size:.82rem;">
+          {{ k.last_used_at.strftime("%Y-%m-%d %H:%M") if k.last_used_at else 'Never' }}
+        </td>
+        <td>
+          {% if k.is_active %}
+          <form method="post" action="/admin/api-keys/{{ k.id }}/revoke" style="display:inline"
+                onsubmit="return confirm('Revoke key {{ k.name }}? This cannot be undone.')">
+            <button type="submit" class="btn-revoke">Revoke</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color:#9ca3af;font-size:.9rem;text-align:center;padding:2rem;">No API keys yet. Generate one above.</p>
+  {% endif %}
+
+  <div style="margin-top:1.5rem;background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.07);padding:1.25rem;">
+    <div style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;margin-bottom:.75rem;">Usage</div>
+    <pre style="font-size:.82rem;color:#374151;background:#f9fafb;padding:.85rem 1rem;border-radius:8px;overflow-x:auto;"><code>curl https://your-domain/api/v1/forecasts \
+  -H "X-API-Key: ibf_sk_..."
+
+curl https://your-domain/api/v1/status   # public, no key needed</code></pre>
+    <div style="font-size:.8rem;color:#6b7280;margin-top:.75rem;">
+      Endpoints: &nbsp;
+      <code style="background:#f3f4f6;padding:.1rem .4rem;border-radius:4px;">/api/v1/forecasts</code>
+      <code style="background:#f3f4f6;padding:.1rem .4rem;border-radius:4px;">/api/v1/impacts</code>
+      <code style="background:#f3f4f6;padding:.1rem .4rem;border-radius:4px;">/api/v1/triggers</code>
+      <code style="background:#f3f4f6;padding:.1rem .4rem;border-radius:4px;">/api/v1/activations</code>
+      <code style="background:#f3f4f6;padding:.1rem .4rem;border-radius:4px;">/api/v1/status</code>
+    </div>
+  </div>
+</div>
+{% endblock %}

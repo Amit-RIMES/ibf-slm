@@ -5,9 +5,13 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import hashlib
+import secrets
+
 from app.core.audit import ACTION_LABELS, log_action
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.models.api_key import APIKey
 from app.models.audit import AuditLog
 from app.models.user import User
 
@@ -149,3 +153,63 @@ async def admin_audit(request: Request, db: AsyncSession = Depends(get_db), page
             "page": page, "total": total, "total_pages": total_pages,
         },
     )
+
+
+@router.get("/api-keys", response_class=HTMLResponse)
+async def admin_api_keys(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    if user.role != "admin":
+        return _FORBIDDEN
+
+    result = await db.execute(select(APIKey).order_by(desc(APIKey.created_at)))
+    keys = result.scalars().all()
+    return templates.TemplateResponse(
+        "admin/api_keys.html", {"request": request, "user": user, "keys": keys}
+    )
+
+
+@router.post("/api-keys/generate", response_class=HTMLResponse)
+async def admin_generate_key(
+    request: Request,
+    name: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    if user.role != "admin":
+        return _FORBIDDEN
+
+    raw_key = "ibf_" + secrets.token_urlsafe(32)
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    prefix = raw_key[:12]
+
+    api_key = APIKey(name=name.strip(), key_prefix=prefix, key_hash=key_hash, user_id=user.id)
+    db.add(api_key)
+    await db.commit()
+    await db.refresh(api_key)
+
+    result = await db.execute(select(APIKey).order_by(desc(APIKey.created_at)))
+    keys = result.scalars().all()
+    return templates.TemplateResponse(
+        "admin/api_keys.html",
+        {"request": request, "user": user, "keys": keys, "new_key": raw_key, "new_key_name": name},
+    )
+
+
+@router.post("/api-keys/{key_id}/revoke")
+async def admin_revoke_key(request: Request, key_id: int, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    if user.role != "admin":
+        return _FORBIDDEN
+
+    result = await db.execute(select(APIKey).where(APIKey.id == key_id))
+    key = result.scalar_one_or_none()
+    if key:
+        key.is_active = False
+        await db.commit()
+    return RedirectResponse("/admin/api-keys", status_code=303)
