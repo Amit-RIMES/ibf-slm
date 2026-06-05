@@ -53,3 +53,25 @@ async def admin_change_role(
         target.role = new_role
         await db.commit()
     return RedirectResponse("/admin/users", status_code=303)
+
+
+@router.post("/users/{target_id}/delete")
+async def admin_delete_user(
+    request: Request,
+    target_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    if user.role != "admin":
+        return _FORBIDDEN
+    if target_id == user.id:
+        return RedirectResponse("/admin/users", status_code=303)
+
+    result = await db.execute(select(User).where(User.id == target_id))
+    target = result.scalar_one_or_none()
+    if target:
+        await db.delete(target)
+        await db.commit()
+    return RedirectResponse("/admin/users", status_code=303)

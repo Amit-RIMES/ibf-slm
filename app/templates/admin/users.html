@@ -37,6 +37,8 @@
   .btn-promote { border-color: #a78bfa; color: #6d28d9; }
   .btn-promote:hover { background: #ede9fe; }
   .btn-demote  { border-color: #d1d5db; color: #6b7280; }
+  .btn-delete  { border-color: #fca5a5; color: #dc2626; }
+  .btn-delete:hover { background: #fef2f2; }
 
   .you-tag { font-size: .78rem; color: #9ca3af; font-style: italic; }
 </style>
@@ -83,18 +85,24 @@
           {% endif %}
         </td>
         <td style="color:#6b7280">{{ u.created_at.strftime("%b %d, %Y") }}</td>
-        <td>
+        <td style="display:flex; gap:.5rem; align-items:center;">
           {% if u.id == user.id %}
             <span class="you-tag">you</span>
-          {% elif u.role == "user" %}
-            <form method="post" action="/admin/users/{{ u.id }}/role" style="display:inline">
-              <input type="hidden" name="new_role" value="admin">
-              <button type="submit" class="btn-role btn-promote">Make Admin</button>
-            </form>
           {% else %}
-            <form method="post" action="/admin/users/{{ u.id }}/role" style="display:inline">
-              <input type="hidden" name="new_role" value="user">
-              <button type="submit" class="btn-role btn-demote">Demote to User</button>
+            {% if u.role == "user" %}
+              <form method="post" action="/admin/users/{{ u.id }}/role" style="display:inline">
+                <input type="hidden" name="new_role" value="admin">
+                <button type="submit" class="btn-role btn-promote">Make Admin</button>
+              </form>
+            {% else %}
+              <form method="post" action="/admin/users/{{ u.id }}/role" style="display:inline">
+                <input type="hidden" name="new_role" value="user">
+                <button type="submit" class="btn-role btn-demote">Demote to User</button>
+              </form>
+            {% endif %}
+            <form method="post" action="/admin/users/{{ u.id }}/delete" style="display:inline"
+                  onsubmit="return confirm('Delete {{ u.username }}? This cannot be undone.')">
+              <button type="submit" class="btn-role btn-delete">Delete</button>
             </form>
           {% endif %}
         </td>
