@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.email import send_new_registration_email, send_password_reset_email
+from app.core.rate_limit import login_limiter
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.reset_token import PasswordResetToken
 from app.models.user import User
@@ -64,10 +65,22 @@ async def login(
     password: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
+    ip = request.client.host if request.client else "unknown"
+
+    limited, seconds = await login_limiter.is_limited(ip)
+    if limited:
+        minutes = max(1, round(seconds / 60))
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": f"Too many failed attempts. Try again in {minutes} minute{'s' if minutes != 1 else ''}."},
+            status_code=429,
+        )
+
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(password, user.hashed_password):
+        await login_limiter.record_failure(ip)
         return templates.TemplateResponse(
             "login.html",
             {"request": request, "error": "Invalid email or password."},
@@ -81,6 +94,7 @@ async def login(
             status_code=403,
         )
 
+    await login_limiter.clear(ip)
     token = create_access_token({"sub": str(user.id)})
     redirect = RedirectResponse("/dashboard", status_code=status.HTTP_303_SEE_OTHER)
     redirect.set_cookie("access_token", token, httponly=True, samesite="lax")
