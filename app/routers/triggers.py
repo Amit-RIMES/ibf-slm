@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -103,6 +104,34 @@ async def trigger_new_page(request: Request, db: AsyncSession = Depends(get_db))
     )
 
 
+def _trigger_form_ctx(request, user, trigger_obj, **kwargs):
+    return {
+        "request": request, "user": user, "trigger": trigger_obj,
+        "hazard_types": HAZARD_TYPES, "variables": VARIABLES,
+        "operators": OPERATORS, "operator_labels": OPERATOR_LABELS,
+        "variable_labels": VARIABLE_LABELS, **kwargs,
+    }
+
+
+def _validate_trigger(name, hazard_type, variable, operator, threshold_str, is_active):
+    """Returns (threshold_float, error_str). error_str is '' on success."""
+    if not name.strip():
+        return None, "Trigger name cannot be empty."
+    if hazard_type not in HAZARD_TYPES:
+        return None, "Please select a valid hazard type."
+    if variable not in VARIABLES:
+        return None, "Please select a valid forecast variable."
+    if operator not in OPERATORS:
+        return None, "Please select a valid operator."
+    try:
+        threshold = float(threshold_str)
+    except (ValueError, TypeError):
+        return None, "Threshold must be a number (e.g. 25 or 12.5)."
+    if threshold < 0:
+        return None, "Threshold must be zero or greater."
+    return threshold, ""
+
+
 @router.post("/new")
 async def trigger_create(
     request: Request,
@@ -110,7 +139,7 @@ async def trigger_create(
     hazard_type: str = Form(...),
     variable: str = Form(...),
     operator: str = Form(...),
-    threshold: float = Form(...),
+    threshold: str = Form(...),
     is_active: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
@@ -118,13 +147,19 @@ async def trigger_create(
     if not user:
         return RedirectResponse("/login")
 
+    threshold_val, error = _validate_trigger(name, hazard_type, variable, operator, threshold, is_active)
+    if error:
+        stub = SimpleNamespace(
+            id=None, name=name, hazard_type=hazard_type, variable=variable,
+            operator=operator, threshold=threshold, is_active=(is_active == "on"),
+        )
+        return templates.TemplateResponse(
+            "trigger_form.html", _trigger_form_ctx(request, user, stub, error=error)
+        )
+
     trigger = Trigger(
-        name=name,
-        hazard_type=hazard_type,
-        variable=variable,
-        operator=operator,
-        threshold=threshold,
-        is_active=is_active == "on",
+        name=name, hazard_type=hazard_type, variable=variable,
+        operator=operator, threshold=threshold_val, is_active=is_active == "on",
     )
     db.add(trigger)
     await db.commit()
@@ -171,11 +206,7 @@ async def trigger_edit_page(trigger_id: int, request: Request, db: AsyncSession 
         return RedirectResponse("/triggers")
 
     return templates.TemplateResponse(
-        "trigger_form.html",
-        {"request": request, "user": user, "trigger": trigger,
-         "hazard_types": HAZARD_TYPES, "variables": VARIABLES,
-         "operators": OPERATORS, "operator_labels": OPERATOR_LABELS,
-         "variable_labels": VARIABLE_LABELS},
+        "trigger_form.html", _trigger_form_ctx(request, user, trigger)
     )
 
 
@@ -187,7 +218,7 @@ async def trigger_update(
     hazard_type: str = Form(...),
     variable: str = Form(...),
     operator: str = Form(...),
-    threshold: float = Form(...),
+    threshold: str = Form(...),
     is_active: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db),
 ):
@@ -200,11 +231,21 @@ async def trigger_update(
     if not trigger:
         return RedirectResponse("/triggers")
 
+    threshold_val, error = _validate_trigger(name, hazard_type, variable, operator, threshold, is_active)
+    if error:
+        stub = SimpleNamespace(
+            id=trigger_id, name=name, hazard_type=hazard_type, variable=variable,
+            operator=operator, threshold=threshold, is_active=(is_active == "on"),
+        )
+        return templates.TemplateResponse(
+            "trigger_form.html", _trigger_form_ctx(request, user, stub, error=error)
+        )
+
     trigger.name = name
     trigger.hazard_type = hazard_type
     trigger.variable = variable
     trigger.operator = operator
-    trigger.threshold = threshold
+    trigger.threshold = threshold_val
     trigger.is_active = is_active == "on"
     await db.commit()
     await log_action(db, user.id, "trigger.edit", f"Edited trigger '{name}'")

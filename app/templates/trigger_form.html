@@ -68,7 +68,11 @@
   <h1>{% if trigger %}Edit Trigger{% else %}New Trigger{% endif %}</h1>
   <p class="sub">{% if trigger %}Update the threshold rule for this trigger.{% else %}Define a threshold rule — it will be evaluated automatically whenever a new forecast is uploaded.{% endif %}</p>
 
-  <form method="post" action="{% if trigger %}/triggers/{{ trigger.id }}/edit{% else %}/triggers/new{% endif %}">
+  {% if error %}
+  <div class="error">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="{% if trigger and trigger.id %}/triggers/{{ trigger.id }}/edit{% else %}/triggers/new{% endif %}">
     <div class="card">
       <div class="form-group">
         <label>Trigger name</label>

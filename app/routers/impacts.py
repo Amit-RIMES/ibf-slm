@@ -142,10 +142,34 @@ async def impact_create(
         return RedirectResponse("/login")
 
     def _int(v: str) -> Optional[int]:
-        return int(v) if v.strip() else None
+        try:
+            return int(v) if v.strip() else None
+        except ValueError:
+            return None
 
     def _float(v: str) -> Optional[float]:
-        return float(v) if v.strip() else None
+        try:
+            return float(v) if v.strip() else None
+        except ValueError:
+            return None
+
+    def _err(msg):
+        return templates.TemplateResponse(
+            "impact_form.html",
+            {"request": request, "user": user, "impact": None, "error": msg,
+             "forecasts": [], "hazard_types": HAZARD_TYPES},
+        )
+
+    lat_val = _float(lat)
+    lon_val = _float(lon)
+    if lat.strip() and lat_val is None:
+        return _err("Latitude must be a number between -90 and 90.")
+    if lon.strip() and lon_val is None:
+        return _err("Longitude must be a number between -180 and 180.")
+    if lat_val is not None and not (-90 <= lat_val <= 90):
+        return _err("Latitude must be between -90 and 90.")
+    if lon_val is not None and not (-180 <= lon_val <= 180):
+        return _err("Longitude must be between -180 and 180.")
 
     record = ImpactRecord(
         event_name=event_name,
@@ -153,8 +177,8 @@ async def impact_create(
         hazard_type=hazard_type,
         country=country,
         region=region or None,
-        lat=_float(lat),
-        lon=_float(lon),
+        lat=lat_val,
+        lon=lon_val,
         affected_population=_int(affected_population),
         casualties=_int(casualties),
         displaced=_int(displaced),
@@ -243,18 +267,51 @@ async def impact_update(
         return RedirectResponse("/impacts")
 
     def _int(v: str) -> Optional[int]:
-        return int(v) if v.strip() else None
+        try:
+            return int(v) if v.strip() else None
+        except ValueError:
+            return None
 
     def _float(v: str) -> Optional[float]:
-        return float(v) if v.strip() else None
+        try:
+            return float(v) if v.strip() else None
+        except ValueError:
+            return None
+
+    lat_val = _float(lat)
+    lon_val = _float(lon)
+    if lat.strip() and lat_val is None:
+        return templates.TemplateResponse(
+            "impact_form.html",
+            {"request": request, "user": user, "impact": impact, "error": "Latitude must be a number.",
+             "forecasts": [], "hazard_types": HAZARD_TYPES},
+        )
+    if lon.strip() and lon_val is None:
+        return templates.TemplateResponse(
+            "impact_form.html",
+            {"request": request, "user": user, "impact": impact, "error": "Longitude must be a number.",
+             "forecasts": [], "hazard_types": HAZARD_TYPES},
+        )
+    if lat_val is not None and not (-90 <= lat_val <= 90):
+        return templates.TemplateResponse(
+            "impact_form.html",
+            {"request": request, "user": user, "impact": impact, "error": "Latitude must be between -90 and 90.",
+             "forecasts": [], "hazard_types": HAZARD_TYPES},
+        )
+    if lon_val is not None and not (-180 <= lon_val <= 180):
+        return templates.TemplateResponse(
+            "impact_form.html",
+            {"request": request, "user": user, "impact": impact, "error": "Longitude must be between -180 and 180.",
+             "forecasts": [], "hazard_types": HAZARD_TYPES},
+        )
 
     impact.event_name = event_name
     impact.event_date = event_date
     impact.hazard_type = hazard_type
     impact.country = country
     impact.region = region or None
-    impact.lat = _float(lat)
-    impact.lon = _float(lon)
+    impact.lat = lat_val
+    impact.lon = lon_val
     impact.affected_population = _int(affected_population)
     impact.casualties = _int(casualties)
     impact.displaced = _int(displaced)
