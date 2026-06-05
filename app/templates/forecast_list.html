@@ -86,6 +86,11 @@
                 border-radius:7px;padding:.45rem .9rem;text-decoration:none;">
         ↓ Export CSV
       </a>
+      <button id="btn-compare" disabled onclick="compareSelected()"
+              style="font-size:.85rem;font-weight:600;border:1px solid #d1d5db;border-radius:7px;
+                     padding:.45rem .9rem;background:#fff;cursor:pointer;color:#6b7280;">
+        ⇄ Compare (0/2)
+      </button>
       <a href="/forecasts/import" class="btn-new">+ Import from RIMES</a>
     </div>
   </div>
@@ -107,6 +112,7 @@
     <table>
       <thead>
         <tr>
+          <th style="width:2rem;"></th>
           <th>File</th>
           <th>Uploaded</th>
           <th>Time range</th>
@@ -119,6 +125,8 @@
       <tbody>
         {% for fc in forecasts %}
         <tr>
+          <td><input type="checkbox" class="fc-check" value="{{ fc.id }}"
+                     style="width:15px;height:15px;cursor:pointer;accent-color:#4f46e5;"></td>
           <td style="font-weight:600;">{{ fc.filename }}</td>
           <td>{{ fc.uploaded_at.strftime("%Y-%m-%d %H:%M") }}</td>
           <td style="font-size:.8rem;">{{ fc.time_start[:10] }} – {{ fc.time_end[:10] }}</td>
@@ -174,4 +182,31 @@
   </div>
   {% endif %}
 </div>
+
+<script>
+const btn = document.getElementById('btn-compare');
+const checked = new Set();
+
+document.querySelectorAll('.fc-check').forEach(cb => {
+  cb.addEventListener('change', () => {
+    if (cb.checked) {
+      if (checked.size >= 2) { cb.checked = false; return; }
+      checked.add(cb.value);
+    } else {
+      checked.delete(cb.value);
+    }
+    btn.textContent = `⇄ Compare (${checked.size}/2)`;
+    btn.disabled = checked.size !== 2;
+    btn.style.color = checked.size === 2 ? '#4f46e5' : '#6b7280';
+    btn.style.borderColor = checked.size === 2 ? '#a5b4fc' : '#d1d5db';
+  });
+});
+
+function compareSelected() {
+  const ids = [...checked];
+  if (ids.length === 2) {
+    window.location.href = `/forecasts/compare?a=${ids[0]}&b=${ids[1]}`;
+  }
+}
+</script>
 {% endblock %}

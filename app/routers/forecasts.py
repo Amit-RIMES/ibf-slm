@@ -467,6 +467,39 @@ async def import_forecast(
     return RedirectResponse(f"/forecasts/{forecast.id}", status_code=303)
 
 
+@router.get("/compare", response_class=HTMLResponse)
+async def forecast_compare(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    a: int = 0,
+    b: int = 0,
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    if not a or not b or a == b:
+        return RedirectResponse("/forecasts")
+
+    res_a = await db.execute(select(ForecastUpload).where(ForecastUpload.id == a))
+    res_b = await db.execute(select(ForecastUpload).where(ForecastUpload.id == b))
+    fc_a = res_a.scalar_one_or_none()
+    fc_b = res_b.scalar_one_or_none()
+    if not fc_a or not fc_b:
+        return RedirectResponse("/forecasts")
+
+    global_min = min(fc_a.precip_min, fc_b.precip_min)
+    global_max = max(fc_a.precip_max, fc_b.precip_max)
+
+    return templates.TemplateResponse(
+        "forecast_compare.html",
+        {
+            "request": request, "user": user,
+            "fc_a": fc_a, "fc_b": fc_b,
+            "global_min": global_min, "global_max": global_max,
+        },
+    )
+
+
 @router.get("/{forecast_id}", response_class=HTMLResponse)
 async def forecast_detail(forecast_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     user = await get_current_user(request, db)

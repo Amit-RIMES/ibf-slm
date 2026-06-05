@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block title %}Compare Forecasts — IBF App{% endblock %}
+
+{% block extra_styles %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.active { color: #4f46e5; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 1.5rem; }
+
+  /* Stats table */
+  .cmp-table { width: 100%; border-collapse: collapse; font-size: .875rem;
+    background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    overflow: hidden; margin-bottom: 1.5rem; }
+  .cmp-table th { padding: .75rem 1rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af;
+    border-bottom: 2px solid #e5e7eb; text-align: left; }
+  .cmp-table th.fc-col { color: #4f46e5; }
+  .cmp-table td { padding: .65rem 1rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  .cmp-table tr:last-child td { border-bottom: none; }
+  .cmp-table td.label { color: #6b7280; font-weight: 500; width: 160px; }
+  .cmp-table td.val { font-weight: 600; }
+  .delta-pos { color: #16a34a; }
+  .delta-neg { color: #dc2626; }
+  .delta-zero { color: #9ca3af; }
+
+  /* Maps */
+  .map-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.5rem; }
+  @media (max-width: 700px) { .map-grid { grid-template-columns: 1fr; } }
+  .map-card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    padding: 1.25rem; }
+  .map-card h3 { font-size: .85rem; font-weight: 700; margin-bottom: .75rem; color: #374151; }
+  .map-card .map-filename { font-size: .78rem; color: #9ca3af; margin-bottom: .75rem;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .leaflet-map { height: 360px; border-radius: 8px; }
+  .legend { margin-top: .65rem; display: flex; align-items: center; gap: .5rem; font-size: .78rem; color: #6b7280; }
+  .legend-bar { flex: 1; height: 10px; border-radius: 5px;
+    background: linear-gradient(to right, #eff6ff, #3b82f6, #1e3a8a); }
+  .legend-note { font-size: .72rem; color: #9ca3af; margin-top: .35rem; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts" class="active">Forecasts</a>
+    <a href="/forecasts/import">Import</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/sync">Auto-Sync</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+    <h1 style="margin-bottom:0;">Forecast Comparison</h1>
+    <a href="/forecasts" style="font-size:.875rem;color:#6b7280;">← Back to forecasts</a>
+  </div>
+
+  <!-- Stats table -->
+  <table class="cmp-table">
+    <thead>
+      <tr>
+        <th>Metric</th>
+        <th class="fc-col">Forecast A</th>
+        <th class="fc-col">Forecast B</th>
+        <th>Δ (B − A)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="label">File</td>
+        <td class="val"><a href="/forecasts/{{ fc_a.id }}" style="font-size:.85rem;">{{ fc_a.filename }}</a></td>
+        <td class="val"><a href="/forecasts/{{ fc_b.id }}" style="font-size:.85rem;">{{ fc_b.filename }}</a></td>
+        <td style="color:#9ca3af;">—</td>
+      </tr>
+      <tr>
+        <td class="label">Uploaded</td>
+        <td>{{ fc_a.uploaded_at.strftime("%Y-%m-%d %H:%M") }}</td>
+        <td>{{ fc_b.uploaded_at.strftime("%Y-%m-%d %H:%M") }}</td>
+        <td style="color:#9ca3af;">—</td>
+      </tr>
+      <tr>
+        <td class="label">Time range</td>
+        <td style="font-size:.82rem;">{{ fc_a.time_start[:10] }} – {{ fc_a.time_end[:10] }}</td>
+        <td style="font-size:.82rem;">{{ fc_b.time_start[:10] }} – {{ fc_b.time_end[:10] }}</td>
+        <td style="color:#9ca3af;">—</td>
+      </tr>
+      <tr>
+        <td class="label">Time steps</td>
+        <td>{{ fc_a.time_steps }}</td>
+        <td>{{ fc_b.time_steps }}</td>
+        {% set d = fc_b.time_steps - fc_a.time_steps %}
+        <td class="{{ 'delta-pos' if d > 0 else ('delta-neg' if d < 0 else 'delta-zero') }}">
+          {{ '+' if d > 0 else '' }}{{ d }}
+        </td>
+      </tr>
+      <tr>
+        <td class="label">Spatial extent</td>
+        <td style="font-size:.82rem;">{{ fc_a.lat_min }}°–{{ fc_a.lat_max }}°N, {{ fc_a.lon_min }}°–{{ fc_a.lon_max }}°E</td>
+        <td style="font-size:.82rem;">{{ fc_b.lat_min }}°–{{ fc_b.lat_max }}°N, {{ fc_b.lon_min }}°–{{ fc_b.lon_max }}°E</td>
+        <td style="color:#9ca3af;">—</td>
+      </tr>
+      {% set dm = (fc_b.precip_mean - fc_a.precip_mean) | round(3) %}
+      <tr>
+        <td class="label">Mean precip (mm)</td>
+        <td class="val">{{ fc_a.precip_mean }}</td>
+        <td class="val">{{ fc_b.precip_mean }}</td>
+        <td class="{{ 'delta-pos' if dm > 0 else ('delta-neg' if dm < 0 else 'delta-zero') }}">
+          {{ '+' if dm > 0 else '' }}{{ dm }}
+        </td>
+      </tr>
+      {% set dmax = (fc_b.precip_max - fc_a.precip_max) | round(3) %}
+      <tr>
+        <td class="label">Max precip (mm)</td>
+        <td class="val">{{ fc_a.precip_max }}</td>
+        <td class="val">{{ fc_b.precip_max }}</td>
+        <td class="{{ 'delta-pos' if dmax > 0 else ('delta-neg' if dmax < 0 else 'delta-zero') }}">
+          {{ '+' if dmax > 0 else '' }}{{ dmax }}
+        </td>
+      </tr>
+      {% set dmin = (fc_b.precip_min - fc_a.precip_min) | round(3) %}
+      <tr>
+        <td class="label">Min precip (mm)</td>
+        <td class="val">{{ fc_a.precip_min }}</td>
+        <td class="val">{{ fc_b.precip_min }}</td>
+        <td class="{{ 'delta-pos' if dmin > 0 else ('delta-neg' if dmin < 0 else 'delta-zero') }}">
+          {{ '+' if dmin > 0 else '' }}{{ dmin }}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Maps -->
+  <div class="map-grid">
+    <div class="map-card">
+      <h3>Forecast A</h3>
+      <div class="map-filename">{{ fc_a.filename }}</div>
+      <div id="map-a" class="leaflet-map"></div>
+      <div class="legend">
+        <span>{{ global_min }} mm</span>
+        <div class="legend-bar"></div>
+        <span>{{ global_max }} mm</span>
+      </div>
+      <div class="legend-note">Shared colour scale across both maps</div>
+    </div>
+    <div class="map-card">
+      <h3>Forecast B</h3>
+      <div class="map-filename">{{ fc_b.filename }}</div>
+      <div id="map-b" class="leaflet-map"></div>
+      <div class="legend">
+        <span>{{ global_min }} mm</span>
+        <div class="legend-bar"></div>
+        <span>{{ global_max }} mm</span>
+      </div>
+      <div class="legend-note">Shared colour scale across both maps</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const geojsonA = {{ fc_a.geojson | safe }};
+  const geojsonB = {{ fc_b.geojson | safe }};
+  const gMin = {{ global_min }};
+  const gMax = {{ global_max }};
+  const gRange = gMax - gMin || 1;
+
+  function precipColor(mm) {
+    const t = Math.max(0, Math.min(1, (mm - gMin) / gRange));
+    const r = Math.round(239 - t * 200);
+    const g = Math.round(246 - t * 170);
+    const b = Math.round(255 - t * 85);
+    return `rgb(${r},${g},${b})`;
+  }
+
+  function buildLayer(geojson) {
+    return L.geoJSON(geojson, {
+      style: f => ({
+        fillColor: precipColor(f.properties.precip),
+        fillOpacity: 0.75,
+        weight: 0,
+        color: 'transparent',
+      }),
+      onEachFeature: (f, layer) => {
+        layer.bindTooltip(`${f.properties.precip} mm`, { sticky: true });
+      },
+    });
+  }
+
+  function initMap(id, geojson) {
+    const map = L.map(id);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors', opacity: 0.6,
+    }).addTo(map);
+    const layer = buildLayer(geojson).addTo(map);
+    map.fitBounds(layer.getBounds(), { padding: [16, 16] });
+    return map;
+  }
+
+  initMap('map-a', geojsonA);
+  initMap('map-b', geojsonB);
+</script>
+{% endblock %}
