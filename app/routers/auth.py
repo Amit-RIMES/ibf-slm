@@ -1,11 +1,17 @@
+import secrets
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.email import send_password_reset_email
 from app.core.security import create_access_token, hash_password, verify_password
+from app.models.reset_token import PasswordResetToken
 from app.models.user import User
 
 router = APIRouter()
@@ -82,6 +88,100 @@ async def change_password_page(request: Request, db: AsyncSession = Depends(get_
     if not user:
         return RedirectResponse("/login")
     return templates.TemplateResponse("change_password.html", {"request": request, "user": user})
+
+
+@router.get("/forgot-password", response_class=HTMLResponse)
+async def forgot_password_page(request: Request):
+    return templates.TemplateResponse("forgot_password.html", {"request": request})
+
+
+@router.post("/forgot-password", response_class=HTMLResponse)
+async def forgot_password(
+    request: Request,
+    email: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+
+    if user:
+        token_str = secrets.token_urlsafe(32)
+        expires = datetime.now(timezone.utc) + timedelta(minutes=settings.RESET_TOKEN_EXPIRE_MINUTES)
+        db.add(PasswordResetToken(token=token_str, user_id=user.id, expires_at=expires))
+        await db.commit()
+        reset_url = f"{settings.APP_BASE_URL}/reset-password/{token_str}"
+        try:
+            await send_password_reset_email(user.email, reset_url)
+        except Exception:
+            pass  # already logged in email utility
+
+    # Always show the same message to avoid email enumeration
+    return templates.TemplateResponse(
+        "forgot_password.html", {"request": request, "sent": True}
+    )
+
+
+@router.get("/reset-password/{token}", response_class=HTMLResponse)
+async def reset_password_page(request: Request, token: str, db: AsyncSession = Depends(get_db)):
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(PasswordResetToken).where(
+            PasswordResetToken.token == token,
+            PasswordResetToken.used == False,  # noqa: E712
+            PasswordResetToken.expires_at > now,
+        )
+    )
+    reset_token = result.scalar_one_or_none()
+    if not reset_token:
+        return templates.TemplateResponse(
+            "reset_password.html", {"request": request, "invalid": True}
+        )
+    return templates.TemplateResponse(
+        "reset_password.html", {"request": request, "token": token}
+    )
+
+
+@router.post("/reset-password/{token}", response_class=HTMLResponse)
+async def reset_password(
+    request: Request,
+    token: str,
+    new_password: str = Form(...),
+    confirm_password: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(PasswordResetToken).where(
+            PasswordResetToken.token == token,
+            PasswordResetToken.used == False,  # noqa: E712
+            PasswordResetToken.expires_at > now,
+        )
+    )
+    reset_token = result.scalar_one_or_none()
+
+    if not reset_token:
+        return templates.TemplateResponse(
+            "reset_password.html", {"request": request, "invalid": True}
+        )
+
+    def err(msg):
+        return templates.TemplateResponse(
+            "reset_password.html", {"request": request, "token": token, "error": msg}
+        )
+
+    if len(new_password) < 6:
+        return err("Password must be at least 6 characters.")
+    if new_password != confirm_password:
+        return err("Passwords do not match.")
+
+    user_result = await db.execute(select(User).where(User.id == reset_token.user_id))
+    user = user_result.scalar_one_or_none()
+    if user:
+        user.hashed_password = hash_password(new_password)
+    reset_token.used = True
+    await db.commit()
+
+    return RedirectResponse("/login?reset=1", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/account/password", response_class=HTMLResponse)
