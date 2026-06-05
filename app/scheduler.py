@@ -1,11 +1,12 @@
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.core.database import AsyncSessionLocal
+from app.models.forecast import ForecastUpload
 from app.models.sync import SyncConfig, SyncLog
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,23 @@ async def _run_daily_sync():
         cfg.last_run_at = datetime.now(timezone.utc)
         cfg.last_run_status = overall
         await db.commit()
+
+        deleted = await _cleanup_old_forecasts(db, cfg.retention_days)
+        if deleted:
+            logger.info("Retention cleanup: deleted %d old forecast(s)", deleted)
+
+
+async def _cleanup_old_forecasts(db, retention_days: int) -> int:
+    if not retention_days:
+        return 0
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    result = await db.execute(
+        delete(ForecastUpload).where(ForecastUpload.uploaded_at < cutoff)
+    )
+    deleted = result.rowcount
+    if deleted:
+        await db.commit()
+    return deleted
 
 
 def _schedule_job(hour: int, minute: int):

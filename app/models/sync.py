@@ -13,6 +13,7 @@ class SyncConfig(Base):
     sources: Mapped[str] = mapped_column(Text, default="[]", nullable=False)  # JSON list of source keys
     sync_hour: Mapped[int] = mapped_column(Integer, default=6, nullable=False)
     sync_minute: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    retention_days: Mapped[int] = mapped_column(Integer, default=90, nullable=False, server_default="90")
     last_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_run_status: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)  # ok / error / partial
 

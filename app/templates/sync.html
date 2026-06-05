@@ -187,6 +187,14 @@
         {% endfor %}
       </div>
 
+      <!-- Retention -->
+      <div class="time-row" style="margin-top:1.25rem;">
+        <label>Keep forecasts for (days)</label>
+        <input type="number" name="retention_days" min="0" max="3650"
+               value="{{ cfg.retention_days }}" required style="width:80px;">
+        <span style="font-size:.8rem;color:#9ca3af;">0 = keep forever</span>
+      </div>
+
       <!-- Hidden fields preserved when toggle auto-submits (JS) -->
       <div style="display:flex; align-items:center; gap:1rem;">
         <button type="submit" class="btn-save">Save settings</button>
