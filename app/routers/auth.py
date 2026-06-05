@@ -7,6 +7,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import log_action
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.email import send_new_registration_email, send_password_reset_email
@@ -163,6 +164,7 @@ async def edit_profile(
     user.username = username
     user.email = email
     await db.commit()
+    await log_action(db, user.id, "user.profile_edit", f"Updated profile: username='{username}', email='{email}'")
 
     return templates.TemplateResponse(
         "edit_profile.html",
@@ -300,6 +302,7 @@ async def change_password(
 
     user.hashed_password = hash_password(new_password)
     await db.commit()
+    await log_action(db, user.id, "user.password_change", "Changed password")
     return templates.TemplateResponse(
         "change_password.html", {"request": request, "user": user, "success": True}
     )

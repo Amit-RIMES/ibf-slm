@@ -7,6 +7,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import log_action
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.email import send_trigger_activation_email
@@ -128,6 +129,7 @@ async def trigger_create(
     db.add(trigger)
     await db.commit()
     await db.refresh(trigger)
+    await log_action(db, user.id, "trigger.create", f"Created trigger '{name}' ({hazard_type})")
     return RedirectResponse(f"/triggers/{trigger.id}", status_code=303)
 
 
@@ -205,6 +207,7 @@ async def trigger_update(
     trigger.threshold = threshold
     trigger.is_active = is_active == "on"
     await db.commit()
+    await log_action(db, user.id, "trigger.edit", f"Edited trigger '{name}'")
     return RedirectResponse(f"/triggers/{trigger_id}", status_code=303)
 
 
@@ -217,8 +220,10 @@ async def trigger_delete(trigger_id: int, request: Request, db: AsyncSession = D
     result = await db.execute(select(Trigger).where(Trigger.id == trigger_id))
     trigger = result.scalar_one_or_none()
     if trigger:
+        tname = trigger.name
         await db.delete(trigger)
         await db.commit()
+        await log_action(db, user.id, "trigger.delete", f"Deleted trigger '{tname}'")
     return RedirectResponse("/triggers", status_code=303)
 
 
@@ -242,5 +247,7 @@ async def acknowledge_activation(
         activation.notes = notes or None
         activation.acknowledged_at = datetime.now(timezone.utc)
         await db.commit()
+        await log_action(db, user.id, "trigger.acknowledge",
+                         f"Acknowledged '{activation.trigger.name}' (value: {activation.value} mm)")
         return RedirectResponse(f"/triggers/{activation.trigger_id}", status_code=303)
     return RedirectResponse("/triggers", status_code=303)

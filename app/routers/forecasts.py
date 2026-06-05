@@ -13,7 +13,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
 
+from app.core.audit import log_action
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.forecast import ForecastUpload
@@ -358,6 +360,7 @@ async def upload_forecast(
     await db.refresh(forecast)
 
     await evaluate_triggers(forecast, db)
+    await _log_import(db, user.id, forecast)
 
     return RedirectResponse(f"/forecasts/{forecast.id}", status_code=303)
 
@@ -424,6 +427,12 @@ async def do_import(source: str, date: str, db: AsyncSession) -> ForecastUpload:
     return forecast
 
 
+async def _log_import(db: AsyncSession, user_id: Optional[int], forecast: ForecastUpload) -> None:
+    label = "auto-sync" if user_id is None else "manual import"
+    await log_action(db, user_id, "forecast.import",
+                     f"Imported {forecast.filename} via {label} (mean: {forecast.precip_mean} mm)")
+
+
 @router.post("/import")
 async def import_forecast(
     request: Request,
@@ -441,6 +450,7 @@ async def import_forecast(
 
     try:
         forecast = await do_import(source, date, db)
+        await _log_import(db, user.id, forecast)
     except FileExistsError:
         return RedirectResponse("/forecasts/import")
     except Exception as exc:
@@ -483,8 +493,10 @@ async def delete_forecast(forecast_id: int, request: Request, db: AsyncSession =
     result = await db.execute(select(ForecastUpload).where(ForecastUpload.id == forecast_id))
     forecast = result.scalar_one_or_none()
     if forecast:
+        filename = forecast.filename
         await db.delete(forecast)
         await db.commit()
+        await log_action(db, user.id, "forecast.delete", f"Deleted {filename}")
     return RedirectResponse("/forecasts", status_code=303)
 
 

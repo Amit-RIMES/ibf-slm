@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import log_action
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.forecast import ForecastUpload
@@ -164,6 +165,7 @@ async def impact_create(
     db.add(record)
     await db.commit()
     await db.refresh(record)
+    await log_action(db, user.id, "impact.create", f"Created impact record '{event_name}' ({hazard_type}, {country})")
 
     return RedirectResponse(f"/impacts/{record.id}", status_code=303)
 
@@ -261,6 +263,7 @@ async def impact_update(
     impact.forecast_id = _int(forecast_id)
 
     await db.commit()
+    await log_action(db, user.id, "impact.edit", f"Edited impact record '{event_name}'")
     return RedirectResponse(f"/impacts/{impact_id}", status_code=303)
 
 
@@ -273,7 +276,9 @@ async def impact_delete(impact_id: int, request: Request, db: AsyncSession = Dep
     result = await db.execute(select(ImpactRecord).where(ImpactRecord.id == impact_id))
     impact = result.scalar_one_or_none()
     if impact:
+        ename = impact.event_name
         await db.delete(impact)
         await db.commit()
+        await log_action(db, user.id, "impact.delete", f"Deleted impact record '{ename}'")
 
     return RedirectResponse("/impacts", status_code=303)

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
 from app.core.database import Base, engine
-from app.models import forecast, impact, trigger, sync, reset_token  # noqa: F401 — registers models with Base
+from app.models import forecast, impact, trigger, sync, reset_token, audit  # noqa: F401 — registers models with Base
 from app.routers import admin, auth, dashboard, forecasts, impacts, triggers
 from app.routers import sync as sync_router
 from app.scheduler import apply_schedule, start_scheduler, stop_scheduler

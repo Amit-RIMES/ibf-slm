@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Audit Log — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.active { color: #7c3aed; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; background: #fff;
+    border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07); overflow: hidden; }
+  th { text-align: left; padding: .65rem .9rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; border-bottom: 1px solid #e5e7eb; }
+  td { padding: .7rem .9rem; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafafa; }
+
+  .action-badge { display: inline-block; padding: .18rem .55rem; border-radius: 6px;
+    font-size: .72rem; font-weight: 700; white-space: nowrap; }
+  .action-forecast  { background: #dbeafe; color: #1d4ed8; }
+  .action-trigger   { background: #f3e8ff; color: #7e22ce; }
+  .action-impact    { background: #dcfce7; color: #166534; }
+  .action-user      { background: #fef3c7; color: #92400e; }
+
+  .empty { color: #9ca3af; font-size: .9rem; padding: 2rem; text-align: center; }
+
+  .pagination { display:flex; align-items:center; gap:.35rem; margin-top:1.25rem; justify-content:center; flex-wrap:wrap; }
+  .page-btn { display:inline-flex; align-items:center; justify-content:center; min-width:2rem; height:2rem;
+    padding:0 .6rem; border-radius:6px; font-size:.875rem; border:1px solid #e5e7eb;
+    background:#fff; color:#374151; text-decoration:none; }
+  .page-btn:hover { background:#f3f4f6; text-decoration:none; }
+  .page-btn.active { background:#4f46e5; color:#fff; border-color:#4f46e5; font-weight:600; pointer-events:none; }
+  .page-btn.disabled { color:#d1d5db; pointer-events:none; border-color:#f3f4f6; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/admin/users">Admin</a>
+    <a href="/admin/audit" class="active">Audit Log</a>
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <h1>Audit Log</h1>
+    <span style="font-size:.85rem;color:#9ca3af;">{{ total }} event{{ 's' if total != 1 else '' }}</span>
+  </div>
+
+  {% if entries %}
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>User</th>
+        <th>Action</th>
+        <th>Detail</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in entries %}
+      {% set category = entry.action.split('.')[0] %}
+      <tr>
+        <td style="color:#6b7280;white-space:nowrap;font-size:.82rem;">
+          {{ entry.created_at.strftime("%Y-%m-%d %H:%M") }}
+        </td>
+        <td style="font-weight:600;">
+          {{ entry.user.username if entry.user else "system" }}
+        </td>
+        <td>
+          <span class="action-badge action-{{ category }}">
+            {{ action_labels.get(entry.action, entry.action) }}
+          </span>
+        </td>
+        <td style="color:#4b5563;">{{ entry.detail or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if total_pages > 1 %}
+  <div class="pagination">
+    {% if page > 1 %}
+      <a class="page-btn" href="/admin/audit?page={{ page - 1 }}">← Prev</a>
+    {% else %}
+      <span class="page-btn disabled">← Prev</span>
+    {% endif %}
+    <span style="font-size:.875rem;color:#6b7280;">Page {{ page }} of {{ total_pages }}</span>
+    {% if page < total_pages %}
+      <a class="page-btn" href="/admin/audit?page={{ page + 1 }}">Next →</a>
+    {% else %}
+      <span class="page-btn disabled">Next →</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="empty">No audit events recorded yet.</div>
+  {% endif %}
+</div>
+{% endblock %}
