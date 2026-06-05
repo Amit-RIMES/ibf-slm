@@ -36,10 +36,85 @@
     }
     .form-group input:focus { border-color: #4f46e5; }
     .error { color: #dc2626; font-size: .875rem; margin-bottom: 1rem; background: #fef2f2; padding: .6rem .85rem; border-radius: 8px; }
+
+    /* ── Hamburger button (hidden on desktop) ── */
+    .nav-hamburger {
+      display: none; background: none; border: 1px solid #e5e7eb; border-radius: 6px;
+      padding: .3rem .65rem; cursor: pointer; font-size: 1.1rem; color: #374151;
+      line-height: 1; flex-shrink: 0;
+    }
+
+    /* ── Mobile breakpoint ── */
+    @media (max-width: 700px) {
+      /* Show hamburger, hide links by default */
+      .nav-hamburger { display: flex; align-items: center; margin-left: auto; }
+      nav .nav-links,
+      nav .user-info {
+        display: none !important;
+        flex-direction: column !important;
+        width: 100%;
+        gap: .6rem !important;
+        padding-top: .65rem;
+        border-top: 1px solid #f3f4f6;
+        font-size: .9rem;
+      }
+      nav .nav-links.nav-open,
+      nav .user-info.nav-open { display: flex !important; }
+
+      /* Nav wraps to next line */
+      nav { flex-wrap: wrap !important; padding: .75rem 1rem !important; gap: .4rem !important; }
+
+      /* Scrollable cards with tables */
+      .card { overflow-x: auto; padding: 1.25rem !important; }
+
+      /* Stack page-header actions */
+      .page-header { flex-direction: column !important; align-items: flex-start !important; gap: .75rem !important; }
+
+      /* Collapse 2-column grids */
+      .grid-2  { grid-template-columns: 1fr !important; }
+      .map-grid { grid-template-columns: 1fr !important; }
+      .chart-grid { grid-template-columns: 1fr !important; }
+
+      /* Stats: 2 per row on mobile is fine */
+      .stats-grid { grid-template-columns: 1fr 1fr !important; }
+
+      /* Main spacing */
+      .main { padding: 0 .75rem !important; margin: 1rem auto !important; }
+
+      /* Filter bars wrap */
+      .filter-bar { padding: .75rem !important; }
+
+      /* Auth forms */
+      .auth-wrapper { padding: .75rem; align-items: flex-start; padding-top: 2rem; }
+    }
   </style>
   {% block extra_styles %}{% endblock %}
 </head>
 <body>
   {% block body %}{% endblock %}
+  <script>
+  (function () {
+    function initNav() {
+      document.querySelectorAll('nav').forEach(function (nav) {
+        var links = nav.querySelector('.nav-links, .user-info');
+        if (!links) return;
+        var btn = document.createElement('button');
+        btn.className = 'nav-hamburger';
+        btn.setAttribute('aria-label', 'Menu');
+        btn.textContent = '☰';
+        btn.addEventListener('click', function () {
+          links.classList.toggle('nav-open');
+          btn.textContent = links.classList.contains('nav-open') ? '✕' : '☰';
+        });
+        nav.insertBefore(btn, links);
+      });
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initNav);
+    } else {
+      initNav();
+    }
+  })();
+  </script>
 </body>
 </html>

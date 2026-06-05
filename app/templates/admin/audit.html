@@ -41,6 +41,12 @@
   .page-btn:hover { background:#f3f4f6; text-decoration:none; }
   .page-btn.active { background:#4f46e5; color:#fff; border-color:#4f46e5; font-weight:600; pointer-events:none; }
   .page-btn.disabled { color:#d1d5db; pointer-events:none; border-color:#f3f4f6; }
+
+  @media (max-width: 700px) {
+    table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
+    h1 { font-size: 1.15rem; }
+    .main { padding: 0 .75rem; }
+  }
 </style>
 {% endblock %}
 

@@ -149,7 +149,7 @@
   </form>
 
   <!-- Charts -->
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.25rem;">
+  <div class="chart-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.25rem;">
     <div class="card" style="grid-column:1/-1;">
       <div class="section-title">Precipitation Trend — Last 30 Forecasts (mm mean)</div>
       <canvas id="precipChart" height="90"></canvas>
@@ -165,7 +165,7 @@
   </div>
 
   <div class="card" style="margin-bottom:1.25rem;">
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem; margin-bottom:1rem;">
       <div class="section-title" style="margin-bottom:0;">Recent Forecasts</div>
       <a href="/forecasts/upload" style="font-size:.85rem; font-weight:600; color:#4f46e5;">+ Upload</a>
     </div>
@@ -198,7 +198,7 @@
   </div>
 
   <div class="card" style="margin-bottom:1.25rem;">
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem; margin-bottom:1rem;">
       <div class="section-title" style="margin-bottom:0;">Recent Impact Records</div>
       <a href="/impacts/new" style="font-size:.85rem; font-weight:600; color:#4f46e5;">+ New Record</a>
     </div>
@@ -234,7 +234,7 @@
 
   {% if user.role == "admin" %}
   <div class="card" style="margin-bottom:1.25rem;">
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem; margin-bottom:1rem;">
       <div class="section-title" style="margin-bottom:0;">Registered Users</div>
       <a href="/admin/users" style="font-size:.85rem; font-weight:600; color:#7c3aed;">Manage →</a>
     </div>
