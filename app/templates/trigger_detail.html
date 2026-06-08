@@ -88,7 +88,10 @@
       </h1>
       <div class="meta">Trigger #{{ trigger.id }} &nbsp;·&nbsp; Created {{ trigger.created_at.strftime("%Y-%m-%d") }} &nbsp;·&nbsp; Hazard: {{ trigger.hazard_type | capitalize }}</div>
     </div>
-    <div style="display:flex; gap:.6rem;">
+    <div style="display:flex; gap:.6rem; align-items:center;">
+      <a href="/triggers/activations/export.csv?trigger_id={{ trigger.id }}"
+         style="padding:.45rem 1rem; border:1px solid #d1d5db; border-radius:8px;
+                font-size:.85rem; font-weight:600; color:#6b7280; text-decoration:none;">↓ Export CSV</a>
       <a href="/triggers/{{ trigger.id }}/edit"
         style="display:inline-block; padding:.45rem 1rem; background:#4f46e5; color:#fff; border-radius:8px; font-size:.85rem; font-weight:600;">Edit</a>
       <form method="post" action="/triggers/{{ trigger.id }}/delete" style="display:inline;"

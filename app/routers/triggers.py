@@ -1,9 +1,11 @@
+import csv
+import io
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -121,6 +123,105 @@ async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
             asyncio.create_task(send_subscriber_alert_emails(fired_rows, email_to_tids))
 
     return len(fired_rows)
+
+
+@router.get("/activations/export.csv")
+async def activations_export(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    trigger_id: Optional[int] = None,
+    hazard: str = "",
+    status: str = "",
+    date_from: str = "",
+    date_to: str = "",
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    from sqlalchemy import and_
+    from datetime import datetime as dt
+
+    filters = []
+    if trigger_id:
+        filters.append(TriggerActivation.trigger_id == trigger_id)
+    if status in ("active", "acknowledged"):
+        filters.append(TriggerActivation.status == status)
+    if date_from:
+        try:
+            filters.append(TriggerActivation.triggered_at >= dt.fromisoformat(date_from))
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            filters.append(TriggerActivation.triggered_at <= dt.fromisoformat(date_to + "T23:59:59"))
+        except ValueError:
+            pass
+
+    stmt = (
+        select(TriggerActivation)
+        .order_by(desc(TriggerActivation.triggered_at))
+    )
+    if filters:
+        stmt = stmt.where(and_(*filters))
+
+    result = await db.execute(stmt)
+    activations = result.scalars().all()
+
+    # Optionally filter by hazard (requires checking the trigger)
+    if hazard:
+        activations = [a for a in activations if a.trigger and a.trigger.hazard_type == hazard]
+
+    # Map activation_id → linked impact IDs
+    if activations:
+        act_ids = [a.id for a in activations]
+        impacts_result = await db.execute(
+            select(ImpactRecord.trigger_activation_id, ImpactRecord.id)
+            .where(ImpactRecord.trigger_activation_id.in_(act_ids))
+        )
+        from collections import defaultdict
+        impact_map: dict[int, list[int]] = defaultdict(list)
+        for aid, iid in impacts_result.all():
+            impact_map[aid].append(iid)
+    else:
+        impact_map = {}
+
+    op_sym = {"gt": ">", "gte": ">=", "lt": "<", "lte": "<="}
+    var_label = {"precip_mean": "precip_mean", "precip_max": "precip_max", "precip_min": "precip_min"}
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "activation_id", "trigger_id", "trigger_name", "hazard_type",
+        "rule", "observed_value_mm", "threshold_mm",
+        "activation_status", "forecast_filename", "forecast_source",
+        "triggered_at", "acknowledged_at", "notes",
+        "validated", "linked_impact_ids",
+    ])
+    for act in activations:
+        t = act.trigger
+        fc = act.forecast
+        rule = f"{t.variable} {op_sym.get(t.operator, t.operator)} {t.threshold}" if t else ""
+        imp_ids = impact_map.get(act.id, [])
+        writer.writerow([
+            act.id, act.trigger_id, t.name if t else "", t.hazard_type if t else "",
+            rule, act.value, t.threshold if t else "",
+            act.status,
+            fc.filename if fc else "", fc.source or "" if fc else "",
+            act.triggered_at.strftime("%Y-%m-%d %H:%M:%S"),
+            act.acknowledged_at.strftime("%Y-%m-%d %H:%M:%S") if act.acknowledged_at else "",
+            act.notes or "",
+            "yes" if imp_ids else "no",
+            ";".join(str(i) for i in imp_ids),
+        ])
+
+    buf.seek(0)
+    filename = f"activations_trigger{trigger_id}.csv" if trigger_id else "activations.csv"
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @router.get("/report", response_class=HTMLResponse)
