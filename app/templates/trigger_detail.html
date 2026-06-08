@@ -89,6 +89,9 @@
       <div class="meta">Trigger #{{ trigger.id }} &nbsp;·&nbsp; Created {{ trigger.created_at.strftime("%Y-%m-%d") }} &nbsp;·&nbsp; Hazard: {{ trigger.hazard_type | capitalize }}</div>
     </div>
     <div style="display:flex; gap:.6rem; align-items:center;">
+      <a href="/triggers/{{ trigger.id }}/backtest"
+         style="padding:.45rem 1rem; border:1px solid #d1d5db; border-radius:8px;
+                font-size:.85rem; font-weight:600; color:#6b7280; text-decoration:none;">Backtest</a>
       <a href="/triggers/activations/export.csv?trigger_id={{ trigger.id }}"
          style="padding:.45rem 1rem; border:1px solid #d1d5db; border-radius:8px;
                 font-size:.85rem; font-weight:600; color:#6b7280; text-decoration:none;">↓ Export CSV</a>

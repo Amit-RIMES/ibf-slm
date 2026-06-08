@@ -1,6 +1,7 @@
 import csv
 import io
-from datetime import datetime, timezone
+import json
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Optional
 
@@ -447,6 +448,162 @@ async def trigger_create(
     await db.refresh(trigger)
     await log_action(db, user.id, "trigger.create", f"Created trigger '{name}' ({hazard_type})")
     return RedirectResponse(f"/triggers/{trigger.id}", status_code=303)
+
+
+@router.get("/{trigger_id}/backtest", response_class=HTMLResponse)
+async def trigger_backtest(
+    trigger_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    match_window: int = 30,
+    date_from: str = "",
+    date_to: str = "",
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    from sqlalchemy import and_
+
+    result = await db.execute(select(Trigger).where(Trigger.id == trigger_id))
+    trigger = result.scalar_one_or_none()
+    if not trigger:
+        return RedirectResponse("/triggers")
+
+    match_window = max(1, min(match_window, 180))
+
+    dt_from = dt_to = None
+    if date_from:
+        try:
+            dt_from = datetime.fromisoformat(date_from).replace(tzinfo=timezone.utc)
+        except ValueError:
+            date_from = ""
+    if date_to:
+        try:
+            dt_to = (datetime.fromisoformat(date_to) + timedelta(days=1)).replace(tzinfo=timezone.utc)
+        except ValueError:
+            date_to = ""
+
+    # All forecasts in the date range
+    fc_stmt = select(ForecastUpload).order_by(ForecastUpload.uploaded_at)
+    fc_filters = []
+    if dt_from:
+        fc_filters.append(ForecastUpload.uploaded_at >= dt_from)
+    if dt_to:
+        fc_filters.append(ForecastUpload.uploaded_at < dt_to)
+    if fc_filters:
+        fc_stmt = fc_stmt.where(and_(*fc_filters))
+    all_forecasts = (await db.execute(fc_stmt)).scalars().all()
+
+    # Impact records matching this trigger's hazard type
+    imp_stmt = select(ImpactRecord)
+    if trigger.hazard_type:
+        imp_stmt = imp_stmt.where(ImpactRecord.hazard_type == trigger.hazard_type)
+    all_impacts = (await db.execute(imp_stmt)).scalars().all()
+
+    # Operator evaluation
+    _ops = {
+        "gt":  lambda v, t: v > t,
+        "gte": lambda v, t: v >= t,
+        "lt":  lambda v, t: v < t,
+        "lte": lambda v, t: v <= t,
+    }
+    _op = _ops.get(trigger.operator, lambda v, t: False)
+
+    def fires_at(value, threshold):
+        return value is not None and _op(value, threshold)
+
+    # Precompute per-forecast: value, date, and whether any impact falls in match window
+    fc_data = []
+    for fc in all_forecasts:
+        v = getattr(fc, trigger.variable, None)
+        if v is None:
+            continue
+        fc_date = fc.uploaded_at.date()
+        ws = fc_date - timedelta(days=match_window)
+        we = fc_date + timedelta(days=match_window)
+        has_impact = any(ws <= imp.event_date <= we for imp in all_impacts)
+        fc_data.append({"fc": fc, "value": v, "date": fc_date, "has_impact": has_impact})
+
+    # For each impact: set of fc_data indices that fall in its match window
+    imp_windows = []
+    for imp in all_impacts:
+        ws = imp.event_date - timedelta(days=match_window)
+        we = imp.event_date + timedelta(days=match_window)
+        covering = frozenset(i for i, fd in enumerate(fc_data) if ws <= fd["date"] <= we)
+        imp_windows.append(covering)
+
+    def compute_stats(threshold):
+        fire_set = {i for i, fd in enumerate(fc_data) if fires_at(fd["value"], threshold)}
+        n_fires = len(fire_set)
+        n_hits = sum(1 for i in fire_set if fc_data[i]["has_impact"])
+        n_fa = n_fires - n_hits
+        n_missed = sum(1 for iw in imp_windows if not (iw & fire_set))
+        pod = round(n_hits / (n_hits + n_missed) * 100, 1) if (n_hits + n_missed) > 0 else None
+        far = round(n_fa / n_fires * 100, 1) if n_fires > 0 else None
+        csi = round(n_hits / (n_hits + n_missed + n_fa) * 100, 1) if (n_hits + n_missed + n_fa) > 0 else None
+        return {"fires": n_fires, "hits": n_hits, "false_alarms": n_fa,
+                "missed": n_missed, "pod": pod, "far": far, "csi": csi}
+
+    # Threshold sweep — 30 evenly-spaced points spanning the observed range + current threshold
+    values = [fd["value"] for fd in fc_data]
+    sweep_json = "[]"
+    if values:
+        v_min, v_max = min(values), max(values)
+        span = v_max - v_min if v_max != v_min else max(v_max, 1.0)
+        sweep_min = max(0.0, v_min - span * 0.15)
+        sweep_max = v_max + span * 0.15
+        N = 30
+        step = (sweep_max - sweep_min) / (N - 1)
+        raw_thresholds = [round(sweep_min + i * step, 2) for i in range(N)]
+        # Insert actual threshold if not already close to a sweep point
+        if all(abs(t - trigger.threshold) > step * 0.4 for t in raw_thresholds):
+            raw_thresholds.append(round(trigger.threshold, 2))
+        thresholds = sorted(set(raw_thresholds))
+
+        sweep = []
+        for t in thresholds:
+            s = compute_stats(t)
+            sweep.append({
+                "threshold": round(t, 2),
+                "fires": s["fires"],
+                "pod": s["pod"],
+                "far": s["far"],
+                "csi": s["csi"],
+                "is_current": abs(t - trigger.threshold) < 1e-6,
+            })
+        sweep_json = json.dumps(sweep)
+
+    # Current threshold detailed stats
+    current = compute_stats(trigger.threshold)
+
+    # Fires timeline at current threshold (most recent first)
+    fire_indices = {i for i, fd in enumerate(fc_data) if fires_at(fd["value"], trigger.threshold)}
+    timeline = sorted(
+        [{"fc": fc_data[i]["fc"], "value": fc_data[i]["value"],
+          "is_hit": fc_data[i]["has_impact"], "date": fc_data[i]["date"]}
+         for i in fire_indices],
+        key=lambda x: x["date"], reverse=True,
+    )
+
+    return templates.TemplateResponse(
+        "trigger_backtest.html",
+        {
+            "request": request, "user": user,
+            "trigger": trigger,
+            "total_forecasts": len(fc_data),
+            "total_impacts": len(all_impacts),
+            "match_window": match_window,
+            "date_from": date_from,
+            "date_to": date_to,
+            "current": current,
+            "sweep_json": sweep_json,
+            "current_threshold": trigger.threshold,
+            "timeline": timeline,
+            "OPERATOR_SYMBOLS": OPERATOR_SYMBOLS,
+            "VARIABLE_LABELS": VARIABLE_LABELS,
+        },
+    )
 
 
 @router.get("/{trigger_id}", response_class=HTMLResponse)

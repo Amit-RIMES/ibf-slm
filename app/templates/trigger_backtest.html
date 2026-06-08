@@ -1,0 +1,379 @@
+{% extends "base.html" %}
+{% block title %}Backtest — {{ trigger.name }} — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.active { color: #4f46e5; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 1080px; margin: 2rem auto; padding: 0 1rem; }
+  .page-header { display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 1.5rem; flex-wrap: wrap; gap: .75rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; }
+  .sub { font-size: .85rem; color: #9ca3af; margin-top: .2rem; }
+
+  .filter-bar {
+    display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+    margin-bottom: 1.5rem; background: #fff; border-radius: 10px;
+    padding: 1rem 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  }
+  .filter-bar label { font-size: .8rem; font-weight: 600; color: #374151; white-space: nowrap; }
+  .filter-bar input[type=date], .filter-bar input[type=number] {
+    padding: .45rem .75rem; border: 1px solid #d1d5db; border-radius: 7px;
+    font-size: .875rem; outline: none; transition: border-color .15s; background: #fff;
+  }
+  .filter-bar input:focus { border-color: #4f46e5; }
+  .filter-bar input[type=number] { width: 80px; }
+  .btn-filter {
+    background: #4f46e5; color: #fff; border: none; border-radius: 7px;
+    padding: .45rem 1rem; font-size: .875rem; font-weight: 600; cursor: pointer;
+  }
+  .btn-filter:hover { opacity: .85; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem; margin-bottom: 1.5rem; }
+  .stat-card { background: #fff; border-radius: 10px; padding: 1.1rem 1.25rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+  .stat-label { font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: #9ca3af; margin-bottom: .4rem; }
+  .stat-value { font-size: 1.75rem; font-weight: 800; color: #111827; line-height: 1; }
+  .stat-sub { font-size: .78rem; color: #9ca3af; margin-top: .3rem; }
+  .stat-green .stat-value { color: #16a34a; }
+  .stat-red   .stat-value { color: #dc2626; }
+  .stat-amber .stat-value { color: #d97706; }
+  .stat-blue  .stat-value { color: #2563eb; }
+
+  .rule-box { background: #f5f3ff; border: 1px solid #e0d9ff; border-radius: 8px;
+    padding: .75rem 1.1rem; font-size: .9rem; color: #4338ca;
+    margin-bottom: 1.25rem; display: inline-flex; align-items: center; gap: .5rem; }
+
+  .info-note { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px;
+    padding: .7rem 1rem; font-size: .8rem; color: #92400e; margin-bottom: 1.5rem; }
+
+  .chart-card { background: #fff; border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07); padding: 1.25rem; margin-bottom: 1.5rem; }
+  .chart-title { font-size: .8rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: #6b7280; margin-bottom: 1rem; }
+  .chart-wrap { position: relative; height: 280px; }
+
+  .legend-row { display: flex; gap: 1.5rem; margin-top: .75rem; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: .4rem; font-size: .8rem; color: #374151; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  th { text-align: left; padding: .55rem .75rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af;
+    border-bottom: 1px solid #e5e7eb; }
+  td { padding: .65rem .75rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f9fafb; }
+  .badge { display: inline-block; padding: .2rem .65rem; border-radius: 999px;
+    font-size: .72rem; font-weight: 700; }
+  .badge-hit  { background: #dcfce7; color: #16a34a; }
+  .badge-fa   { background: #fef3c7; color: #92400e; }
+  .empty { color: #9ca3af; font-size: .9rem; padding: 2rem 0; text-align: center; }
+
+  .no-data { background: #f9fafb; border-radius: 8px; padding: 2rem;
+    text-align: center; color: #9ca3af; font-size: .9rem; margin-bottom: 1.5rem; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/triggers" class="active">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/sync">Auto-Sync</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+
+  <div class="page-header">
+    <div>
+      <div style="font-size:.82rem; color:#9ca3af; margin-bottom:.4rem;">
+        <a href="/triggers" style="color:#9ca3af;">Triggers</a> &rsaquo;
+        <a href="/triggers/{{ trigger.id }}" style="color:#9ca3af;">{{ trigger.name }}</a> &rsaquo;
+        Backtest
+      </div>
+      <h1>Backtest — {{ trigger.name }}</h1>
+      <div class="sub">
+        How would this trigger have performed against {{ total_forecasts }} historical forecast{{ 's' if total_forecasts != 1 else '' }}
+        and {{ total_impacts }} impact record{{ 's' if total_impacts != 1 else '' }}
+        {% if trigger.hazard_type %}({{ trigger.hazard_type }} only){% endif %}?
+      </div>
+    </div>
+    <a href="/triggers/{{ trigger.id }}"
+       style="font-size:.85rem; color:#6b7280; border:1px solid #d1d5db; border-radius:8px;
+              padding:.45rem .9rem; text-decoration:none; font-weight:600; white-space:nowrap;">
+      ← Back to trigger
+    </a>
+  </div>
+
+  <div class="rule-box">
+    Current rule: <strong>{{ VARIABLE_LABELS[trigger.variable] }} {{ OPERATOR_SYMBOLS[trigger.operator] }} {{ trigger.threshold }} mm</strong>
+  </div>
+
+  <!-- Filters -->
+  <form method="get" action="/triggers/{{ trigger.id }}/backtest" class="filter-bar">
+    <label>Forecast date from</label>
+    <input type="date" name="date_from" value="{{ date_from }}">
+    <label>to</label>
+    <input type="date" name="date_to" value="{{ date_to }}">
+    <label>Match window</label>
+    <input type="number" name="match_window" value="{{ match_window }}" min="1" max="180"
+           title="Number of days before/after a forecast fire to search for an impact event">
+    <label style="font-size:.75rem; color:#9ca3af;">days</label>
+    <button type="submit" class="btn-filter">Apply</button>
+  </form>
+
+  <div class="info-note">
+    A <strong>hit</strong> is a forecast that fires AND has at least one {{ trigger.hazard_type or 'matching' }} impact event recorded within ±{{ match_window }} days of the forecast date.
+    A <strong>false alarm</strong> is a fire with no nearby impact.
+    A <strong>miss</strong> is an impact event where the trigger did not fire within its window.
+  </div>
+
+  {% if total_forecasts == 0 %}
+  <div class="no-data">No forecasts found for the selected date range.</div>
+  {% else %}
+
+  <!-- Summary stats at current threshold -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Forecasts analysed</div>
+      <div class="stat-value" style="color:#374151;">{{ total_forecasts }}</div>
+      <div class="stat-sub">{{ total_impacts }} impact event{{ 's' if total_impacts != 1 }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Fires at current threshold</div>
+      <div class="stat-value" style="color:#4f46e5;">{{ current.fires }}</div>
+      <div class="stat-sub">{{ current.hits }} hit{{ 's' if current.hits != 1 }}, {{ current.false_alarms }} false alarm{{ 's' if current.false_alarms != 1 }}</div>
+    </div>
+    <div class="stat-card {% if current.pod is not none %}{% if current.pod >= 67 %}stat-green{% elif current.pod >= 33 %}stat-amber{% else %}stat-red{% endif %}{% endif %}">
+      <div class="stat-label">Probability of Detection</div>
+      <div class="stat-value">
+        {% if current.pod is not none %}{{ current.pod }}%{% else %}—{% endif %}
+      </div>
+      <div class="stat-sub">hits ÷ (hits + misses)</div>
+    </div>
+    <div class="stat-card {% if current.far is not none %}{% if current.far <= 33 %}stat-green{% elif current.far <= 67 %}stat-amber{% else %}stat-red{% endif %}{% endif %}">
+      <div class="stat-label">False Alarm Ratio</div>
+      <div class="stat-value">
+        {% if current.far is not none %}{{ current.far }}%{% else %}—{% endif %}
+      </div>
+      <div class="stat-sub">false alarms ÷ total fires</div>
+    </div>
+    <div class="stat-card {% if current.csi is not none %}{% if current.csi >= 50 %}stat-green{% elif current.csi >= 25 %}stat-amber{% else %}stat-red{% endif %}{% endif %}">
+      <div class="stat-label">Critical Success Index</div>
+      <div class="stat-value">
+        {% if current.csi is not none %}{{ current.csi }}%{% else %}—{% endif %}
+      </div>
+      <div class="stat-sub">hits ÷ (hits + misses + FA)</div>
+    </div>
+    <div class="stat-card stat-amber">
+      <div class="stat-label">Missed events</div>
+      <div class="stat-value">{{ current.missed }}</div>
+      <div class="stat-sub">impacts with no fire in window</div>
+    </div>
+  </div>
+
+  <!-- Calibration chart -->
+  <div class="chart-card">
+    <div class="chart-title">Threshold calibration — POD and FAR across the observed range</div>
+    <div class="chart-wrap">
+      <canvas id="calibChart"></canvas>
+    </div>
+    <div class="legend-row">
+      <div class="legend-item"><div class="legend-dot" style="background:#16a34a;"></div>Probability of Detection (%)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#dc2626;"></div>False Alarm Ratio (%)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#2563eb;"></div>Critical Success Index (%)</div>
+      <div class="legend-item">
+        <div style="width:12px;height:2px;border-top:2px dashed #4f46e5;margin-top:5px;"></div>
+        Current threshold ({{ trigger.threshold }} mm)
+      </div>
+    </div>
+  </div>
+
+  <!-- Fires timeline -->
+  <div class="chart-card">
+    <div class="chart-title">
+      Fires at current threshold ({{ trigger.threshold }} mm) — {{ timeline | length }} event{{ 's' if timeline | length != 1 }}
+    </div>
+    {% if timeline %}
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Forecast file</th>
+          <th style="text-align:right;">{{ VARIABLE_LABELS[trigger.variable] }}</th>
+          <th>Threshold</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in timeline %}
+        <tr>
+          <td>{{ row.date }}</td>
+          <td>
+            <a href="/forecasts/{{ row.fc.id }}" style="color:#4f46e5; font-size:.83rem;">
+              {{ row.fc.filename }}
+            </a>
+          </td>
+          <td style="text-align:right; font-weight:600;">{{ "%.2f"|format(row.value) }} mm</td>
+          <td style="color:#9ca3af; font-size:.83rem;">
+            {{ OPERATOR_SYMBOLS[trigger.operator] }} {{ trigger.threshold }} mm
+          </td>
+          <td>
+            {% if row.is_hit %}
+            <span class="badge badge-hit">Hit</span>
+            {% else %}
+            <span class="badge badge-fa">False alarm</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No forecasts would fire at this threshold in the selected date range.</div>
+    {% endif %}
+  </div>
+
+  {% endif %} {# total_forecasts > 0 #}
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  const sweep = {{ sweep_json | safe }};
+  if (!sweep.length) return;
+
+  const currentThreshold = {{ current_threshold }};
+  const labels = sweep.map(d => d.threshold.toFixed(2));
+  const podData = sweep.map(d => d.pod);
+  const farData = sweep.map(d => d.far);
+  const csiData = sweep.map(d => d.csi);
+
+  // Highlight the current threshold point
+  const currentIdx = sweep.findIndex(d => d.is_current);
+  function pointRadius(arr, baseR, highlightR) {
+    return arr.map((_, i) => i === currentIdx ? highlightR : baseR);
+  }
+  function pointColor(base, highlight) {
+    return sweep.map((_, i) => i === currentIdx ? highlight : base);
+  }
+
+  // Vertical reference line at the current threshold — must register before Chart()
+  Chart.register({
+    id: 'currentThresholdLine',
+    afterDraw(chart) {
+      if (currentIdx < 0) return;
+      const { ctx: c, chartArea: { top, bottom }, scales: { x } } = chart;
+      const xPos = x.getPixelForIndex(currentIdx);
+      c.save();
+      c.beginPath();
+      c.strokeStyle = '#4f46e5';
+      c.lineWidth = 1.5;
+      c.setLineDash([5, 4]);
+      c.moveTo(xPos, top);
+      c.lineTo(xPos, bottom);
+      c.stroke();
+      c.restore();
+    },
+  });
+
+  const ctx = document.getElementById('calibChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'POD (%)',
+          data: podData,
+          borderColor: '#16a34a',
+          backgroundColor: 'rgba(22,163,74,0.08)',
+          fill: false,
+          tension: 0.35,
+          pointRadius: pointRadius(podData, 3, 8),
+          pointBackgroundColor: pointColor('#16a34a', '#4f46e5'),
+          pointBorderColor: pointColor('#16a34a', '#fff'),
+          pointBorderWidth: pointRadius(podData, 0, 2),
+          spanGaps: true,
+        },
+        {
+          label: 'FAR (%)',
+          data: farData,
+          borderColor: '#dc2626',
+          backgroundColor: 'rgba(220,38,38,0.06)',
+          fill: false,
+          tension: 0.35,
+          pointRadius: pointRadius(farData, 3, 8),
+          pointBackgroundColor: pointColor('#dc2626', '#4f46e5'),
+          pointBorderColor: pointColor('#dc2626', '#fff'),
+          pointBorderWidth: pointRadius(farData, 0, 2),
+          spanGaps: true,
+        },
+        {
+          label: 'CSI (%)',
+          data: csiData,
+          borderColor: '#2563eb',
+          backgroundColor: 'rgba(37,99,235,0.06)',
+          fill: false,
+          tension: 0.35,
+          borderDash: [4, 3],
+          pointRadius: pointRadius(csiData, 2, 8),
+          pointBackgroundColor: pointColor('#2563eb', '#4f46e5'),
+          pointBorderColor: pointColor('#2563eb', '#fff'),
+          pointBorderWidth: pointRadius(csiData, 0, 2),
+          spanGaps: true,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: items => `Threshold: ${items[0].label} mm`,
+            afterBody: items => {
+              const d = sweep[items[0].dataIndex];
+              return [`Fires: ${d.fires}`];
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          title: { display: true, text: `${{{ VARIABLE_LABELS[trigger.variable] | tojson }}} threshold (mm)`,
+            font: { size: 11 }, color: '#6b7280' },
+          ticks: { maxTicksLimit: 10, font: { size: 11 } },
+          grid: { color: '#f3f4f6' },
+        },
+        y: {
+          min: 0, max: 100,
+          title: { display: true, text: 'Score (%)', font: { size: 11 }, color: '#6b7280' },
+          ticks: { font: { size: 11 }, callback: v => v + '%' },
+          grid: { color: '#f3f4f6' },
+        },
+      },
+    },
+  });
+})();
+</script>
+{% endblock %}
