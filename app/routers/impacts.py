@@ -40,20 +40,52 @@ def _build_page_range(current: int, total_pages: int) -> list:
 
 
 @router.get("", response_class=HTMLResponse)
-async def impact_list(request: Request, db: AsyncSession = Depends(get_db), page: int = 1):
+async def impact_list(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    q: str = "",
+    hazard: str = "",
+    country: str = "",
+    date_from: str = "",
+    date_to: str = "",
+    page: int = 1,
+):
     user = await get_current_user(request, db)
     if not user:
         return RedirectResponse("/login")
 
-    from sqlalchemy import func
+    from sqlalchemy import and_, func
+    from datetime import date as date_type, timedelta
 
     page = max(1, page)
-    total = await db.scalar(select(func.count()).select_from(ImpactRecord))
+    filters = []
+    if q:
+        filters.append(ImpactRecord.event_name.ilike(f"%{q}%"))
+    if hazard and hazard in HAZARD_TYPES:
+        filters.append(ImpactRecord.hazard_type == hazard)
+    if country:
+        filters.append(ImpactRecord.country.ilike(f"%{country}%"))
+    if date_from:
+        try:
+            filters.append(ImpactRecord.event_date >= date_type.fromisoformat(date_from))
+        except ValueError:
+            date_from = ""
+    if date_to:
+        try:
+            filters.append(ImpactRecord.event_date <= date_type.fromisoformat(date_to))
+        except ValueError:
+            date_to = ""
+
+    base = select(ImpactRecord)
+    if filters:
+        base = base.where(and_(*filters))
+
+    total = await db.scalar(select(func.count()).select_from(base.subquery()))
     total_pages = max(1, -(-total // PAGE_SIZE))
     page = min(page, total_pages)
 
     result = await db.execute(
-        select(ImpactRecord).order_by(desc(ImpactRecord.event_date))
+        base.order_by(desc(ImpactRecord.event_date))
         .offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE)
     )
     impacts = result.scalars().all()
@@ -62,6 +94,9 @@ async def impact_list(request: Request, db: AsyncSession = Depends(get_db), page
         "impact_list.html",
         {
             "request": request, "user": user, "impacts": impacts,
+            "q": q, "hazard": hazard, "country": country,
+            "date_from": date_from, "date_to": date_to,
+            "hazard_types": HAZARD_TYPES,
             "page": page, "total": total, "total_pages": total_pages,
             "page_size": PAGE_SIZE, "page_range": _build_page_range(page, total_pages),
         },
@@ -69,12 +104,46 @@ async def impact_list(request: Request, db: AsyncSession = Depends(get_db), page
 
 
 @router.get("/export.csv")
-async def impact_export(request: Request, db: AsyncSession = Depends(get_db)):
+async def impact_export(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    q: str = "",
+    hazard: str = "",
+    country: str = "",
+    date_from: str = "",
+    date_to: str = "",
+):
     user = await get_current_user(request, db)
     if not user:
         return RedirectResponse("/login")
 
-    result = await db.execute(select(ImpactRecord).order_by(desc(ImpactRecord.event_date)))
+    from sqlalchemy import and_
+    from datetime import date as date_type
+
+    filters = []
+    if q:
+        filters.append(ImpactRecord.event_name.ilike(f"%{q}%"))
+    if hazard and hazard in HAZARD_TYPES:
+        filters.append(ImpactRecord.hazard_type == hazard)
+    if country:
+        filters.append(ImpactRecord.country.ilike(f"%{country}%"))
+    if date_from:
+        try:
+            filters.append(ImpactRecord.event_date >= date_type.fromisoformat(date_from))
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            filters.append(ImpactRecord.event_date <= date_type.fromisoformat(date_to))
+        except ValueError:
+            pass
+
+    stmt = select(ImpactRecord)
+    if filters:
+        stmt = stmt.where(and_(*filters))
+    stmt = stmt.order_by(desc(ImpactRecord.event_date))
+
+    result = await db.execute(stmt)
     impacts = result.scalars().all()
 
     buf = io.StringIO()

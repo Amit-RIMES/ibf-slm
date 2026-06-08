@@ -40,6 +40,25 @@
 
   .empty { color: #9ca3af; font-size: .9rem; padding: 2rem 0; text-align: center; }
 
+  .filter-bar {
+    display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+    margin-bottom: 1.25rem; background: #fff; border-radius: 10px;
+    padding: 1rem 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,.07);
+  }
+  .filter-bar input[type=text], .filter-bar input[type=date], .filter-bar select {
+    padding: .45rem .75rem; border: 1px solid #d1d5db; border-radius: 7px;
+    font-size: .875rem; outline: none; transition: border-color .15s; background: #fff;
+  }
+  .filter-bar input:focus, .filter-bar select:focus { border-color: #4f46e5; }
+  .filter-bar input[type=text] { width: 180px; }
+  .btn-filter {
+    background: #4f46e5; color: #fff; border: none; border-radius: 7px;
+    padding: .45rem 1rem; font-size: .875rem; font-weight: 600; cursor: pointer;
+  }
+  .btn-filter:hover { opacity: .85; }
+  .btn-clear { font-size: .82rem; color: #6b7280; }
+  .result-count { font-size: .82rem; color: #9ca3af; margin-left: auto; }
+
   .pagination { display:flex; align-items:center; gap:.35rem; margin-top:1.25rem; justify-content:center; flex-wrap:wrap; }
   .page-btn { display:inline-flex; align-items:center; justify-content:center; min-width:2rem; height:2rem;
     padding:0 .6rem; border-radius:6px; font-size:.875rem; border:1px solid #e5e7eb;
@@ -70,7 +89,7 @@
   <div class="page-header">
     <h1>Impact Records</h1>
     <div style="display:flex;gap:.6rem;align-items:center;">
-      <a href="/impacts/export.csv"
+      <a href="/impacts/export.csv?q={{ q }}&hazard={{ hazard }}&country={{ country }}&date_from={{ date_from }}&date_to={{ date_to }}"
          style="font-size:.85rem;font-weight:600;color:#6b7280;border:1px solid #d1d5db;
                 border-radius:7px;padding:.45rem .9rem;text-decoration:none;">
         ↓ Export CSV
@@ -78,6 +97,25 @@
       <a href="/impacts/new" class="btn-new">+ New Record</a>
     </div>
   </div>
+
+  <!-- Filter bar -->
+  <form method="get" action="/impacts" class="filter-bar">
+    <input type="text" name="q" placeholder="Search event name…" value="{{ q }}">
+    <select name="hazard">
+      <option value="">All hazards</option>
+      {% for h in hazard_types %}
+      <option value="{{ h }}" {% if hazard == h %}selected{% endif %}>{{ h | capitalize }}</option>
+      {% endfor %}
+    </select>
+    <input type="text" name="country" placeholder="Country…" value="{{ country }}" style="width:130px;">
+    <input type="date" name="date_from" value="{{ date_from }}" title="Event date from">
+    <input type="date" name="date_to"   value="{{ date_to }}"   title="Event date to">
+    <button type="submit" class="btn-filter">Filter</button>
+    {% if q or hazard or country or date_from or date_to %}
+    <a href="/impacts" class="btn-clear">✕ Clear</a>
+    {% endif %}
+    <span class="result-count">{{ total }} result{{ 's' if total != 1 else '' }}</span>
+  </form>
 
   <div class="card">
     {% if impacts %}
@@ -116,14 +154,21 @@
       </tbody>
     </table>
     {% else %}
-    <div class="empty">No impact records yet. <a href="/impacts/new">Add the first one.</a></div>
+    <div class="empty">
+      {% if q or hazard or country or date_from or date_to %}
+        No records match your filters. <a href="/impacts">Clear filters</a>
+      {% else %}
+        No impact records yet. <a href="/impacts/new">Add the first one.</a>
+      {% endif %}
+    </div>
     {% endif %}
   </div>
 
   {% if total_pages > 1 %}
+  {% set base_url = "/impacts?q=" ~ q ~ "&hazard=" ~ hazard ~ "&country=" ~ country ~ "&date_from=" ~ date_from ~ "&date_to=" ~ date_to %}
   <div class="pagination">
     {% if page > 1 %}
-      <a class="page-btn" href="/impacts?page={{ page - 1 }}">← Prev</a>
+      <a class="page-btn" href="{{ base_url }}&page={{ page - 1 }}">← Prev</a>
     {% else %}
       <span class="page-btn disabled">← Prev</span>
     {% endif %}
@@ -134,12 +179,12 @@
       {% elif p == page %}
         <span class="page-btn active">{{ p }}</span>
       {% else %}
-        <a class="page-btn" href="/impacts?page={{ p }}">{{ p }}</a>
+        <a class="page-btn" href="{{ base_url }}&page={{ p }}">{{ p }}</a>
       {% endif %}
     {% endfor %}
 
     {% if page < total_pages %}
-      <a class="page-btn" href="/impacts?page={{ page + 1 }}">Next →</a>
+      <a class="page-btn" href="{{ base_url }}&page={{ page + 1 }}">Next →</a>
     {% else %}
       <span class="page-btn disabled">Next →</span>
     {% endif %}
