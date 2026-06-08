@@ -109,6 +109,50 @@
     </div>
   </div>
 
+  {% if forecast.seasonal_anomaly_pct is not none %}
+  <div class="card" style="margin-bottom:1.25rem;padding:1rem 1.25rem;display:flex;align-items:center;gap:.75rem;background:{% if forecast.seasonal_anomaly_pct > 0 %}#fef2f2{% else %}#eff6ff{% endif %};">
+    <span style="font-size:1.5rem;">{% if forecast.seasonal_anomaly_pct > 0 %}🔴{% else %}🔵{% endif %}</span>
+    <div>
+      <div style="font-weight:700;font-size:.95rem;color:{% if forecast.seasonal_anomaly_pct > 0 %}#991b1b{% else %}#1d4ed8{% endif %};">
+        Seasonal context: {% if forecast.seasonal_anomaly_pct > 0 %}+{% endif %}{{ "%.1f"|format(forecast.seasonal_anomaly_pct) }}% vs same-month average
+      </div>
+      <div style="font-size:.82rem;color:#6b7280;">Based on rolling mean of prior uploads for the same source and calendar month.</div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if forecast.lead_time_stats %}
+  {% set lts = forecast.lead_time_stats | from_json %}
+  <div class="card" style="margin-bottom:1.25rem;">
+    <div class="section-title">Lead-time Breakdown</div>
+    <table style="font-size:.875rem;">
+      <thead>
+        <tr>
+          <th>Lead-time window</th>
+          <th>Min (mm)</th>
+          <th>Mean (mm)</th>
+          <th>Max (mm)</th>
+          <th>Steps</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for bucket in [('d1_5', 'Days 1–5'), ('d6_10', 'Days 6–10'), ('d11_15', 'Days 11–15')] %}
+        {% if lts.get(bucket[0]) %}
+        {% set b = lts[bucket[0]] %}
+        <tr>
+          <td style="font-weight:600;">{{ bucket[1] }}</td>
+          <td>{{ "%.2f"|format(b.min) }}</td>
+          <td style="font-weight:600;">{{ "%.2f"|format(b.mean) }}</td>
+          <td>{{ "%.2f"|format(b.max) }}</td>
+          <td style="color:#9ca3af;">{{ b.steps }}</td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
   <div class="card">
     <div class="section-title">Precipitation Map (time-mean)</div>
     <div id="map"></div>

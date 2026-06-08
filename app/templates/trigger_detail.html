@@ -27,8 +27,13 @@
   .badge-acknowledged { background: #e0f2fe; color: #0369a1; }
 
   .rule-box { background: #f5f3ff; border: 1px solid #e0d9ff; border-radius: 8px;
-    padding: .85rem 1.2rem; font-size: .95rem; color: #4338ca; margin-bottom: 1.5rem; }
+    padding: .85rem 1.2rem; font-size: .95rem; color: #4338ca; margin-bottom: 1rem; }
   .rule-box strong { font-family: monospace; }
+
+  .plan-box { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px;
+    padding: .85rem 1.2rem; font-size: .875rem; color: #7c2d12; margin-bottom: 1.5rem; white-space: pre-wrap; }
+  .plan-box .plan-title { font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: #c2410c; margin-bottom: .4rem; }
 
   .section-title { font-size: .78rem; font-weight: 700; text-transform: uppercase;
     letter-spacing: .06em; color: #9ca3af; margin-bottom: 1rem; }
@@ -39,7 +44,6 @@
   td { padding: .7rem .75rem; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
   tr:last-child td { border-bottom: none; }
 
-  .ack-form { margin-top: .5rem; }
   .ack-form textarea { width: 100%; padding: .4rem .6rem; border: 1px solid #d1d5db;
     border-radius: 6px; font-size: .8rem; font-family: inherit; resize: none; height: 52px;
     outline: none; }
@@ -47,6 +51,11 @@
   .btn-ack { background: #4f46e5; color: #fff; border: none; border-radius: 6px;
     padding: .35rem .9rem; font-size: .8rem; font-weight: 600; cursor: pointer; margin-top: .35rem; }
   .btn-ack:hover { opacity: .85; }
+  .btn-comment { background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px;
+    padding: .3rem .75rem; font-size: .78rem; font-weight: 600; cursor: pointer; color: #374151; }
+  .btn-comment:hover { background: #e5e7eb; }
+  .btn-del { background: none; border: none; cursor: pointer; color: #9ca3af; font-size: .78rem; padding: 0; }
+  .btn-del:hover { color: #dc2626; }
 
   .empty { color: #9ca3af; font-size: .9rem; padding: 1.5rem 0; text-align: center; }
 
@@ -56,9 +65,20 @@
   .vtag-no  { background: #f3f4f6; color: #9ca3af; }
   .impact-link { font-size: .78rem; color: #4f46e5; }
   .summary-bar { display: flex; gap: 1.5rem; padding: .85rem 1.2rem;
-    background: #f0fdf4; border-radius: 8px; margin-bottom: 1.25rem; font-size: .875rem; }
+    background: #f0fdf4; border-radius: 8px; margin-bottom: 1.25rem; font-size: .875rem; flex-wrap: wrap; }
   .summary-bar .s-label { color: #6b7280; }
   .summary-bar .s-value { font-weight: 700; }
+
+  .comment-thread { margin-top: .5rem; }
+  .comment-item { font-size: .8rem; color: #374151; background: #f9fafb; border-radius: 6px;
+    padding: .35rem .6rem; margin-bottom: .25rem; display: flex; justify-content: space-between; gap: .5rem; }
+  .comment-meta { color: #9ca3af; font-size: .75rem; }
+
+  .bulk-bar { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
+    padding: .65rem 1rem; margin-bottom: 1rem; display: none; align-items: center; gap: .75rem; font-size: .875rem; }
+  .bulk-bar.visible { display: flex; }
+  .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    padding: 1.25rem; margin-bottom: 1.25rem; overflow: hidden; }
 </style>
 {% endblock %}
 
@@ -88,13 +108,13 @@
       </h1>
       <div class="meta">Trigger #{{ trigger.id }} &nbsp;·&nbsp; Created {{ trigger.created_at.strftime("%Y-%m-%d") }} &nbsp;·&nbsp; Hazard: {{ trigger.hazard_type | capitalize }}</div>
     </div>
-    <div style="display:flex; gap:.6rem; align-items:center;">
+    <div style="display:flex; gap:.6rem; align-items:center; flex-wrap:wrap;">
       <a href="/triggers/{{ trigger.id }}/backtest"
          style="padding:.45rem 1rem; border:1px solid #d1d5db; border-radius:8px;
                 font-size:.85rem; font-weight:600; color:#6b7280; text-decoration:none;">Backtest</a>
       <a href="/triggers/activations/export.csv?trigger_id={{ trigger.id }}"
          style="padding:.45rem 1rem; border:1px solid #d1d5db; border-radius:8px;
-                font-size:.85rem; font-weight:600; color:#6b7280; text-decoration:none;">↓ Export CSV</a>
+                font-size:.85rem; font-weight:600; color:#6b7280; text-decoration:none;">↓ CSV</a>
       <a href="/triggers/{{ trigger.id }}/edit"
         style="display:inline-block; padding:.45rem 1rem; background:#4f46e5; color:#fff; border-radius:8px; font-size:.85rem; font-weight:600;">Edit</a>
       <form method="post" action="/triggers/{{ trigger.id }}/delete" style="display:inline;"
@@ -107,19 +127,50 @@
 
   <div class="rule-box">
     Fire when <strong>{{ VARIABLE_LABELS[trigger.variable] }} {{ OPERATOR_SYMBOLS[trigger.operator] }} {{ trigger.threshold }} mm</strong>
+    {% if trigger.condition_2_variable %}
+    &nbsp;<span style="font-size:.85rem;font-weight:700;color:#6d28d9">{{ trigger.logic_op | upper }}</span>&nbsp;
+    <strong>{{ VARIABLE_LABELS.get(trigger.condition_2_variable, trigger.condition_2_variable) }}
+      {{ OPERATOR_SYMBOLS.get(trigger.condition_2_operator, trigger.condition_2_operator) }}
+      {{ trigger.condition_2_threshold }} mm</strong>
+    {% endif %}
     {% if trigger.scope_lat_min is not none %}
     &nbsp;·&nbsp; <span style="font-size:.85rem; font-weight:500;">
       Scope: {{ trigger.scope_lat_min }}°–{{ trigger.scope_lat_max }}°N, {{ trigger.scope_lon_min }}°–{{ trigger.scope_lon_max }}°E
     </span>
     {% endif %}
+    {% if trigger.scope_polygon %}
+    &nbsp;·&nbsp; <span style="font-size:.85rem;">Polygon scope set</span>
+    {% endif %}
   </div>
+
+  {% if trigger.response_plan %}
+  <div class="plan-box">
+    <div class="plan-title">📋 Response Plan / SOP</div>
+    {{ trigger.response_plan }}
+  </div>
+  {% endif %}
 
   {% if activations %}
   <div class="summary-bar">
     <span><span class="s-label">Activations: </span><span class="s-value">{{ activations | length }}</span></span>
-    <span><span class="s-label">Validated with impact data: </span><span class="s-value" style="color:{% if validated_count > 0 %}#16a34a{% else %}#9ca3af{% endif %};">{{ validated_count }}</span></span>
-    <span><span class="s-label">Unvalidated: </span><span class="s-value">{{ activations | length - validated_count }}</span></span>
+    <span><span class="s-label">Validated: </span><span class="s-value" style="color:{% if validated_count > 0 %}#16a34a{% else %}#9ca3af{% endif %};">{{ validated_count }}</span></span>
+    <span><span class="s-label">Unacknowledged: </span><span class="s-value">{{ activations | selectattr('status','eq','active') | list | length }}</span></span>
+    {% if user.role == "admin" %}
+    <span style="margin-left:auto;">
+      <button id="bulk-toggle" class="btn-comment" type="button">Select for bulk acknowledge</button>
+    </span>
+    {% endif %}
   </div>
+  {% endif %}
+
+  {% if user.role == "admin" %}
+  <form method="post" action="/triggers/activations/bulk-acknowledge" id="bulk-form">
+    <div class="bulk-bar" id="bulk-bar">
+      <span id="bulk-count">0 selected</span>
+      <input type="text" name="notes" placeholder="Optional notes…"
+             style="flex:1;padding:.4rem .6rem;border:1px solid #d1d5db;border-radius:6px;font-size:.82rem;">
+      <button type="submit" class="btn-ack" style="margin-top:0;">Bulk Acknowledge</button>
+    </div>
   {% endif %}
 
   <div class="card">
@@ -128,8 +179,9 @@
     <table>
       <thead>
         <tr>
+          {% if user.role == "admin" %}<th style="width:2rem;"></th>{% endif %}
           <th>Forecast</th>
-          <th>Observed value</th>
+          <th>Value</th>
           <th>Triggered at</th>
           <th>Status</th>
           <th>Validated impacts</th>
@@ -139,7 +191,16 @@
       <tbody>
         {% for a in activations %}
         {% set linked_impacts = impacts_by_activation.get(a.id, []) %}
+        {% set comments = comments_by_activation.get(a.id, []) %}
         <tr>
+          {% if user.role == "admin" %}
+          <td>
+            {% if a.status == "active" %}
+            <input type="checkbox" name="activation_ids" value="{{ a.id }}" form="bulk-form"
+                   class="bulk-cb" style="accent-color:#4f46e5;">
+            {% endif %}
+          </td>
+          {% endif %}
           <td>
             {% if a.forecast %}
             <a href="/forecasts/{{ a.forecast_id }}" style="font-weight:500;">{{ a.forecast.filename }}</a>
@@ -181,6 +242,32 @@
               {% if a.notes %}<br><em>{{ a.notes }}</em>{% endif %}
             </span>
             {% endif %}
+
+            {# Comment thread #}
+            {% if comments %}
+            <div class="comment-thread">
+              {% for c in comments %}
+              <div class="comment-item">
+                <span>
+                  <span class="comment-meta">{{ c.user.username if c.user else '?' }} · {{ c.created_at.strftime("%d %b %H:%M") }} — </span>
+                  {{ c.text }}
+                </span>
+                {% if user.id == c.user_id or user.role == "admin" %}
+                <form method="post" action="/triggers/activations/{{ a.id }}/comments/{{ c.id }}/delete" style="display:inline;margin:0">
+                  <button type="submit" class="btn-del" title="Delete comment">✕</button>
+                </form>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+            <form method="post" action="/triggers/activations/{{ a.id }}/comments"
+                  style="margin-top:.4rem;display:flex;gap:.35rem;">
+              <input type="text" name="text" placeholder="Add comment…"
+                     style="flex:1;padding:.3rem .55rem;border:1px solid #d1d5db;border-radius:6px;font-size:.78rem;">
+              <button type="submit" class="btn-comment">Post</button>
+            </form>
+
             <div style="margin-top:.4rem;">
               <a href="/triggers/activations/{{ a.id }}/sitrep" target="_blank"
                  style="font-size:.78rem; color:#4f46e5; font-weight:600;">Situation report →</a>
@@ -194,5 +281,26 @@
     <div class="empty">No activations yet — this trigger will fire automatically when a matching forecast is uploaded.</div>
     {% endif %}
   </div>
+
+  {% if user.role == "admin" %}
+  </form>
+  {% endif %}
 </div>
+
+<script>
+  const btn = document.getElementById('bulk-toggle');
+  const bar = document.getElementById('bulk-bar');
+  const cbs = document.querySelectorAll('.bulk-cb');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      const visible = bar.classList.toggle('visible');
+      btn.textContent = visible ? 'Cancel bulk select' : 'Select for bulk acknowledge';
+    });
+  }
+  cbs.forEach(cb => cb.addEventListener('change', () => {
+    const n = document.querySelectorAll('.bulk-cb:checked').length;
+    const el = document.getElementById('bulk-count');
+    if (el) el.textContent = n + ' selected';
+  }));
+</script>
 {% endblock %}

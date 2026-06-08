@@ -140,10 +140,23 @@
         </td>
         <td>
           {% if k.is_active %}
-          <form method="post" action="/admin/api-keys/{{ k.id }}/revoke" style="display:inline"
-                onsubmit="return confirm('Revoke key {{ k.name }}? This cannot be undone.')">
-            <button type="submit" class="btn-revoke">Revoke</button>
-          </form>
+          <div style="display:flex;flex-direction:column;gap:.4rem;align-items:flex-start;">
+            <form method="post" action="/admin/api-keys/{{ k.id }}/revoke" style="display:inline"
+                  onsubmit="return confirm('Revoke key {{ k.name }}? This cannot be undone.')">
+              <button type="submit" class="btn-revoke">Revoke</button>
+            </form>
+            <form method="post" action="/admin/api-keys/{{ k.id }}/allowed-ips"
+                  style="display:flex;gap:.35rem;align-items:center;">
+              <input type="text" name="allowed_ips" value="{{ k.allowed_ips or '' }}"
+                     placeholder="e.g. 203.0.113.0/24, 198.51.100.5"
+                     title="Comma-separated IPs or CIDR ranges. Empty = allow all."
+                     style="width:200px;padding:.28rem .55rem;border:1px solid #d1d5db;border-radius:6px;font-size:.78rem;">
+              <button type="submit"
+                      style="padding:.28rem .65rem;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;font-size:.78rem;cursor:pointer;font-weight:600;white-space:nowrap;">
+                Set IPs
+              </button>
+            </form>
+          </div>
           {% endif %}
         </td>
       </tr>

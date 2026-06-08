@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Two-Factor Authentication — IBF App{% endblock %}
+{% block extra_styles %}
+<style>
+  .main { max-width: 480px; margin: 3rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: .25rem; }
+  .sub { color: #6b7280; font-size: .9rem; margin-bottom: 1.75rem; }
+  .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.08); padding: 1.5rem; margin-bottom: 1.25rem; }
+  .label { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #9ca3af; margin-bottom: .5rem; }
+  .secret-box { font-family: monospace; font-size: 1rem; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: .75rem 1rem; letter-spacing: .12em; word-break: break-all; user-select: all; }
+  .btn { display: inline-block; padding: .65rem 1.5rem; border-radius: 8px; border: none; font-size: .9rem; font-weight: 600; cursor: pointer; text-decoration: none; }
+  .btn-primary { background: #4f46e5; color: #fff; }
+  .btn-primary:hover { opacity: .88; }
+  .btn-danger { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
+  .btn-secondary { background: #f3f4f6; color: #374151; }
+  input[type=text] { width: 100%; padding: .65rem .9rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: 1rem; outline: none; box-sizing: border-box; }
+  input[type=text]:focus { border-color: #4f46e5; }
+  .alert-err { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1rem; font-size: .9rem; }
+  .badge-on  { background: #dcfce7; color: #166534; padding: .2rem .7rem; border-radius: 999px; font-size: .8rem; font-weight: 700; }
+  .badge-off { background: #f3f4f6; color: #6b7280; padding: .2rem .7rem; border-radius: 999px; font-size: .8rem; font-weight: 700; }
+  #qr-canvas { margin: 1rem auto; display: block; }
+  .steps { list-style: none; padding: 0; counter-reset: step; }
+  .steps li { counter-increment: step; padding: .5rem 0 .5rem 2.5rem; position: relative; font-size: .9rem; color: #374151; }
+  .steps li::before { content: counter(step); position: absolute; left: 0; top: .45rem; width: 1.5rem; height: 1.5rem; background: #4f46e5; color: #fff; border-radius: 50%; font-size: .78rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+</style>
+{% endblock %}
+{% block body %}
+<div class="main">
+  <h1>Two-Factor Authentication</h1>
+  <p class="sub">Protect your account with an authenticator app.</p>
+
+  {% if step == "done" %}
+  <div class="card" style="text-align:center;padding:2rem;">
+    <div style="font-size:2.5rem;margin-bottom:.75rem;">✅</div>
+    <div style="font-size:1.1rem;font-weight:700;color:#166534;margin-bottom:.5rem;">2FA enabled</div>
+    <p style="color:#6b7280;font-size:.9rem;">Your account is now protected by two-factor authentication.</p>
+    <a href="/dashboard" class="btn btn-primary" style="margin-top:1rem;">Back to dashboard</a>
+  </div>
+
+  {% elif step == "confirm" %}
+  <div class="card">
+    <div class="label">Step 1 — Scan QR code</div>
+    <canvas id="qr-canvas"></canvas>
+    <div style="font-size:.8rem;color:#6b7280;text-align:center;margin-bottom:1rem;">Or enter this key manually:</div>
+    <div class="secret-box">{{ secret }}</div>
+  </div>
+  <div class="card">
+    <div class="label">Step 2 — Confirm with a code</div>
+    {% if error %}<div class="alert-err">{{ error }}</div>{% endif %}
+    <form method="post" action="/account/2fa/confirm">
+      <input type="text" name="code" placeholder="6-digit code" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autofocus style="margin-bottom:.75rem;">
+      <button type="submit" class="btn btn-primary" style="width:100%;">Enable 2FA</button>
+    </form>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  <script>
+    QRCode.toCanvas(document.getElementById('qr-canvas'), {{ otp_uri | tojson }}, {width: 220}, function(err){});
+  </script>
+
+  {% elif step == "disable" %}
+  <div class="card">
+    <div class="label" style="color:#dc2626;">Disable 2FA</div>
+    <p style="font-size:.9rem;color:#6b7280;margin-bottom:1rem;">Enter your current authenticator code to confirm.</p>
+    {% if error %}<div class="alert-err">{{ error }}</div>{% endif %}
+    <form method="post" action="/account/2fa/disable">
+      <input type="text" name="code" placeholder="6-digit code" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autofocus style="margin-bottom:.75rem;">
+      <button type="submit" class="btn btn-danger" style="width:100%;">Disable 2FA</button>
+    </form>
+  </div>
+
+  {% else %}
+  <div class="card" style="display:flex;align-items:center;justify-content:space-between;">
+    <div>
+      <div style="font-weight:600;margin-bottom:.25rem;">Two-factor authentication</div>
+      <div style="font-size:.875rem;color:#6b7280;">
+        {% if user.totp_enabled %}
+          <span class="badge-on">Enabled</span> — your account requires a code at login.
+        {% else %}
+          <span class="badge-off">Disabled</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% if not user.totp_enabled %}
+  <div class="card">
+    <ul class="steps">
+      <li>Install an authenticator app (Google Authenticator, Authy, 1Password)</li>
+      <li>Click <strong>Set up 2FA</strong> and scan the QR code</li>
+      <li>Enter the 6-digit code to confirm</li>
+    </ul>
+    <form method="post" action="/account/2fa/setup" style="margin-top:1rem;">
+      <button type="submit" class="btn btn-primary">Set up 2FA</button>
+    </form>
+  </div>
+  {% else %}
+  <div class="card">
+    <p style="font-size:.9rem;color:#6b7280;margin-bottom:1rem;">To disable 2FA, enter a valid authenticator code.</p>
+    <form method="post" action="/account/2fa/disable" style="display:flex;gap:.75rem;align-items:flex-start;flex-wrap:wrap;">
+      <input type="text" name="code" placeholder="6-digit code" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" style="width:auto;flex:1;min-width:140px;">
+      <button type="submit" class="btn btn-danger">Disable 2FA</button>
+    </form>
+  </div>
+  {% endif %}
+  <a href="/dashboard" class="btn btn-secondary">← Back to dashboard</a>
+  {% endif %}
+</div>
+{% endblock %}

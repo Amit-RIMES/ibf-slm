@@ -31,6 +31,9 @@ class Trigger(Base):
     condition_2_threshold: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     logic_op: Mapped[str] = mapped_column(String(8), nullable=False, default="and", server_default="and")
 
+    # Response plan / SOP attached to this trigger
+    response_plan: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     # Optional geographic scope: bounding box OR polygon (polygon takes precedence)
     scope_lat_min: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     scope_lat_max: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

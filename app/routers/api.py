@@ -1,19 +1,22 @@
+import asyncio
 import json
 import os
 import tempfile
 from datetime import date as date_type, datetime, timedelta, timezone
-from typing import Optional
+from typing import AsyncGenerator, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.api_auth import require_api_key
-from app.core.database import get_db
+from app.core.database import AsyncSessionLocal, get_db
 from app.models.api_key import APIKey
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
+from app.models.sync import SyncConfig, SyncLog
 from app.models.trigger import OPERATORS, VARIABLES, Trigger, TriggerActivation
 from app.models.user import User
 
@@ -205,7 +208,87 @@ def _parse_date(value: str, end_of_day: bool = False):
         raise HTTPException(status_code=400, detail=f"Invalid date format: '{value}'. Use YYYY-MM-DD.")
 
 
-# ── Public endpoint ────────────────────────────────────────────────────────────
+# ── SSE event bus ─────────────────────────────────────────────────────────────
+
+_sse_subscribers: list[asyncio.Queue] = []
+
+
+def broadcast_activation(activation_id: int, trigger_name: str, hazard_type: str) -> None:
+    """Called from evaluate_triggers to push a real-time event to all SSE clients."""
+    payload = json.dumps({"activation_id": activation_id, "trigger_name": trigger_name,
+                          "hazard_type": hazard_type})
+    dead = []
+    for q in _sse_subscribers:
+        try:
+            q.put_nowait(payload)
+        except asyncio.QueueFull:
+            dead.append(q)
+    for q in dead:
+        try:
+            _sse_subscribers.remove(q)
+        except ValueError:
+            pass
+
+
+async def _event_generator() -> AsyncGenerator[str, None]:
+    q: asyncio.Queue = asyncio.Queue(maxsize=20)
+    _sse_subscribers.append(q)
+    try:
+        yield "data: connected\n\n"
+        while True:
+            try:
+                msg = await asyncio.wait_for(q.get(), timeout=25)
+                yield f"data: {msg}\n\n"
+            except asyncio.TimeoutError:
+                yield ": heartbeat\n\n"
+    finally:
+        try:
+            _sse_subscribers.remove(q)
+        except ValueError:
+            pass
+
+
+@router.get("/stream", summary="SSE stream for real-time activation events (requires API key)")
+async def api_stream(_key: APIKey = Depends(require_api_key)):
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ── Public endpoints ───────────────────────────────────────────────────────────
+
+@router.get("/health", summary="System health (public)")
+async def api_health():
+    """Machine-readable health check for load balancers / k8s probes."""
+    healthy = True
+    checks: dict = {}
+    try:
+        async with AsyncSessionLocal() as db:
+            await db.execute(select(func.count()).select_from(ForecastUpload))
+            fc_count = await db.scalar(select(func.count()).select_from(ForecastUpload))
+            active_alerts = await db.scalar(
+                select(func.count()).select_from(TriggerActivation)
+                .where(TriggerActivation.status == "active")
+            )
+            cfg = await db.scalar(select(SyncConfig).where(SyncConfig.id == 1))
+            checks["database"] = "ok"
+            checks["forecast_count"] = fc_count or 0
+            checks["active_alerts"] = active_alerts or 0
+            checks["sync_enabled"] = bool(cfg and cfg.enabled) if cfg else False
+            checks["last_sync_status"] = cfg.last_run_status if cfg else None
+            checks["last_sync_at"] = cfg.last_run_at.isoformat() if cfg and cfg.last_run_at else None
+    except Exception as exc:
+        healthy = False
+        checks["database"] = f"error: {exc}"
+
+    return {
+        "status": "healthy" if healthy else "unhealthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        **checks,
+    }
+
 
 @router.get("/status", summary="Active alert status (public)")
 async def api_status(db: AsyncSession = Depends(get_db)):

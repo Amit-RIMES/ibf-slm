@@ -190,6 +190,34 @@
   <meta name="csrf-token" content="{{ request.state.csrf_token if request.state.csrf_token is defined else '' }}">
   {% block body %}{% endblock %}
   <button class="dark-toggle" id="dark-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+
+  <!-- SSE notification badge (injects a counter on any unacknowledged activations broadcast) -->
+  <div id="sse-badge"
+       style="display:none;position:fixed;top:.9rem;right:4.5rem;z-index:9999;
+              background:#dc2626;color:#fff;border-radius:999px;font-size:.72rem;font-weight:700;
+              padding:.25rem .6rem;cursor:pointer;"
+       title="New trigger activations"
+       onclick="window.location='/triggers'">
+    <span id="sse-count">0</span> new activation
+  </div>
+
+  <script>
+  (function() {
+    var badge = document.getElementById('sse-badge');
+    var countEl = document.getElementById('sse-count');
+    var n = 0;
+    try {
+      var es = new EventSource('/api/v1/stream');
+      es.addEventListener('activation', function(e) {
+        n++;
+        countEl.textContent = n;
+        badge.style.display = 'block';
+        badge.querySelector('span').nextSibling
+          || (badge.lastChild.nodeValue = ' new activation' + (n > 1 ? 's' : ''));
+      });
+    } catch(e) {}
+  })();
+  </script>
   <script>
   (function () {
     // Auto-inject CSRF hidden field into all state-changing forms

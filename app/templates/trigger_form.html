@@ -249,6 +249,16 @@
         <label for="is_active">Active — evaluate this trigger on new forecasts</label>
       </div>
 
+      <div class="section-heading">Response Plan / SOP</div>
+      <p style="font-size:.85rem; color:#6b7280; margin-bottom:.75rem;">
+        Optional standard operating procedure shown on the trigger detail page when this trigger fires.
+      </p>
+      <div class="form-group">
+        <textarea name="response_plan" rows="5"
+          placeholder="Describe the response actions to take when this trigger is activated…"
+          style="width:100%;padding:.65rem .9rem;border:1px solid #d1d5db;border-radius:8px;font-size:.9rem;font-family:inherit;resize:vertical;">{{ trigger.response_plan if trigger and trigger.response_plan else '' }}</textarea>
+      </div>
+
       <div class="form-actions">
         <button type="submit" class="btn-submit">{% if trigger %}Save Changes{% else %}Create Trigger{% endif %}</button>
         <a href="{% if trigger %}/triggers/{{ trigger.id }}{% else %}/triggers{% endif %}" class="btn-cancel">Cancel</a>

@@ -131,6 +131,14 @@ async def login(
 )
 
     await login_limiter.clear(ip)
+
+    # If 2FA is enabled, issue a short-lived "pending" token and redirect to TOTP verify
+    if user.totp_enabled:
+        pending_token = create_access_token({"sub": str(user.id), "totp_pending": True})
+        redirect = RedirectResponse("/account/2fa/verify", status_code=status.HTTP_303_SEE_OTHER)
+        redirect.set_cookie("totp_pending", pending_token, httponly=True, samesite="lax", max_age=300)
+        return redirect
+
     token = create_access_token({"sub": str(user.id)})
     redirect = RedirectResponse("/dashboard", status_code=status.HTTP_303_SEE_OTHER)
     redirect.set_cookie("access_token", token, httponly=True, samesite="lax")

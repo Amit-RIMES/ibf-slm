@@ -16,6 +16,7 @@ from app.core.audit import log_action
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.models.activation_comment import ActivationComment
 from app.core.email import send_acknowledgement_emails, send_subscriber_alert_emails, send_trigger_activation_email
 from app.core.webhook import send_webhook_notifications
 from app.models.forecast import ForecastUpload
@@ -151,6 +152,10 @@ async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
     if fired_rows:
         await db.commit()
         import asyncio
+        # Push SSE events
+        from app.routers.api import broadcast_activation
+        for t, act, _ in fired_rows:
+            broadcast_activation(act.id, t.name, t.hazard_type)
         # Email all admins
         admins_result = await db.execute(
             select(User.email).where(User.role == "admin")
@@ -759,6 +764,17 @@ async def trigger_detail(trigger_id: int, request: Request, db: AsyncSession = D
 
     validated_count = sum(1 for a in activations if impacts_by_activation.get(a.id))
 
+    # Load comments for all activations
+    comments_by_activation: dict[int, list] = {a.id: [] for a in activations}
+    if activation_ids:
+        comments_result = await db.execute(
+            select(ActivationComment)
+            .where(ActivationComment.activation_id.in_(activation_ids))
+            .order_by(ActivationComment.created_at)
+        )
+        for c in comments_result.scalars().all():
+            comments_by_activation[c.activation_id].append(c)
+
     return templates.TemplateResponse(
     request,
     "trigger_detail.html",
@@ -766,7 +782,8 @@ async def trigger_detail(trigger_id: int, request: Request, db: AsyncSession = D
          "activations": activations, "OPERATOR_SYMBOLS": OPERATOR_SYMBOLS,
          "VARIABLE_LABELS": VARIABLE_LABELS,
          "impacts_by_activation": impacts_by_activation,
-         "validated_count": validated_count},
+         "validated_count": validated_count,
+         "comments_by_activation": comments_by_activation},
 )
 
 
@@ -1014,4 +1031,95 @@ async def acknowledge_activation(
             )
 
         return RedirectResponse(f"/triggers/{activation.trigger_id}", status_code=303)
+    return RedirectResponse("/triggers", status_code=303)
+
+
+@router.post("/activations/{activation_id}/comments")
+async def add_activation_comment(
+    activation_id: int,
+    request: Request,
+    text: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    result = await db.execute(
+        select(TriggerActivation).where(TriggerActivation.id == activation_id)
+    )
+    activation = result.scalar_one_or_none()
+    if not activation:
+        return RedirectResponse("/triggers", status_code=303)
+
+    if text.strip():
+        db.add(ActivationComment(
+            activation_id=activation_id,
+            user_id=user.id,
+            text=text.strip(),
+        ))
+        await db.commit()
+        await log_action(db, user.id, "trigger.comment",
+                         f"Added comment to activation {activation_id}")
+
+    return RedirectResponse(f"/triggers/{activation.trigger_id}", status_code=303)
+
+
+@router.post("/activations/{activation_id}/comments/{comment_id}/delete")
+async def delete_activation_comment(
+    activation_id: int,
+    comment_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    result = await db.execute(
+        select(ActivationComment).where(ActivationComment.id == comment_id)
+    )
+    comment = result.scalar_one_or_none()
+    if comment and (comment.user_id == user.id or user.role == "admin"):
+        result2 = await db.execute(
+            select(TriggerActivation).where(TriggerActivation.id == activation_id)
+        )
+        activation = result2.scalar_one_or_none()
+        await db.delete(comment)
+        await db.commit()
+        if activation:
+            return RedirectResponse(f"/triggers/{activation.trigger_id}", status_code=303)
+    return RedirectResponse("/triggers", status_code=303)
+
+
+@router.post("/activations/bulk-acknowledge")
+async def bulk_acknowledge(
+    request: Request,
+    activation_ids: list[int] = Form(default=[]),
+    notes: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user or user.role != "admin":
+        return RedirectResponse("/login")
+
+    if not activation_ids:
+        return RedirectResponse("/triggers", status_code=303)
+
+    result = await db.execute(
+        select(TriggerActivation).where(
+            TriggerActivation.id.in_(activation_ids),
+            TriggerActivation.status == "active",
+        )
+    )
+    activations = result.scalars().all()
+    now = datetime.now(timezone.utc)
+    for act in activations:
+        act.status = "acknowledged"
+        act.acknowledged_at = now
+        act.notes = notes or None
+
+    await db.commit()
+    await log_action(db, user.id, "trigger.bulk_acknowledge",
+                     f"Bulk-acknowledged {len(activations)} activation(s)")
     return RedirectResponse("/triggers", status_code=303)

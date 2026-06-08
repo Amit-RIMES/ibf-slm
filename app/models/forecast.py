@@ -37,3 +37,9 @@ class ForecastUpload(Base):
     # Anomaly detection vs trailing history
     anomaly_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     is_anomaly: Mapped[Optional[bool]] = mapped_column(nullable=True)
+
+    # Lead-time breakdown: JSON {"d1_5": {min,max,mean}, "d6_10": {...}, "d11_15": {...}}
+    lead_time_stats: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Seasonal context: % deviation from same-month rolling mean (positive = above average)
+    seasonal_anomaly_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

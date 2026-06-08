@@ -4,12 +4,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
 from app.core.csrf import _token_for, validate_csrf
 from app.core.database import Base, engine
-from app.models import forecast, impact, trigger, sync, reset_token, audit, api_key, webhook  # noqa: F401 — registers models with Base
-from app.routers import admin, alerts, api, auth, dashboard, forecasts, impacts, triggers
+from app.models import forecast, impact, trigger, sync, reset_token, audit, api_key, webhook, activation_comment  # noqa: F401
+from app.routers import admin, alerts, api, auth, dashboard, forecasts, impacts, triggers, totp
 from app.routers import sync as sync_router
 from app.scheduler import apply_schedule, start_scheduler, stop_scheduler
 
@@ -38,6 +39,42 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="IBF App", lifespan=lifespan)
+
+# ── Prometheus metrics ─────────────────────────────────────────────────────────
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+    Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+except ImportError:
+    pass  # optional dependency
+
+# ── Security headers ───────────────────────────────────────────────────────────
+
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "
+    "style-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "
+    "img-src 'self' data: https://*.tile.openstreetmap.org; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none';"
+)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        # Only set CSP for HTML responses to avoid breaking SSE / binary streams
+        ct = response.headers.get("content-type", "")
+        if "text/html" in ct:
+            response.headers["Content-Security-Policy"] = _CSP
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 @app.middleware("http")
@@ -74,6 +111,7 @@ app.include_router(forecasts.router)
 app.include_router(impacts.router)
 app.include_router(triggers.router)
 app.include_router(sync_router.router)
+app.include_router(totp.router)
 
 
 @app.get("/")

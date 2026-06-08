@@ -19,3 +19,6 @@ class User(Base):
     )
     # JSON array of source keys this user can see; NULL means no restriction (all sources)
     country_scope: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # TOTP / 2FA
+    totp_secret: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")

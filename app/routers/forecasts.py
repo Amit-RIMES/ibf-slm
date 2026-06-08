@@ -146,13 +146,33 @@ def _process_netcdf(path: str) -> dict:
 
     da = ds[var_name]
 
+    def _bucket_stats(arr):
+        a = arr.flatten().astype(float)
+        a = a[~np.isnan(a)]
+        if not len(a):
+            return {"min": 0.0, "max": 0.0, "mean": 0.0}
+        return {"min": round(float(a.min()), 3), "max": round(float(a.max()), 3),
+                "mean": round(float(a.mean()), 3)}
+
     # Collapse time dimension by taking the mean if present
+    lead_time_stats = None
     if time_name and time_name in da.dims:
         times = ds[time_name].values
         time_start = str(times[0])[:19]
         time_end = str(times[-1])[:19]
         time_steps = int(len(times))
         da_mean = da.mean(dim=time_name)
+
+        # Lead-time buckets (days 1-5, 6-10, 11-15)
+        buckets = {"d1_5": slice(0, 5), "d6_10": slice(5, 10), "d11_15": slice(10, 15)}
+        lt = {}
+        for label, sl in buckets.items():
+            chunk = da.isel({time_name: sl}) if time_steps > 1 else da
+            if chunk.sizes.get(time_name, 0) > 0 or time_steps == 1:
+                lt[label] = _bucket_stats(chunk.values)
+        if lt:
+            import json as _j
+            lead_time_stats = _j.dumps(lt)
     else:
         time_start = time_end = "N/A"
         time_steps = 1
@@ -196,6 +216,7 @@ def _process_netcdf(path: str) -> dict:
         "precip_max": round(float(flat.max()), 3) if len(flat) else 0.0,
         "precip_mean": round(float(flat.mean()), 3) if len(flat) else 0.0,
         "geojson": geojson,
+        "lead_time_stats": lead_time_stats,
     }
 
 
@@ -382,12 +403,17 @@ async def upload_forecast(
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
-    forecast = ForecastUpload(filename=file.filename, source="manual", **stats)
+    forecast = ForecastUpload(
+        filename=file.filename, source="manual",
+        lead_time_stats=stats.pop("lead_time_stats", None),
+        **stats,
+    )
     db.add(forecast)
     await db.commit()
     await db.refresh(forecast)
 
     await compute_anomaly(forecast, db)
+    await _compute_seasonal_context(forecast, db)
     await evaluate_triggers(forecast, db)
     await _log_import(db, user.id, forecast)
 
@@ -449,13 +475,45 @@ async def do_import(source: str, date: str, db: AsyncSession) -> ForecastUpload:
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
-    forecast = ForecastUpload(filename=filename, source=source, **stats)
+    forecast = ForecastUpload(
+        filename=filename, source=source,
+        lead_time_stats=stats.pop("lead_time_stats", None),
+        **stats,
+    )
     db.add(forecast)
     await db.commit()
     await db.refresh(forecast)
     await compute_anomaly(forecast, db)
+    await _compute_seasonal_context(forecast, db)
     await evaluate_triggers(forecast, db)
     return forecast
+
+
+async def _compute_seasonal_context(forecast: ForecastUpload, db: AsyncSession) -> None:
+    """Set forecast.seasonal_anomaly_pct vs rolling mean for the same calendar month."""
+    if not forecast.uploaded_at:
+        return
+    month = forecast.uploaded_at.month
+    from sqlalchemy import extract
+    result = await db.execute(
+        select(ForecastUpload.precip_mean)
+        .where(
+            ForecastUpload.id != forecast.id,
+            extract("month", ForecastUpload.uploaded_at) == month,
+            ForecastUpload.source == forecast.source,
+        )
+        .order_by(desc(ForecastUpload.uploaded_at))
+        .limit(36)
+    )
+    history = [r[0] for r in result.all()]
+    if len(history) < 3:
+        return
+    monthly_mean = sum(history) / len(history)
+    if monthly_mean < 0.01:
+        return
+    pct = round((forecast.precip_mean - monthly_mean) / monthly_mean * 100, 1)
+    forecast.seasonal_anomaly_pct = pct
+    await db.commit()
 
 
 async def _log_import(db: AsyncSession, user_id: Optional[int], forecast: ForecastUpload) -> None:
@@ -497,6 +555,39 @@ async def import_forecast(
              "error": f"Import failed: {exc}", "portal_base": PORTAL_BASE},
 )
     return RedirectResponse(f"/forecasts/{forecast.id}", status_code=303)
+
+
+@router.get("/drift", response_class=HTMLResponse)
+async def forecast_drift(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    source: str = "",
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    # Show last 14 forecasts for the selected source (same-source drift view)
+    forecasts_for_source = []
+    if source:
+        result = await db.execute(
+            select(ForecastUpload)
+            .where(ForecastUpload.source == source)
+            .order_by(desc(ForecastUpload.uploaded_at))
+            .limit(14)
+        )
+        forecasts_for_source = list(reversed(result.scalars().all()))
+
+    return templates.TemplateResponse(
+        request,
+        "forecast_drift.html",
+        {
+            "user": user,
+            "sources": SOURCES,
+            "selected_source": source,
+            "forecasts": forecasts_for_source,
+        },
+    )
 
 
 @router.get("/compare", response_class=HTMLResponse)
