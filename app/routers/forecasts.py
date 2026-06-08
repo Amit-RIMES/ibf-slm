@@ -50,6 +50,23 @@ SOURCES = [
     for cc, name in sorted(COUNTRY_NAMES.items(), key=lambda x: x[1])
 ]
 _SOURCE_MAP = {s["value"]: s for s in SOURCES}
+_COUNTRY_CODES = set(COUNTRY_NAMES.keys())
+
+
+def infer_source_from_filename(filename: str) -> str:
+    """Derive the source key from a portal-imported filename like ecmwf_tp_{key}_{date}.nc."""
+    import re
+    m = re.match(r"ecmwf_tp_([a-z]+)_\d{8}\.nc$", filename)
+    if not m:
+        return "manual"
+    key = m.group(1)
+    if key == "rimes":
+        return "regional_rimes"
+    if key == "sea":
+        return "regional_sea"
+    if key in _COUNTRY_CODES:
+        return f"country_{key}"
+    return "manual"
 
 
 async def _fetch_portal_dates() -> list[str]:

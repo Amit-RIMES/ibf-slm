@@ -14,6 +14,7 @@ from app.core.deps import get_current_user
 from app.models.api_key import APIKey
 from app.models.audit import AuditLog
 from app.models.user import User
+from app.models.webhook import Webhook
 
 router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory="app/templates")
@@ -213,3 +214,75 @@ async def admin_revoke_key(request: Request, key_id: int, db: AsyncSession = Dep
         key.is_active = False
         await db.commit()
     return RedirectResponse("/admin/api-keys", status_code=303)
+
+
+@router.get("/webhooks", response_class=HTMLResponse)
+async def admin_webhooks(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    if user.role != "admin":
+        return _FORBIDDEN
+
+    result = await db.execute(select(Webhook).order_by(desc(Webhook.created_at)))
+    webhooks = result.scalars().all()
+    return templates.TemplateResponse(
+        "admin/webhooks.html", {"request": request, "user": user, "webhooks": webhooks}
+    )
+
+
+@router.post("/webhooks/create")
+async def admin_webhook_create(
+    request: Request,
+    name: str = Form(...),
+    url: str = Form(...),
+    secret: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    if user.role != "admin":
+        return _FORBIDDEN
+
+    wh = Webhook(name=name.strip(), url=url.strip(), secret=secret.strip() or None, is_active=True)
+    db.add(wh)
+    await db.commit()
+    await log_action(db, user.id, "webhook.create", f"Created webhook '{name}'")
+    return RedirectResponse("/admin/webhooks", status_code=303)
+
+
+@router.post("/webhooks/{wh_id}/toggle")
+async def admin_webhook_toggle(request: Request, wh_id: int, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    if user.role != "admin":
+        return _FORBIDDEN
+
+    result = await db.execute(select(Webhook).where(Webhook.id == wh_id))
+    wh = result.scalar_one_or_none()
+    if wh:
+        wh.is_active = not wh.is_active
+        await db.commit()
+        await log_action(db, user.id, "webhook.toggle",
+                         f"{'Enabled' if wh.is_active else 'Disabled'} webhook '{wh.name}'")
+    return RedirectResponse("/admin/webhooks", status_code=303)
+
+
+@router.post("/webhooks/{wh_id}/delete")
+async def admin_webhook_delete(request: Request, wh_id: int, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    if user.role != "admin":
+        return _FORBIDDEN
+
+    result = await db.execute(select(Webhook).where(Webhook.id == wh_id))
+    wh = result.scalar_one_or_none()
+    if wh:
+        wname = wh.name
+        await db.delete(wh)
+        await db.commit()
+        await log_action(db, user.id, "webhook.delete", f"Deleted webhook '{wname}'")
+    return RedirectResponse("/admin/webhooks", status_code=303)

@@ -221,6 +221,24 @@
     </form>
   </div>
 
+  <!-- Source backfill -->
+  {% if user.role == "admin" %}
+  <div class="card" style="margin-bottom:1.5rem;">
+    <div class="section-title">Data Utilities</div>
+    {% if request.query_params.get("backfill") is not none and request.query_params.get("backfill") != "" %}
+    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:.7rem 1rem;margin-bottom:1rem;font-size:.875rem;color:#166534;">
+      ✓ Backfill complete — {{ request.query_params.get("backfill") }} forecast{{ 's' if request.query_params.get("backfill") != '1' else '' }} updated.
+    </div>
+    {% endif %}
+    <p style="font-size:.875rem; color:#6b7280; margin-bottom:1rem;">
+      Infer and fill in the <strong>source</strong> field for any forecasts that were imported before source tagging was added.
+    </p>
+    <form method="post" action="/sync/backfill-sources">
+      <button type="submit" class="btn-run">Backfill forecast sources</button>
+    </form>
+  </div>
+  {% endif %}
+
   <!-- Log -->
   <div class="card">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">

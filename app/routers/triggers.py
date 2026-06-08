@@ -12,6 +12,7 @@ from app.core.audit import log_action
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.email import send_trigger_activation_email
+from app.core.webhook import send_webhook_notifications
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
 from app.models.trigger import (
@@ -19,6 +20,7 @@ from app.models.trigger import (
     Trigger, TriggerActivation,
 )
 from app.models.user import User
+from app.models.webhook import Webhook
 
 router = APIRouter(prefix="/triggers")
 templates = Jinja2Templates(directory="app/templates")
@@ -87,13 +89,19 @@ async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
 
     if fired_rows:
         await db.commit()
-        # Notify all admins — fire-and-forget, errors are logged not raised
+        import asyncio
+        # Email all admins
         admins_result = await db.execute(
             select(User.email).where(User.role == "admin")
         )
         admin_emails = [row[0] for row in admins_result.all()]
-        import asyncio
         asyncio.create_task(send_trigger_activation_email(admin_emails, fired_rows))
+        # Fire webhooks
+        webhooks_result = await db.execute(
+            select(Webhook).where(Webhook.is_active == True)  # noqa: E712
+        )
+        webhooks = webhooks_result.scalars().all()
+        asyncio.create_task(send_webhook_notifications(fired_rows, webhooks))
 
     return len(fired_rows)
 

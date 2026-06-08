@@ -9,8 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.models.forecast import ForecastUpload
 from app.models.sync import SyncConfig, SyncLog
-from app.routers.forecasts import SOURCES, do_import
+from app.routers.forecasts import SOURCES, do_import, infer_source_from_filename
 from app.scheduler import apply_schedule, _cleanup_old_forecasts
 
 router = APIRouter(prefix="/sync")
@@ -106,3 +107,20 @@ async def run_now(request: Request, db: AsyncSession = Depends(get_db)):
     await _cleanup_old_forecasts(db, cfg.retention_days)
 
     return RedirectResponse("/sync", status_code=303)
+
+
+@router.post("/backfill-sources")
+async def backfill_sources(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user or user.role != "admin":
+        return RedirectResponse("/login")
+
+    result = await db.execute(
+        select(ForecastUpload).where(ForecastUpload.source == None)  # noqa: E711
+    )
+    forecasts = result.scalars().all()
+    for fc in forecasts:
+        fc.source = infer_source_from_filename(fc.filename)
+
+    await db.commit()
+    return RedirectResponse(f"/sync?backfill={len(forecasts)}", status_code=303)

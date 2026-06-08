@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Webhooks — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.active { color: #7c3aed; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 1.5rem; }
+
+  .sub-nav { display: flex; gap: 1rem; margin-bottom: 1.75rem; flex-wrap: wrap; }
+  .sub-nav a { font-size: .875rem; color: #6b7280; padding: .35rem .85rem;
+    border-radius: 6px; border: 1px solid #e5e7eb; }
+  .sub-nav a:hover { background: #f9fafb; text-decoration: none; }
+  .sub-nav a.active { background: #f5f3ff; color: #7c3aed; border-color: #c4b5fd; font-weight: 600; }
+
+  .new-form { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 1.25rem 1.4rem; margin-bottom: 1.75rem; }
+  .new-form h2 { font-size: 1rem; font-weight: 700; margin-bottom: 1rem; }
+  .form-row { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: .75rem; align-items: end; }
+  @media (max-width: 640px) { .form-row { grid-template-columns: 1fr; } }
+  .form-group { display: flex; flex-direction: column; gap: .3rem; }
+  .form-group label { font-size: .8rem; font-weight: 600; color: #555; }
+  .form-group input { padding: .55rem .8rem; border: 1px solid #d1d5db; border-radius: 7px;
+    font-size: .875rem; outline: none; }
+  .form-group input:focus { border-color: #4f46e5; }
+  .btn-add { background: #4f46e5; color: #fff; border: none; border-radius: 7px;
+    padding: .55rem 1.1rem; font-size: .875rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn-add:hover { opacity: .85; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  th { text-align: left; padding: .6rem .75rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; border-bottom: 1px solid #e5e7eb; }
+  td { padding: .7rem .75rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+
+  .badge { display: inline-block; padding: .2rem .6rem; border-radius: 999px;
+    font-size: .72rem; font-weight: 700; text-transform: uppercase; }
+  .badge-active   { background: #dcfce7; color: #16a34a; }
+  .badge-inactive { background: #f3f4f6; color: #9ca3af; }
+
+  .btn-sm { font-size: .78rem; padding: .3rem .75rem; border-radius: 6px;
+    border: 1px solid #d1d5db; cursor: pointer; background: #fff; font-weight: 500; }
+  .btn-toggle-on  { color: #6b7280; }
+  .btn-toggle-off { color: #4f46e5; border-color: #a5b4fc; }
+  .btn-del { color: #dc2626; border-color: #fca5a5; }
+  .btn-sm:hover { background: #f9fafb; }
+
+  .empty { color: #9ca3af; font-size: .9rem; padding: 1.5rem 0; text-align: center; }
+  .url-cell { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-family: monospace; font-size: .82rem; color: #374151; }
+  .secret-hint { font-size: .78rem; color: #9ca3af; font-family: monospace; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/admin/users">Admin</a>
+    <a href="/admin/audit">Audit Log</a>
+    <a href="/admin/api-keys">API Keys</a>
+    <a href="/admin/webhooks" class="active">Webhooks</a>
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <h1>Webhooks</h1>
+
+  <div class="sub-nav">
+    <a href="/admin/users">Users</a>
+    <a href="/admin/audit">Audit Log</a>
+    <a href="/admin/api-keys">API Keys</a>
+    <a href="/admin/webhooks" class="active">Webhooks</a>
+  </div>
+
+  <div class="new-form">
+    <h2>Add Webhook</h2>
+    <form method="post" action="/admin/webhooks/create">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" name="name" placeholder="e.g. Slack alerts" required />
+        </div>
+        <div class="form-group">
+          <label>URL</label>
+          <input type="url" name="url" placeholder="https://hooks.example.com/…" required />
+        </div>
+        <div class="form-group">
+          <label>Secret <span style="font-weight:400;color:#9ca3af;">(optional)</span></label>
+          <input type="text" name="secret" placeholder="For HMAC signature" />
+        </div>
+      </div>
+      <div style="margin-top:.85rem;">
+        <button type="submit" class="btn-add">Add Webhook</button>
+        <span style="font-size:.78rem; color:#9ca3af; margin-left:.85rem;">
+          When a secret is set, requests include <code>X-IBF-Signature: sha256=…</code>
+        </span>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    {% if webhooks %}
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>URL</th>
+          <th>Secret</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for wh in webhooks %}
+        <tr>
+          <td style="font-weight:600;">{{ wh.name }}</td>
+          <td class="url-cell" title="{{ wh.url }}">{{ wh.url }}</td>
+          <td>
+            {% if wh.secret %}
+            <span class="secret-hint">••••••••</span>
+            {% else %}
+            <span style="color:#d1d5db;">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge {% if wh.is_active %}badge-active{% else %}badge-inactive{% endif %}">
+              {{ "Active" if wh.is_active else "Disabled" }}
+            </span>
+          </td>
+          <td style="font-size:.8rem; color:#9ca3af;">{{ wh.created_at.strftime("%Y-%m-%d") }}</td>
+          <td style="display:flex; gap:.4rem;">
+            <form method="post" action="/admin/webhooks/{{ wh.id }}/toggle" style="display:inline;">
+              <button type="submit" class="btn-sm {% if wh.is_active %}btn-toggle-on{% else %}btn-toggle-off{% endif %}">
+                {{ "Disable" if wh.is_active else "Enable" }}
+              </button>
+            </form>
+            <form method="post" action="/admin/webhooks/{{ wh.id }}/delete" style="display:inline;"
+                  onsubmit="return confirm('Delete webhook {{ wh.name }}?')">
+              <button type="submit" class="btn-sm btn-del">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No webhooks configured yet.</div>
+    {% endif %}
+  </div>
+
+  <div style="margin-top:1.5rem; font-size:.82rem; color:#9ca3af; line-height:1.7;">
+    <strong style="color:#374151;">Payload format</strong> — JSON POST on every trigger activation:<br>
+    <code style="background:#f3f4f6; padding:.2rem .5rem; border-radius:4px; font-size:.78rem;">
+      { "event": "trigger.activation", "trigger": {…}, "activation": {…}, "forecast": {…} }
+    </code>
+  </div>
+</div>
+{% endblock %}
