@@ -1,18 +1,24 @@
+import hashlib
+import os
+import secrets
+import sys
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import desc, func
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import hashlib
-import secrets
-
 from app.core.audit import ACTION_CATEGORIES, ACTION_LABELS, log_action
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.api_key import APIKey
 from app.models.audit import AuditLog
+from app.models.forecast import ForecastUpload
+from app.models.impact import ImpactRecord
+from app.models.sync import SyncConfig, SyncLog
+from app.models.trigger import Trigger, TriggerActivation
 from app.models.user import User
 from app.models.webhook import Webhook
 
@@ -345,3 +351,135 @@ async def admin_webhook_delete(request: Request, wh_id: int, db: AsyncSession = 
         await db.commit()
         await log_action(db, user.id, "webhook.delete", f"Deleted webhook '{wname}'")
     return RedirectResponse("/admin/webhooks", status_code=303)
+
+
+@router.get("/health", response_class=HTMLResponse)
+async def admin_health(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    if user.role != "admin":
+        return _FORBIDDEN
+
+    from datetime import datetime, timezone
+
+    # ── Row counts ────────────────────────────────────────────────
+    async def count(model, *filters):
+        stmt = select(func.count()).select_from(model)
+        if filters:
+            from sqlalchemy import and_
+            stmt = stmt.where(and_(*filters))
+        return await db.scalar(stmt)
+
+    total_users      = await count(User)
+    active_users     = await count(User, User.is_active == True)   # noqa: E712
+    pending_users    = await count(User, User.is_active == False)  # noqa: E712
+    total_forecasts  = await count(ForecastUpload)
+    total_anomalies  = await count(ForecastUpload, ForecastUpload.is_anomaly == True)  # noqa: E712
+    total_impacts    = await count(ImpactRecord)
+    total_triggers   = await count(Trigger)
+    active_triggers  = await count(Trigger, Trigger.is_active == True)   # noqa: E712
+    total_acts       = await count(TriggerActivation)
+    active_acts      = await count(TriggerActivation, TriggerActivation.status == "active")
+    total_audit      = await count(AuditLog)
+    active_keys      = await count(APIKey, APIKey.is_active == True)   # noqa: E712
+    total_webhooks   = await count(Webhook)
+    active_webhooks  = await count(Webhook, Webhook.is_active == True)  # noqa: E712
+    total_sync_logs  = await count(SyncLog)
+
+    # ── Sync config + recent logs ─────────────────────────────────
+    sync_cfg = (await db.execute(
+        select(SyncConfig).where(SyncConfig.id == 1)
+    )).scalar_one_or_none()
+
+    recent_sync_logs = (await db.execute(
+        select(SyncLog).order_by(desc(SyncLog.run_at)).limit(20)
+    )).scalars().all()
+
+    # Sync log status counts
+    sync_ok      = sum(1 for s in recent_sync_logs if s.status == "success")
+    sync_skipped = sum(1 for s in recent_sync_logs if s.status == "skipped")
+    sync_errors  = sum(1 for s in recent_sync_logs if s.status == "error")
+
+    # ── DB file size ──────────────────────────────────────────────
+    db_path_raw = settings.DATABASE_URL.split("///", 1)[-1]
+    db_path_abs = os.path.abspath(db_path_raw)
+    try:
+        db_bytes = os.path.getsize(db_path_abs)
+    except OSError:
+        db_bytes = None
+
+    def fmt_bytes(b):
+        if b is None:
+            return "—"
+        for unit in ("B", "KB", "MB", "GB"):
+            if b < 1024:
+                return f"{b:.1f} {unit}"
+            b /= 1024
+        return f"{b:.1f} GB"
+
+    # ── SMTP ──────────────────────────────────────────────────────
+    smtp = {
+        "configured": bool(settings.SMTP_HOST),
+        "host": settings.SMTP_HOST or "—",
+        "port": settings.SMTP_PORT,
+        "from_addr": settings.SMTP_FROM,
+        "auth": bool(settings.SMTP_USER),
+    }
+
+    # ── System ────────────────────────────────────────────────────
+    sys_info = {
+        "python": sys.version.split()[0],
+        "db_url": settings.DATABASE_URL,
+        "db_path": db_path_abs,
+        "db_size": fmt_bytes(db_bytes),
+    }
+
+    table_counts = [
+        ("users",              total_users),
+        ("forecast_uploads",   total_forecasts),
+        ("impact_records",     total_impacts),
+        ("triggers",           total_triggers),
+        ("trigger_activations",total_acts),
+        ("audit_logs",         total_audit),
+        ("sync_log",           total_sync_logs),
+        ("webhooks",           total_webhooks),
+        ("api_keys",           active_keys),
+    ]
+
+    import json as _json
+    sync_sources_count = 0
+    if sync_cfg and sync_cfg.sources:
+        try:
+            sync_sources_count = len(_json.loads(sync_cfg.sources))
+        except Exception:
+            pass
+
+    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    return templates.TemplateResponse(
+        "admin/health.html",
+        {
+            "request": request, "user": user,
+            "now_utc": now_utc,
+            # counts
+            "total_users": total_users, "active_users": active_users, "pending_users": pending_users,
+            "total_forecasts": total_forecasts, "total_anomalies": total_anomalies,
+            "total_impacts": total_impacts,
+            "total_triggers": total_triggers, "active_triggers": active_triggers,
+            "total_acts": total_acts, "active_acts": active_acts,
+            "total_audit": total_audit,
+            "active_keys": active_keys,
+            "total_webhooks": total_webhooks, "active_webhooks": active_webhooks,
+            # sync
+            "sync_cfg": sync_cfg,
+            "recent_sync_logs": recent_sync_logs,
+            "sync_ok": sync_ok, "sync_skipped": sync_skipped, "sync_errors": sync_errors,
+            "sync_sources_count": sync_sources_count,
+            "app_base_url": settings.APP_BASE_URL,
+            # smtp + sys
+            "smtp": smtp,
+            "sys_info": sys_info,
+            "table_counts": table_counts,
+        },
+    )

@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+{% block title %}System Health — Admin — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.active { color: #4f46e5; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 1060px; margin: 2rem auto; padding: 0 1rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.5rem; flex-wrap: wrap; gap: .75rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; }
+  .refresh-time { font-size: .8rem; color: #9ca3af; }
+
+  /* ── Stat cards ─────────────────────────────────────────────── */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: .85rem; margin-bottom: 1.5rem; }
+  .stat-card { background: #fff; border-radius: 10px; padding: 1rem 1.1rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+  .stat-label { font-size: .68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: #9ca3af; margin-bottom: .3rem; }
+  .stat-value { font-size: 1.6rem; font-weight: 800; color: #111827; line-height: 1; }
+  .stat-sub { font-size: .72rem; color: #9ca3af; margin-top: .25rem; }
+  .val-green { color: #16a34a; }
+  .val-red   { color: #dc2626; }
+  .val-amber { color: #d97706; }
+  .val-blue  { color: #2563eb; }
+
+  /* ── Sections ───────────────────────────────────────────────── */
+  .section { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    margin-bottom: 1.25rem; overflow: hidden; }
+  .section-header { padding: .85rem 1.25rem; border-bottom: 1px solid #f3f4f6;
+    display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+  .section-title { font-size: .78rem; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .07em; color: #6b7280; }
+  .section-body { padding: 1rem 1.25rem; }
+
+  /* ── Two-col info grid ──────────────────────────────────────── */
+  .info-grid { display: grid; grid-template-columns: 180px 1fr; gap: .3rem .75rem; }
+  .info-grid dt { font-size: .8rem; color: #9ca3af; font-weight: 600; padding-top: .1rem; }
+  .info-grid dd { font-size: .85rem; color: #1f2937; word-break: break-all; }
+
+  /* ── Status dot ─────────────────────────────────────────────── */
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    margin-right: .35rem; vertical-align: middle; }
+  .dot-green { background: #16a34a; }
+  .dot-red   { background: #dc2626; }
+  .dot-amber { background: #d97706; }
+  .dot-grey  { background: #9ca3af; }
+
+  /* ── Table ──────────────────────────────────────────────────── */
+  table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  th { text-align: left; padding: .45rem .75rem; font-size: .7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af;
+    border-bottom: 1px solid #e5e7eb; }
+  td { padding: .5rem .75rem; border-bottom: 1px solid #f3f4f6; }
+  tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: .15rem .5rem; border-radius: 4px;
+    font-size: .7rem; font-weight: 700; }
+  .badge-ok      { background: #dcfce7; color: #16a34a; }
+  .badge-error   { background: #fee2e2; color: #991b1b; }
+  .badge-skipped { background: #f3f4f6; color: #6b7280; }
+  .badge-partial { background: #fef3c7; color: #92400e; }
+
+  /* ── Quick links ────────────────────────────────────────────── */
+  .quick-links { display: flex; flex-wrap: wrap; gap: .6rem; }
+  .ql { display: inline-block; padding: .4rem .9rem; border: 1px solid #e5e7eb;
+    border-radius: 7px; font-size: .82rem; font-weight: 600; color: #374151;
+    text-decoration: none; background: #fff; }
+  .ql:hover { background: #f9fafb; text-decoration: none; }
+
+  /* ── Two-column layout ──────────────────────────────────────── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;
+    margin-bottom: 1.25rem; }
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+  code { font-size: .78rem; background: #f3f4f6; padding: .1rem .35rem;
+    border-radius: 4px; color: #374151; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/admin/users">Admin</a>
+    <a href="/admin/audit">Audit Log</a>
+    <a href="/admin/api-keys">API Keys</a>
+    <a href="/admin/webhooks">Webhooks</a>
+    <a href="/admin/health" class="active">Health</a>
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <h1>System Health</h1>
+    <div style="display:flex;align-items:center;gap:.85rem;">
+      <span class="refresh-time">Last refreshed: {{ now_utc }}</span>
+      <a href="/admin/health"
+         style="font-size:.85rem;font-weight:600;color:#6b7280;border:1px solid #d1d5db;
+                border-radius:8px;padding:.4rem .85rem;text-decoration:none;">
+        Refresh
+      </a>
+    </div>
+  </div>
+
+  <!-- Stat cards -->
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-label">Users</div>
+      <div class="stat-value">{{ active_users }}</div>
+      <div class="stat-sub">active{% if pending_users %} &nbsp;·&nbsp; <span style="color:#d97706;">{{ pending_users }} pending</span>{% endif %}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Forecasts</div>
+      <div class="stat-value">{{ total_forecasts }}</div>
+      <div class="stat-sub">{% if total_anomalies %}<span style="color:#d97706;">{{ total_anomalies }} anomal{{ 'ies' if total_anomalies != 1 else 'y' }}</span>{% else %}no anomalies{% endif %}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Impact Records</div>
+      <div class="stat-value">{{ total_impacts }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Triggers</div>
+      <div class="stat-value">{{ active_triggers }}</div>
+      <div class="stat-sub">active of {{ total_triggers }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Activations</div>
+      <div class="stat-value {% if active_acts > 0 %}val-red{% endif %}">{{ active_acts }}</div>
+      <div class="stat-sub">unacknowledged of {{ total_acts }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Audit Log</div>
+      <div class="stat-value">{{ total_audit }}</div>
+      <div class="stat-sub">total entries</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Webhooks</div>
+      <div class="stat-value">{{ active_webhooks }}</div>
+      <div class="stat-sub">active of {{ total_webhooks }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">API Keys</div>
+      <div class="stat-value">{{ active_keys }}</div>
+      <div class="stat-sub">active</div>
+    </div>
+  </div>
+
+  <div class="two-col">
+
+    <!-- Database -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">Database</span>
+        <span style="font-size:.8rem;font-weight:700;color:#374151;">{{ sys_info.db_size }}</span>
+      </div>
+      <div class="section-body">
+        <dl class="info-grid" style="margin-bottom:1rem;">
+          <dt>Path</dt>
+          <dd><code>{{ sys_info.db_path }}</code></dd>
+          <dt>Size on disk</dt>
+          <dd><strong>{{ sys_info.db_size }}</strong></dd>
+        </dl>
+        <table>
+          <thead><tr><th>Table</th><th style="text-align:right;">Rows</th></tr></thead>
+          <tbody>
+            {% for table, cnt in table_counts %}
+            <tr>
+              <td><code>{{ table }}</code></td>
+              <td style="text-align:right;font-weight:600;">{{ "{:,}".format(cnt) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Email + System -->
+    <div>
+      <div class="section" style="margin-bottom:1.25rem;">
+        <div class="section-header">
+          <span class="section-title">Email (SMTP)</span>
+          {% if smtp.configured %}
+          <span style="font-size:.78rem;font-weight:700;color:#16a34a;">
+            <span class="status-dot dot-green"></span>Configured
+          </span>
+          {% else %}
+          <span style="font-size:.78rem;font-weight:700;color:#9ca3af;">
+            <span class="status-dot dot-grey"></span>Not configured
+          </span>
+          {% endif %}
+        </div>
+        <div class="section-body">
+          <dl class="info-grid">
+            <dt>Status</dt>
+            <dd>
+              {% if smtp.configured %}
+              <span class="status-dot dot-green"></span><strong style="color:#16a34a;">Active</strong>
+              {% else %}
+              <span class="status-dot dot-grey"></span>Not configured — set SMTP_HOST in .env
+              {% endif %}
+            </dd>
+            <dt>Host</dt>
+            <dd>{{ smtp.host }}{% if smtp.configured %}:{{ smtp.port }}{% endif %}</dd>
+            <dt>From address</dt>
+            <dd>{{ smtp.from_addr }}</dd>
+            <dt>Authentication</dt>
+            <dd>{{ "Enabled" if smtp.auth else "Disabled (unauthenticated)" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <span class="section-title">System</span>
+        </div>
+        <div class="section-body">
+          <dl class="info-grid">
+            <dt>Python</dt>
+            <dd>{{ sys_info.python }}</dd>
+            <dt>Database URL</dt>
+            <dd><code>{{ sys_info.db_url }}</code></dd>
+            <dt>App base URL</dt>
+            <dd><code>{{ app_base_url }}</code></dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Auto-sync -->
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title">Auto-Sync</span>
+      {% if sync_cfg %}
+        {% if sync_cfg.enabled %}
+        <span style="font-size:.78rem;font-weight:700;color:#16a34a;">
+          <span class="status-dot dot-green"></span>Enabled
+        </span>
+        {% else %}
+        <span style="font-size:.78rem;font-weight:700;color:#9ca3af;">
+          <span class="status-dot dot-grey"></span>Disabled
+        </span>
+        {% endif %}
+      {% endif %}
+    </div>
+    <div class="section-body">
+      {% if sync_cfg %}
+      <dl class="info-grid" style="margin-bottom:1.1rem;">
+        <dt>Schedule</dt>
+        <dd>Daily at {{ "%02d"|format(sync_cfg.sync_hour) }}:{{ "%02d"|format(sync_cfg.sync_minute) }} UTC</dd>
+        <dt>Sources configured</dt>
+        <dd>{{ sync_sources_count }} source{{ 's' if sync_sources_count != 1 }}</dd>
+        <dt>Last run</dt>
+        <dd>
+          {% if sync_cfg.last_run_at %}
+          {{ sync_cfg.last_run_at.strftime("%Y-%m-%d %H:%M UTC") }}
+          &nbsp;
+          {% if sync_cfg.last_run_status == "ok" %}
+          <span class="badge badge-ok">OK</span>
+          {% elif sync_cfg.last_run_status == "error" %}
+          <span class="badge badge-error">Error</span>
+          {% elif sync_cfg.last_run_status == "partial" %}
+          <span class="badge badge-partial">Partial</span>
+          {% endif %}
+          {% else %}
+          Never run
+          {% endif %}
+        </dd>
+        <dt>Retention policy</dt>
+        <dd>{{ sync_cfg.retention_days }} days</dd>
+      </dl>
+      {% else %}
+      <p style="color:#9ca3af;font-size:.85rem;">Sync not configured yet. <a href="/sync">Configure →</a></p>
+      {% endif %}
+
+      {% if recent_sync_logs %}
+      <div style="display:flex;gap:1rem;margin-bottom:.85rem;flex-wrap:wrap;">
+        <span style="font-size:.8rem;color:#6b7280;">Last 20 log entries:</span>
+        <span style="font-size:.8rem;"><span class="badge badge-ok">{{ sync_ok }} success</span></span>
+        <span style="font-size:.8rem;"><span class="badge badge-skipped">{{ sync_skipped }} skipped</span></span>
+        {% if sync_errors %}<span style="font-size:.8rem;"><span class="badge badge-error">{{ sync_errors }} error</span></span>{% endif %}
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Source</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Message</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in recent_sync_logs %}
+          <tr>
+            <td style="white-space:nowrap;color:#6b7280;font-size:.78rem;">
+              {{ log.run_at.strftime("%m-%d %H:%M") }}
+            </td>
+            <td style="font-size:.8rem;">{{ log.source }}</td>
+            <td style="font-size:.8rem;font-family:monospace;">{{ log.date }}</td>
+            <td>
+              {% if log.status == "success" %}<span class="badge badge-ok">success</span>
+              {% elif log.status == "error" %}<span class="badge badge-error">error</span>
+              {% else %}<span class="badge badge-skipped">{{ log.status }}</span>
+              {% endif %}
+            </td>
+            <td style="font-size:.78rem;color:#6b7280;">{{ log.message or "—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p style="color:#9ca3af;font-size:.85rem;margin-top:.5rem;">No sync log entries yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Quick links -->
+  <div class="section">
+    <div class="section-header"><span class="section-title">Quick Links</span></div>
+    <div class="section-body">
+      <div class="quick-links">
+        <a href="/sync" class="ql">⚙ Auto-Sync settings</a>
+        <a href="/admin/webhooks" class="ql">Webhooks</a>
+        <a href="/admin/api-keys" class="ql">API Keys</a>
+        <a href="/admin/audit" class="ql">Audit Log</a>
+        <a href="/forecasts/calendar" class="ql">Forecast Calendar</a>
+        <a href="/triggers/report" class="ql">Trigger Report</a>
+        <a href="/status" class="ql" target="_blank">Public Status Page ↗</a>
+        <a href="/docs" class="ql" target="_blank">API Docs ↗</a>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
