@@ -38,3 +38,9 @@ class ImpactRecord(Base):
         Integer, ForeignKey("forecast_uploads.id", ondelete="SET NULL"), nullable=True, index=True
     )
     forecast: Mapped[Optional["ForecastUpload"]] = relationship("ForecastUpload", lazy="selectin")  # noqa: F821
+
+    # Optional link to the trigger activation this impact validates
+    trigger_activation_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("trigger_activations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    trigger_activation: Mapped[Optional["TriggerActivation"]] = relationship("TriggerActivation", lazy="selectin")  # noqa: F821

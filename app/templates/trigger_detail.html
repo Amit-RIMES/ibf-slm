@@ -49,6 +49,16 @@
   .btn-ack:hover { opacity: .85; }
 
   .empty { color: #9ca3af; font-size: .9rem; padding: 1.5rem 0; text-align: center; }
+
+  .validation-tag { display: inline-flex; align-items: center; gap: .3rem;
+    font-size: .75rem; font-weight: 600; padding: .18rem .55rem; border-radius: 999px; }
+  .vtag-yes { background: #dcfce7; color: #16a34a; }
+  .vtag-no  { background: #f3f4f6; color: #9ca3af; }
+  .impact-link { font-size: .78rem; color: #4f46e5; }
+  .summary-bar { display: flex; gap: 1.5rem; padding: .85rem 1.2rem;
+    background: #f0fdf4; border-radius: 8px; margin-bottom: 1.25rem; font-size: .875rem; }
+  .summary-bar .s-label { color: #6b7280; }
+  .summary-bar .s-value { font-weight: 700; }
 </style>
 {% endblock %}
 
@@ -98,6 +108,14 @@
     {% endif %}
   </div>
 
+  {% if activations %}
+  <div class="summary-bar">
+    <span><span class="s-label">Activations: </span><span class="s-value">{{ activations | length }}</span></span>
+    <span><span class="s-label">Validated with impact data: </span><span class="s-value" style="color:{% if validated_count > 0 %}#16a34a{% else %}#9ca3af{% endif %};">{{ validated_count }}</span></span>
+    <span><span class="s-label">Unvalidated: </span><span class="s-value">{{ activations | length - validated_count }}</span></span>
+  </div>
+  {% endif %}
+
   <div class="card">
     <div class="section-title">Activation History ({{ activations | length }})</div>
     {% if activations %}
@@ -108,11 +126,13 @@
           <th>Observed value</th>
           <th>Triggered at</th>
           <th>Status</th>
+          <th>Validated impacts</th>
           <th>Notes / Acknowledge</th>
         </tr>
       </thead>
       <tbody>
         {% for a in activations %}
+        {% set linked_impacts = impacts_by_activation.get(a.id, []) %}
         <tr>
           <td>
             {% if a.forecast %}
@@ -127,6 +147,21 @@
             {% else %}
             <span class="badge badge-acknowledged">Acknowledged</span>
             {% endif %}
+          </td>
+          <td>
+            {% if linked_impacts %}
+            <span class="validation-tag vtag-yes">✓ {{ linked_impacts | length }} impact{{ 's' if linked_impacts | length != 1 }}</span>
+            <div style="margin-top:.3rem;">
+              {% for imp in linked_impacts %}
+              <div><a href="/impacts/{{ imp.id }}" class="impact-link">{{ imp.event_name }}</a></div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <span class="validation-tag vtag-no">Not validated</span>
+            {% endif %}
+            <div style="margin-top:.4rem;">
+              <a href="/impacts/new?activation={{ a.id }}" class="impact-link">+ Add impact record</a>
+            </div>
           </td>
           <td>
             {% if a.status == "active" %}

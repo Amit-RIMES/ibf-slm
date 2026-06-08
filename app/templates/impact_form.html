@@ -150,9 +150,28 @@
       <div class="form-group">
         <label>Forecast file</label>
         <select name="forecast_id">
-          <option value="" {% if not impact or not impact.forecast_id %}selected{% endif %}>— None —</option>
+          <option value="" {% if not impact and not prefill_forecast_id %}selected{% endif %}>— None —</option>
           {% for fc in forecasts %}
-          <option value="{{ fc.id }}" {% if impact and impact.forecast_id == fc.id %}selected{% endif %}>{{ fc.filename }} ({{ fc.time_start[:10] }})</option>
+          <option value="{{ fc.id }}"
+            {% if impact and impact.forecast_id == fc.id %}selected
+            {% elif not impact and prefill_forecast_id == fc.id %}selected{% endif %}>
+            {{ fc.filename }} ({{ fc.time_start[:10] }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="section-heading">Link to Trigger Activation <span class="optional" style="text-transform:none; letter-spacing:0;">(optional — validates a trigger alert)</span></div>
+      <div class="form-group">
+        <label>Trigger activation</label>
+        <select name="trigger_activation_id">
+          <option value="" {% if not impact and not prefill_activation_id %}selected{% endif %}>— None —</option>
+          {% for act in activations %}
+          <option value="{{ act.id }}"
+            {% if impact and impact.trigger_activation_id == act.id %}selected
+            {% elif not impact and prefill_activation_id == act.id %}selected{% endif %}>
+            {{ act.trigger.name }} — {{ act.triggered_at.strftime("%Y-%m-%d") }} ({{ act.value }} mm)
+          </option>
           {% endfor %}
         </select>
       </div>

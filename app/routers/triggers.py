@@ -13,6 +13,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.email import send_trigger_activation_email
 from app.models.forecast import ForecastUpload
+from app.models.impact import ImpactRecord
 from app.models.trigger import (
     OPERATOR_LABELS, OPERATOR_SYMBOLS, OPERATORS, VARIABLES,
     Trigger, TriggerActivation,
@@ -245,11 +246,27 @@ async def trigger_detail(trigger_id: int, request: Request, db: AsyncSession = D
     )
     activations = activations_result.scalars().all()
 
+    # Load impacts linked to any activation of this trigger
+    activation_ids = [a.id for a in activations]
+    impacts_by_activation: dict[int, list] = {a.id: [] for a in activations}
+    if activation_ids:
+        impacts_result = await db.execute(
+            select(ImpactRecord)
+            .where(ImpactRecord.trigger_activation_id.in_(activation_ids))
+            .order_by(desc(ImpactRecord.event_date))
+        )
+        for imp in impacts_result.scalars().all():
+            impacts_by_activation[imp.trigger_activation_id].append(imp)
+
+    validated_count = sum(1 for a in activations if impacts_by_activation.get(a.id))
+
     return templates.TemplateResponse(
         "trigger_detail.html",
         {"request": request, "user": user, "trigger": trigger,
          "activations": activations, "OPERATOR_SYMBOLS": OPERATOR_SYMBOLS,
-         "VARIABLE_LABELS": VARIABLE_LABELS},
+         "VARIABLE_LABELS": VARIABLE_LABELS,
+         "impacts_by_activation": impacts_by_activation,
+         "validated_count": validated_count},
     )
 
 

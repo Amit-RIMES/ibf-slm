@@ -14,6 +14,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
+from app.models.trigger import TriggerActivation
 
 router = APIRouter(prefix="/impacts")
 templates = Jinja2Templates(directory="app/templates")
@@ -82,7 +83,7 @@ async def impact_export(request: Request, db: AsyncSession = Depends(get_db)):
         "id", "event_name", "event_date", "hazard_type",
         "country", "region", "lat", "lon",
         "affected_population", "casualties", "displaced", "damage_usd",
-        "description", "forecast_id", "created_at",
+        "description", "forecast_id", "trigger_activation_id", "created_at",
     ])
     for imp in impacts:
         writer.writerow([
@@ -91,6 +92,7 @@ async def impact_export(request: Request, db: AsyncSession = Depends(get_db)):
             imp.affected_population or "", imp.casualties or "",
             imp.displaced or "", imp.damage_usd or "",
             imp.description or "", imp.forecast_id or "",
+            imp.trigger_activation_id or "",
             imp.created_at.strftime("%Y-%m-%d %H:%M:%S"),
         ])
 
@@ -102,20 +104,39 @@ async def impact_export(request: Request, db: AsyncSession = Depends(get_db)):
     )
 
 
+async def _load_form_data(db: AsyncSession):
+    forecasts = (await db.execute(
+        select(ForecastUpload).order_by(desc(ForecastUpload.uploaded_at))
+    )).scalars().all()
+    activations = (await db.execute(
+        select(TriggerActivation).order_by(desc(TriggerActivation.triggered_at))
+    )).scalars().all()
+    return forecasts, activations
+
+
 @router.get("/new", response_class=HTMLResponse)
-async def impact_new_page(request: Request, db: AsyncSession = Depends(get_db)):
+async def impact_new_page(request: Request, db: AsyncSession = Depends(get_db), activation: int = 0):
     user = await get_current_user(request, db)
     if not user:
         return RedirectResponse("/login")
 
-    forecasts_result = await db.execute(
-        select(ForecastUpload).order_by(desc(ForecastUpload.uploaded_at))
-    )
-    forecasts = forecasts_result.scalars().all()
+    forecasts, activations = await _load_form_data(db)
+
+    # Pre-fill forecast_id from the activation if navigating from trigger detail
+    prefill_forecast_id = None
+    if activation:
+        act = next((a for a in activations if a.id == activation), None)
+        if act:
+            prefill_forecast_id = act.forecast_id
 
     return templates.TemplateResponse(
         "impact_form.html",
-        {"request": request, "user": user, "forecasts": forecasts, "hazard_types": HAZARD_TYPES},
+        {
+            "request": request, "user": user, "forecasts": forecasts,
+            "activations": activations, "hazard_types": HAZARD_TYPES,
+            "prefill_activation_id": activation or None,
+            "prefill_forecast_id": prefill_forecast_id,
+        },
     )
 
 
@@ -135,6 +156,7 @@ async def impact_create(
     damage_usd: str = Form(""),
     description: str = Form(""),
     forecast_id: str = Form(""),
+    trigger_activation_id: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     user = await get_current_user(request, db)
@@ -157,7 +179,7 @@ async def impact_create(
         return templates.TemplateResponse(
             "impact_form.html",
             {"request": request, "user": user, "impact": None, "error": msg,
-             "forecasts": [], "hazard_types": HAZARD_TYPES},
+             "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES},
         )
 
     lat_val = _float(lat)
@@ -185,6 +207,7 @@ async def impact_create(
         damage_usd=_float(damage_usd),
         description=description or None,
         forecast_id=_int(forecast_id),
+        trigger_activation_id=_int(trigger_activation_id),
     )
     db.add(record)
     await db.commit()
@@ -221,18 +244,13 @@ async def impact_edit_page(impact_id: int, request: Request, db: AsyncSession = 
     if not impact:
         return RedirectResponse("/impacts")
 
-    forecasts_result = await db.execute(
-        select(ForecastUpload).order_by(desc(ForecastUpload.uploaded_at))
-    )
-    forecasts = forecasts_result.scalars().all()
+    forecasts, activations = await _load_form_data(db)
 
     return templates.TemplateResponse(
         "impact_form.html",
         {
-            "request": request,
-            "user": user,
-            "impact": impact,
-            "forecasts": forecasts,
+            "request": request, "user": user, "impact": impact,
+            "forecasts": forecasts, "activations": activations,
             "hazard_types": HAZARD_TYPES,
         },
     )
@@ -255,6 +273,7 @@ async def impact_update(
     damage_usd: str = Form(""),
     description: str = Form(""),
     forecast_id: str = Form(""),
+    trigger_activation_id: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     user = await get_current_user(request, db)
@@ -284,25 +303,25 @@ async def impact_update(
         return templates.TemplateResponse(
             "impact_form.html",
             {"request": request, "user": user, "impact": impact, "error": "Latitude must be a number.",
-             "forecasts": [], "hazard_types": HAZARD_TYPES},
+             "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES},
         )
     if lon.strip() and lon_val is None:
         return templates.TemplateResponse(
             "impact_form.html",
             {"request": request, "user": user, "impact": impact, "error": "Longitude must be a number.",
-             "forecasts": [], "hazard_types": HAZARD_TYPES},
+             "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES},
         )
     if lat_val is not None and not (-90 <= lat_val <= 90):
         return templates.TemplateResponse(
             "impact_form.html",
             {"request": request, "user": user, "impact": impact, "error": "Latitude must be between -90 and 90.",
-             "forecasts": [], "hazard_types": HAZARD_TYPES},
+             "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES},
         )
     if lon_val is not None and not (-180 <= lon_val <= 180):
         return templates.TemplateResponse(
             "impact_form.html",
             {"request": request, "user": user, "impact": impact, "error": "Longitude must be between -180 and 180.",
-             "forecasts": [], "hazard_types": HAZARD_TYPES},
+             "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES},
         )
 
     impact.event_name = event_name
@@ -318,6 +337,7 @@ async def impact_update(
     impact.damage_usd = _float(damage_usd)
     impact.description = description or None
     impact.forecast_id = _int(forecast_id)
+    impact.trigger_activation_id = _int(trigger_activation_id)
 
     await db.commit()
     await log_action(db, user.id, "impact.edit", f"Edited impact record '{event_name}'")
