@@ -136,7 +136,16 @@
         <tr>
           <td><input type="checkbox" class="fc-check" value="{{ fc.id }}"
                      style="width:15px;height:15px;cursor:pointer;accent-color:#4f46e5;"></td>
-          <td style="font-weight:600;">{{ fc.filename }}</td>
+          <td style="font-weight:600;">
+            {{ fc.filename }}
+            {% if fc.is_anomaly %}
+            <span style="display:inline-block;margin-left:.4rem;padding:.1rem .45rem;
+                         background:#fef3c7;color:#92400e;border-radius:4px;
+                         font-size:.68rem;font-weight:700;vertical-align:middle;">
+              ⚠ {{ fc.anomaly_score }}σ
+            </span>
+            {% endif %}
+          </td>
           <td style="font-size:.8rem;color:#6b7280;">
             {% if fc.source == "manual" %}
               <span title="Manual upload">Manual</span>

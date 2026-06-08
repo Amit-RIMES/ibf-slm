@@ -100,6 +100,16 @@ async def dashboard(
     )
     active_activations = active_activations_result.scalars().all()
 
+    # Anomalous forecasts ingested in the last 7 days
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    anomalies_result = await db.execute(
+        select(ForecastUpload)
+        .where(ForecastUpload.is_anomaly == True)  # noqa: E712
+        .where(ForecastUpload.uploaded_at >= week_ago)
+        .order_by(desc(ForecastUpload.uploaded_at))
+    )
+    recent_anomalies = anomalies_result.scalars().all()
+
     # --- Chart data ---
 
     # 1. Precipitation trend — date filter only (forecasts don't carry hazard/country)
@@ -208,6 +218,7 @@ async def dashboard(
             "recent_forecasts": recent_forecasts,
             "recent_impacts": recent_impacts,
             "active_activations": active_activations,
+            "recent_anomalies": recent_anomalies,
             "precip_chart": json.dumps(precip_chart),
             "hazard_chart": json.dumps(hazard_chart),
             "monthly_chart": json.dumps(monthly_chart),

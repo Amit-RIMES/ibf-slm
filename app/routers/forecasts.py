@@ -15,6 +15,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
+from app.core.anomaly import compute_anomaly
 from app.core.audit import log_action
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -383,6 +384,7 @@ async def upload_forecast(
     await db.commit()
     await db.refresh(forecast)
 
+    await compute_anomaly(forecast, db)
     await evaluate_triggers(forecast, db)
     await _log_import(db, user.id, forecast)
 
@@ -447,6 +449,7 @@ async def do_import(source: str, date: str, db: AsyncSession) -> ForecastUpload:
     db.add(forecast)
     await db.commit()
     await db.refresh(forecast)
+    await compute_anomaly(forecast, db)
     await evaluate_triggers(forecast, db)
     return forecast
 

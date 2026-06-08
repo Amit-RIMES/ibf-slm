@@ -33,3 +33,7 @@ class ForecastUpload(Base):
 
     # GeoJSON grid for map rendering (stored as JSON string)
     geojson: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Anomaly detection vs trailing history
+    anomaly_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    is_anomaly: Mapped[Optional[bool]] = mapped_column(nullable=True)
