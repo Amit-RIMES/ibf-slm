@@ -109,6 +109,9 @@
     <div class="stat-card">
       <div class="stat-label">Impact Records</div>
       <div class="stat-value">{{ stats.total_impacts }}</div>
+      {% if impacts_filtered and stats.total_impacts != stats.total_impacts_unfiltered %}
+      <div class="stat-sub">of {{ stats.total_impacts_unfiltered }} total</div>
+      {% endif %}
     </div>
     <div class="stat-card">
       <div class="stat-label">Member Since</div>
@@ -122,30 +125,55 @@
     </div>
   </div>
 
-  <!-- Chart date filter -->
+  <!-- Filters -->
   <form method="get" action="/dashboard"
-        style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;
+        style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;
                background:#fff;border-radius:10px;padding:.85rem 1.25rem;
                box-shadow:0 1px 4px rgba(0,0,0,.07);margin-bottom:1rem;">
-    <span style="font-size:.8rem;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">Charts</span>
+    <span style="font-size:.8rem;font-weight:600;color:#6b7280;text-transform:uppercase;
+                 letter-spacing:.05em;white-space:nowrap;">Filter</span>
+
     <input type="date" name="date_from" value="{{ date_from }}"
+           title="From date"
            style="padding:.4rem .7rem;border:1px solid #d1d5db;border-radius:7px;font-size:.875rem;outline:none;">
     <span style="font-size:.8rem;color:#9ca3af;">to</span>
     <input type="date" name="date_to" value="{{ date_to }}"
+           title="To date"
            style="padding:.4rem .7rem;border:1px solid #d1d5db;border-radius:7px;font-size:.875rem;outline:none;">
+
+    <select name="hazard"
+            style="padding:.4rem .7rem;border:1px solid #d1d5db;border-radius:7px;
+                   font-size:.875rem;outline:none;background:#fff;min-width:120px;">
+      <option value="">All hazards</option>
+      {% for h in hazard_types %}
+      <option value="{{ h }}" {% if hazard == h %}selected{% endif %}>{{ h | capitalize }}</option>
+      {% endfor %}
+    </select>
+
+    <input type="text" name="country" value="{{ country }}" placeholder="Country…"
+           style="padding:.4rem .7rem;border:1px solid #d1d5db;border-radius:7px;
+                  font-size:.875rem;outline:none;width:130px;">
+
     <button type="submit"
             style="background:#4f46e5;color:#fff;border:none;border-radius:7px;
                    padding:.4rem 1rem;font-size:.875rem;font-weight:600;cursor:pointer;">Apply</button>
-    {% if date_from or date_to %}
+
+    {% if date_from or date_to or hazard or country %}
     <a href="/dashboard" style="font-size:.82rem;color:#6b7280;">✕ Clear</a>
     {% endif %}
-    {% if not date_from and not date_to %}
-    <span style="font-size:.78rem;color:#9ca3af;margin-left:auto;">Default: last 6 months</span>
-    {% else %}
-    <span style="font-size:.78rem;color:#4f46e5;margin-left:auto;font-weight:600;">
-      Filtered: {{ date_from or '…' }} → {{ date_to or 'today' }}
+
+    <span style="font-size:.78rem;margin-left:auto;
+                 {% if date_from or date_to or hazard or country %}color:#4f46e5;font-weight:600;{% else %}color:#9ca3af;{% endif %}">
+      {% if date_from or date_to or hazard or country %}
+        {% set parts = [] %}
+        {% if date_from or date_to %}{% set _ = parts.append((date_from or '…') ~ ' → ' ~ (date_to or 'today')) %}{% endif %}
+        {% if hazard %}{% set _ = parts.append(hazard | capitalize) %}{% endif %}
+        {% if country %}{% set _ = parts.append(country) %}{% endif %}
+        {{ parts | join(' · ') }}
+      {% else %}
+        Forecast charts: last 6 months · Impact filters: all time
+      {% endif %}
     </span>
-    {% endif %}
   </form>
 
   <!-- Charts -->
@@ -203,8 +231,24 @@
 
   <div class="card" style="margin-bottom:1.25rem;">
     <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem; margin-bottom:1rem;">
-      <div class="section-title" style="margin-bottom:0;">Recent Impact Records</div>
-      <a href="/impacts/new" style="font-size:.85rem; font-weight:600; color:#4f46e5;">+ New Record</a>
+      <div style="display:flex;align-items:center;gap:.6rem;">
+        <div class="section-title" style="margin-bottom:0;">Recent Impact Records</div>
+        {% if impacts_filtered %}
+        <span style="font-size:.72rem;font-weight:700;background:#eff6ff;color:#1d4ed8;
+                     padding:.15rem .55rem;border-radius:999px;text-transform:uppercase;letter-spacing:.04em;">
+          filtered
+        </span>
+        {% endif %}
+      </div>
+      <div style="display:flex;gap:.6rem;align-items:center;">
+        {% if hazard or country or date_from or date_to %}
+        <a href="/impacts?{% if hazard %}hazard={{ hazard }}&{% endif %}{% if country %}country={{ country }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}{% endif %}"
+           style="font-size:.82rem;color:#4f46e5;">View all →</a>
+        {% else %}
+        <a href="/impacts" style="font-size:.82rem;color:#6b7280;">View all →</a>
+        {% endif %}
+        <a href="/impacts/new" style="font-size:.85rem; font-weight:600; color:#4f46e5;">+ New Record</a>
+      </div>
     </div>
     {% if recent_impacts %}
     <table class="profile-table" style="font-size:.875rem;">
@@ -348,13 +392,18 @@
     document.getElementById('precipChart').remove();
   }
 
-  // 2. Hazard type doughnut
+  // 2. Hazard type doughnut — highlight selected hazard if filter active
   if (hazard.labels.length) {
+    const hlLabel = hazard.highlight || '';
+    const bgColors = hazard.labels.map((lbl, i) => {
+      if (!hlLabel) return PALETTE[i % PALETTE.length];
+      return lbl === hlLabel ? PALETTE[i % PALETTE.length] : 'rgba(156,163,175,0.35)';
+    });
     new Chart(document.getElementById('hazardChart'), {
       type: 'doughnut',
       data: {
         labels: hazard.labels,
-        datasets: [{ data: hazard.values, backgroundColor: PALETTE, borderWidth: 2, borderColor: '#fff' }],
+        datasets: [{ data: hazard.values, backgroundColor: bgColors, borderWidth: 2, borderColor: '#fff' }],
       },
       options: {
         responsive: true,

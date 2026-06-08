@@ -21,18 +21,29 @@ router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
 
+HAZARD_TYPES = ["flood", "storm", "drought", "landslide", "heatwave", "cyclone", "other"]
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(
     request: Request,
     db: AsyncSession = Depends(get_db),
     date_from: str = "",
     date_to: str = "",
+    hazard: str = "",
+    country: str = "",
 ):
     user = await get_current_user(request, db)
     if not user:
         return RedirectResponse("/login")
 
-    # Parse optional chart date range
+    from sqlalchemy import and_
+    from datetime import date as date_type
+
+    # Validate / parse filters
+    if hazard and hazard not in HAZARD_TYPES:
+        hazard = ""
+
     dt_from = dt_to = None
     if date_from:
         try:
@@ -45,11 +56,27 @@ async def dashboard(
         except ValueError:
             date_to = ""
 
+    # Impact filters (hazard + country + date) — used for stat counter, hazard chart, recent table
+    impact_filters = []
+    if dt_from:
+        impact_filters.append(ImpactRecord.event_date >= dt_from.date())
+    if dt_to:
+        impact_filters.append(ImpactRecord.event_date < (dt_to - timedelta(days=1)).date())
+    if hazard:
+        impact_filters.append(ImpactRecord.hazard_type == hazard)
+    if country:
+        impact_filters.append(ImpactRecord.country.ilike(f"%{country}%"))
+
     total_users = await db.scalar(select(func.count()).select_from(User).where(User.is_active == True))  # noqa: E712
     pending_count = await db.scalar(select(func.count()).select_from(User).where(User.is_active == False))  # noqa: E712
     admin_count = await db.scalar(select(func.count()).select_from(User).where(User.role == "admin", User.is_active == True))  # noqa: E712
     total_forecasts = await db.scalar(select(func.count()).select_from(ForecastUpload))
-    total_impacts = await db.scalar(select(func.count()).select_from(ImpactRecord))
+
+    impacts_count_stmt = select(func.count()).select_from(ImpactRecord)
+    if impact_filters:
+        impacts_count_stmt = impacts_count_stmt.where(and_(*impact_filters))
+    total_impacts = await db.scalar(impacts_count_stmt)
+    total_impacts_unfiltered = await db.scalar(select(func.count()).select_from(ImpactRecord))
 
     recent_users_result = await db.execute(
         select(User).order_by(desc(User.created_at)).limit(5)
@@ -61,10 +88,10 @@ async def dashboard(
     )
     recent_forecasts = recent_forecasts_result.scalars().all()
 
-    recent_impacts_result = await db.execute(
-        select(ImpactRecord).order_by(desc(ImpactRecord.event_date)).limit(5)
-    )
-    recent_impacts = recent_impacts_result.scalars().all()
+    recent_impacts_stmt = select(ImpactRecord).order_by(desc(ImpactRecord.event_date)).limit(10)
+    if impact_filters:
+        recent_impacts_stmt = recent_impacts_stmt.where(and_(*impact_filters))
+    recent_impacts = (await db.execute(recent_impacts_stmt)).scalars().all()
 
     active_activations_result = await db.execute(
         select(TriggerActivation)
@@ -75,40 +102,40 @@ async def dashboard(
 
     # --- Chart data ---
 
-    # 1. Precipitation trend — filtered or last 60 forecasts
+    # 1. Precipitation trend — date filter only (forecasts don't carry hazard/country)
     precip_stmt = select(ForecastUpload.uploaded_at, ForecastUpload.precip_mean, ForecastUpload.filename)
     if dt_from:
         precip_stmt = precip_stmt.where(ForecastUpload.uploaded_at >= dt_from)
     if dt_to:
         precip_stmt = precip_stmt.where(ForecastUpload.uploaded_at < dt_to)
     precip_stmt = precip_stmt.order_by(desc(ForecastUpload.uploaded_at)).limit(60)
-    precip_result = await db.execute(precip_stmt)
-    precip_rows = list(reversed(precip_result.all()))
+    precip_rows = list(reversed((await db.execute(precip_stmt)).all()))
     precip_chart = {
         "labels": [r.uploaded_at.strftime("%b %d") for r in precip_rows],
         "values": [round(r.precip_mean, 2) for r in precip_rows],
         "filenames": [r.filename for r in precip_rows],
     }
 
-    # 2. Impacts by hazard type — filtered
-    from datetime import date as date_type
-    hazard_stmt = (
-        select(ImpactRecord.hazard_type, func.count().label("cnt"))
-        .group_by(ImpactRecord.hazard_type)
-    )
+    # 2. Impacts by hazard — country + date filters (not hazard, so the chart always shows the full breakdown)
+    hazard_chart_filters = []
     if dt_from:
-        hazard_stmt = hazard_stmt.where(ImpactRecord.event_date >= dt_from.date())
+        hazard_chart_filters.append(ImpactRecord.event_date >= dt_from.date())
     if dt_to:
-        hazard_stmt = hazard_stmt.where(ImpactRecord.event_date < (dt_to - timedelta(days=1)).date())
+        hazard_chart_filters.append(ImpactRecord.event_date < (dt_to - timedelta(days=1)).date())
+    if country:
+        hazard_chart_filters.append(ImpactRecord.country.ilike(f"%{country}%"))
+    hazard_stmt = select(ImpactRecord.hazard_type, func.count().label("cnt")).group_by(ImpactRecord.hazard_type)
+    if hazard_chart_filters:
+        hazard_stmt = hazard_stmt.where(and_(*hazard_chart_filters))
     hazard_stmt = hazard_stmt.order_by(desc("cnt"))
-    hazard_result = await db.execute(hazard_stmt)
-    hazard_rows = hazard_result.all()
+    hazard_rows = (await db.execute(hazard_stmt)).all()
     hazard_chart = {
         "labels": [r.hazard_type.capitalize() for r in hazard_rows],
         "values": [r.cnt for r in hazard_rows],
+        "highlight": hazard.capitalize() if hazard else "",
     }
 
-    # 3. Forecasts ingested per month
+    # 3. Forecasts ingested per month — date filter only
     now = datetime.now(timezone.utc)
     if dt_from or dt_to:
         window_start = dt_from or (now - timedelta(days=365))
@@ -126,7 +153,6 @@ async def dashboard(
     for (uploaded_at,) in monthly_result.all():
         monthly_counts[uploaded_at.strftime("%b %Y")] += 1
 
-    # Build month labels spanning the window
     month_labels = []
     cur = window_start.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     end_month = window_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -139,7 +165,7 @@ async def dashboard(
         "values": [monthly_counts.get(m, 0) for m in month_labels],
     }
 
-    # 4. Forecasts by source
+    # 4. Forecasts by source — date filter only
     source_label_map = {
         "manual": "Manual upload",
         "regional_rimes": "Regional — RIMES",
@@ -161,6 +187,8 @@ async def dashboard(
         "values": [r.cnt for r in source_rows],
     }
 
+    impacts_filtered = bool(impact_filters)
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
@@ -173,6 +201,7 @@ async def dashboard(
                 "user_count": total_users - admin_count,
                 "total_forecasts": total_forecasts,
                 "total_impacts": total_impacts,
+                "total_impacts_unfiltered": total_impacts_unfiltered,
                 "member_since": user.created_at.strftime("%B %d, %Y"),
             },
             "recent_users": recent_users,
@@ -185,5 +214,9 @@ async def dashboard(
             "source_chart": json.dumps(source_chart),
             "date_from": date_from,
             "date_to": date_to,
+            "hazard": hazard,
+            "country": country,
+            "hazard_types": HAZARD_TYPES,
+            "impacts_filtered": impacts_filtered,
         },
     )
