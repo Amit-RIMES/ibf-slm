@@ -162,6 +162,10 @@
       <div class="section-title">Forecasts Ingested (last 6 months)</div>
       <canvas id="monthlyChart" height="200"></canvas>
     </div>
+    <div class="card">
+      <div class="section-title">Forecasts by Source</div>
+      <canvas id="sourceChart" height="200"></canvas>
+    </div>
   </div>
 
   <div class="card" style="margin-bottom:1.25rem;">
@@ -301,6 +305,7 @@
   const precip = {{ precip_chart | safe }};
   const hazard = {{ hazard_chart | safe }};
   const monthly = {{ monthly_chart | safe }};
+  const source = {{ source_chart | safe }};
 
   // 1. Precipitation trend
   if (precip.labels.length) {
@@ -363,6 +368,36 @@
     document.getElementById('hazardChart').parentElement.innerHTML +=
       '<p style="color:#9ca3af;font-size:.875rem;margin-top:.5rem;">No impact records yet.</p>';
     document.getElementById('hazardChart').remove();
+  }
+
+  // 4. Source breakdown horizontal bar
+  if (source.labels.length) {
+    new Chart(document.getElementById('sourceChart'), {
+      type: 'bar',
+      data: {
+        labels: source.labels,
+        datasets: [{
+          label: 'Forecasts',
+          data: source.values,
+          backgroundColor: PALETTE.slice(0, source.labels.length),
+          borderRadius: 5,
+          borderSkipped: false,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: '#f3f4f6' } },
+          y: { ticks: { font: { size: 11 } }, grid: { display: false } },
+        },
+      },
+    });
+  } else {
+    document.getElementById('sourceChart').parentElement.innerHTML +=
+      '<p style="color:#9ca3af;font-size:.875rem;margin-top:.5rem;">No forecast data yet.</p>';
+    document.getElementById('sourceChart').remove();
   }
 
   // 3. Monthly ingestion bar

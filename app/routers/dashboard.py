@@ -13,8 +13,9 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
-from app.models.trigger import TriggerActivation
+from app.models.trigger import Trigger, TriggerActivation
 from app.models.user import User
+from app.routers.forecasts import COUNTRY_NAMES
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -138,6 +139,28 @@ async def dashboard(
         "values": [monthly_counts.get(m, 0) for m in month_labels],
     }
 
+    # 4. Forecasts by source
+    source_label_map = {
+        "manual": "Manual upload",
+        "regional_rimes": "Regional — RIMES",
+        "regional_sea": "Regional — SEA",
+        **{f"country_{cc}": f"{name} ({cc.upper()})" for cc, name in COUNTRY_NAMES.items()},
+    }
+    source_stmt = (
+        select(ForecastUpload.source, func.count().label("cnt"))
+        .group_by(ForecastUpload.source)
+        .order_by(desc("cnt"))
+    )
+    if dt_from:
+        source_stmt = source_stmt.where(ForecastUpload.uploaded_at >= dt_from)
+    if dt_to:
+        source_stmt = source_stmt.where(ForecastUpload.uploaded_at < dt_to)
+    source_rows = (await db.execute(source_stmt)).all()
+    source_chart = {
+        "labels": [source_label_map.get(r.source or "", "Unknown") for r in source_rows],
+        "values": [r.cnt for r in source_rows],
+    }
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
@@ -159,6 +182,7 @@ async def dashboard(
             "precip_chart": json.dumps(precip_chart),
             "hazard_chart": json.dumps(hazard_chart),
             "monthly_chart": json.dumps(monthly_chart),
+            "source_chart": json.dumps(source_chart),
             "date_from": date_from,
             "date_to": date_to,
         },

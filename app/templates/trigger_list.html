@@ -36,7 +36,10 @@
 
   .rule { font-family: monospace; font-size: .82rem; background: #f3f4f6; padding: .2rem .5rem; border-radius: 4px; }
   .empty { color: #9ca3af; font-size: .9rem; padding: 2rem 0; text-align: center; }
+
+  #coverage-map { height: 340px; border-radius: 10px; }
 </style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 {% endblock %}
 
 {% block body %}
@@ -59,6 +62,17 @@
     <h1>Triggers</h1>
     <a href="/triggers/new" class="btn-new">+ New Trigger</a>
   </div>
+
+  {% if scoped_count %}
+  <div class="card" style="margin-bottom:1.25rem;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.85rem;">
+      <div style="font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#9ca3af;">
+        Coverage Map — {{ scoped_count }} scoped trigger{{ 's' if scoped_count != 1 }}
+      </div>
+    </div>
+    <div id="coverage-map"></div>
+  </div>
+  {% endif %}
 
   <div class="card">
     {% if triggers %}
@@ -104,4 +118,41 @@
     {% endif %}
   </div>
 </div>
+
+{% if scoped_count %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function () {
+  const HAZARD_COLORS = {
+    flood: '#3b82f6', storm: '#8b5cf6', drought: '#f59e0b',
+    landslide: '#10b981', heatwave: '#ef4444', cyclone: '#0ea5e9', other: '#6b7280',
+  };
+  const triggers = {{ scoped_triggers_json | safe }};
+
+  const map = L.map('coverage-map', { zoomControl: true });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 18,
+  }).addTo(map);
+
+  const allBounds = [];
+  triggers.forEach(t => {
+    const color = HAZARD_COLORS[t.hazard_type] || '#6b7280';
+    const rect = L.rectangle(t.bounds, {
+      color: color, weight: 2, fillColor: color, fillOpacity: t.is_active ? 0.15 : 0.05,
+      dashArray: t.is_active ? null : '6 4',
+    }).addTo(map);
+    rect.bindPopup(
+      `<strong><a href="/triggers/${t.id}" style="color:#4f46e5;">${t.name}</a></strong><br>` +
+      `<span style="text-transform:capitalize;">${t.hazard_type}</span> &nbsp;·&nbsp; ` +
+      `<span style="font-family:monospace;font-size:.82rem;">${t.rule}</span><br>` +
+      `<span style="font-size:.78rem;color:${t.is_active ? '#16a34a' : '#9ca3af'};">` +
+      `${t.is_active ? 'Active' : 'Inactive'}</span>`
+    );
+    allBounds.push(t.bounds[0], t.bounds[1]);
+  });
+
+  if (allBounds.length) map.fitBounds(allBounds, { padding: [30, 30] });
+})();
+</script>
+{% endif %}
 {% endblock %}

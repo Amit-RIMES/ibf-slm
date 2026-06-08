@@ -115,10 +115,25 @@ async def trigger_list(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Trigger).order_by(desc(Trigger.created_at)))
     triggers = result.scalars().all()
 
+    import json as _json
+    scoped = [
+        {
+            "id": t.id,
+            "name": t.name,
+            "hazard_type": t.hazard_type,
+            "is_active": t.is_active,
+            "bounds": [[t.scope_lat_min, t.scope_lon_min], [t.scope_lat_max, t.scope_lon_max]],
+            "rule": f"{VARIABLE_LABELS[t.variable]} {OPERATOR_SYMBOLS[t.operator]} {t.threshold} mm",
+        }
+        for t in triggers if t.scope_lat_min is not None
+    ]
+
     return templates.TemplateResponse(
         "trigger_list.html",
         {"request": request, "user": user, "triggers": triggers,
-         "OPERATOR_SYMBOLS": OPERATOR_SYMBOLS, "VARIABLE_LABELS": VARIABLE_LABELS},
+         "OPERATOR_SYMBOLS": OPERATOR_SYMBOLS, "VARIABLE_LABELS": VARIABLE_LABELS,
+         "scoped_triggers_json": _json.dumps(scoped),
+         "scoped_count": len(scoped)},
     )
 
 
