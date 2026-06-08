@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     LOG_FILE: str = "ibf_app.log"
     LOG_LEVEL: str = "INFO"
     SMTP_FAILURE_ALERT_AFTER: int = 3
+    TRIGGER_COOLDOWN_HOURS: int = 6
+    ALERT_ESCALATION_HOURS: int = 24
+    WEEKLY_DIGEST_DAY: int = 0   # 0=Monday
+    WEEKLY_DIGEST_HOUR: int = 8
 
     class Config:
         env_file = ".env"

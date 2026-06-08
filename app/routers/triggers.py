@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Optional
@@ -12,6 +13,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_action
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.email import send_acknowledgement_emails, send_subscriber_alert_emails, send_trigger_activation_email
@@ -25,6 +27,7 @@ from app.models.trigger import (
 from app.models.user import User
 from app.models.webhook import Webhook
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/triggers")
 templates = Jinja2Templates(directory="app/templates")
 
@@ -115,6 +118,20 @@ async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
             fires = fires1
 
         if fires:
+            # Check cooldown BEFORE db.add to avoid autoflush finding the new activation
+            cooldown_cutoff = datetime.now(timezone.utc) - timedelta(
+                hours=settings.TRIGGER_COOLDOWN_HOURS
+            )
+            recent = await db.execute(
+                select(TriggerActivation.id)
+                .where(
+                    TriggerActivation.trigger_id == trigger.id,
+                    TriggerActivation.triggered_at >= cooldown_cutoff,
+                )
+                .limit(1)
+            )
+            in_cooldown = recent.scalar_one_or_none() is not None
+
             activation = TriggerActivation(
                 trigger_id=trigger.id,
                 forecast_id=forecast.id,
@@ -122,7 +139,14 @@ async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
                 status="active",
             )
             db.add(activation)
-            fired_rows.append((trigger, activation, forecast))
+
+            if in_cooldown:
+                logger.debug(
+                    "Trigger %d within cooldown (%dh) — activation recorded, notification suppressed",
+                    trigger.id, settings.TRIGGER_COOLDOWN_HOURS,
+                )
+            else:
+                fired_rows.append((trigger, activation, forecast))
 
     if fired_rows:
         await db.commit()
@@ -325,9 +349,10 @@ async def trigger_report(request: Request, db: AsyncSession = Depends(get_db)):
     never_fired = sum(1 for r in rows if r["activation_count"] == 0)
 
     return templates.TemplateResponse(
-        "trigger_report.html",
-        {
-            "request": request, "user": user, "rows": rows,
+    request,
+    "trigger_report.html",
+    {
+            "user": user, "rows": rows,
             "total_activations": total_activations,
             "total_validated": total_validated,
             "overall_hit_rate": overall_hit_rate,
@@ -336,7 +361,7 @@ async def trigger_report(request: Request, db: AsyncSession = Depends(get_db)):
             "OPERATOR_SYMBOLS": OPERATOR_SYMBOLS,
             "VARIABLE_LABELS": VARIABLE_LABELS,
         },
-    )
+)
 
 
 @router.get("", response_class=HTMLResponse)
@@ -362,12 +387,13 @@ async def trigger_list(request: Request, db: AsyncSession = Depends(get_db)):
     ]
 
     return templates.TemplateResponse(
-        "trigger_list.html",
-        {"request": request, "user": user, "triggers": triggers,
+    request,
+    "trigger_list.html",
+    {"user": user, "triggers": triggers,
          "OPERATOR_SYMBOLS": OPERATOR_SYMBOLS, "VARIABLE_LABELS": VARIABLE_LABELS,
          "scoped_triggers_json": _json.dumps(scoped),
          "scoped_count": len(scoped)},
-    )
+)
 
 
 @router.get("/new", response_class=HTMLResponse)
@@ -377,12 +403,13 @@ async def trigger_new_page(request: Request, db: AsyncSession = Depends(get_db))
         return RedirectResponse("/login")
 
     return templates.TemplateResponse(
-        "trigger_form.html",
-        {"request": request, "user": user, "trigger": None,
+    request,
+    "trigger_form.html",
+    {"user": user, "trigger": None,
          "hazard_types": HAZARD_TYPES, "variables": VARIABLES,
          "operators": OPERATORS, "operator_labels": OPERATOR_LABELS,
          "variable_labels": VARIABLE_LABELS, "logic_ops": LOGIC_OPS},
-    )
+)
 
 
 def _trigger_form_ctx(request, user, trigger_obj, **kwargs):
@@ -680,9 +707,10 @@ async def trigger_backtest(
     )
 
     return templates.TemplateResponse(
-        "trigger_backtest.html",
-        {
-            "request": request, "user": user,
+    request,
+    "trigger_backtest.html",
+    {
+            "user": user,
             "trigger": trigger,
             "total_forecasts": len(fc_data),
             "total_impacts": len(all_impacts),
@@ -696,7 +724,7 @@ async def trigger_backtest(
             "OPERATOR_SYMBOLS": OPERATOR_SYMBOLS,
             "VARIABLE_LABELS": VARIABLE_LABELS,
         },
-    )
+)
 
 
 @router.get("/{trigger_id}", response_class=HTMLResponse)
@@ -732,13 +760,14 @@ async def trigger_detail(trigger_id: int, request: Request, db: AsyncSession = D
     validated_count = sum(1 for a in activations if impacts_by_activation.get(a.id))
 
     return templates.TemplateResponse(
-        "trigger_detail.html",
-        {"request": request, "user": user, "trigger": trigger,
+    request,
+    "trigger_detail.html",
+    {"user": user, "trigger": trigger,
          "activations": activations, "OPERATOR_SYMBOLS": OPERATOR_SYMBOLS,
          "VARIABLE_LABELS": VARIABLE_LABELS,
          "impacts_by_activation": impacts_by_activation,
          "validated_count": validated_count},
-    )
+)
 
 
 @router.get("/{trigger_id}/edit", response_class=HTMLResponse)
@@ -920,9 +949,10 @@ async def activation_sitrep(
     )
 
     return templates.TemplateResponse(
-        "sitrep.html",
-        {
-            "request": request, "user": user,
+    request,
+    "sitrep.html",
+    {
+            "user": user,
             "activation": activation,
             "trigger": trigger,
             "forecast": forecast,
@@ -940,7 +970,7 @@ async def activation_sitrep(
             "OPERATOR_SYMBOLS": OPERATOR_SYMBOLS,
             "VARIABLE_LABELS": VARIABLE_LABELS,
         },
-    )
+)
 
 
 @router.post("/activations/{activation_id}/acknowledge")

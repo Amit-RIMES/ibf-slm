@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
-from sqlalchemy import Boolean, DateTime, Integer, String
+from typing import Optional
+from sqlalchemy import Boolean, DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
@@ -16,3 +17,5 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    # JSON array of source keys this user can see; NULL means no restriction (all sources)
+    country_scope: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

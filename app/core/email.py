@@ -281,6 +281,145 @@ async def send_sync_failure_email(admin_emails: list[str], n_consecutive: int, b
             logger.error("Failed to send sync failure alert to %s: %s", email, exc)
 
 
+async def send_escalation_email(
+    admin_emails: list[str],
+    activation: "TriggerActivation",
+    trigger: "Trigger",
+    hours_unacknowledged: int,
+    base_url: str,
+) -> None:
+    """Re-notify admins that an activation has been unacknowledged for N hours."""
+    if not settings.SMTP_HOST:
+        logger.warning("SMTP not configured. Escalation email skipped for activation %d.", activation.id)
+        return
+
+    op_sym = {"gt": ">", "gte": "≥", "lt": "<", "lte": "≤"}
+    var_label = {"precip_mean": "Mean precip", "precip_max": "Max precip", "precip_min": "Min precip"}
+    url = f"{base_url}/triggers/{trigger.id}"
+    subject = f"[IBF ESCALATION] Unacknowledged alert — {trigger.name} ({hours_unacknowledged}h)"
+    html = f"""
+    <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:2rem;">
+      <div style="background:#fff7ed;border:2px solid #fb923c;border-radius:8px;
+                  padding:1rem 1.25rem;margin-bottom:1.5rem;">
+        <span style="font-size:1.1rem">🔔</span>
+        <strong style="color:#c2410c;margin-left:.4rem;">
+          Escalation: alert unacknowledged for {hours_unacknowledged}+ hours
+        </strong>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:.9rem;margin-bottom:1.25rem;">
+        <tr>
+          <td style="padding:.4rem 0;color:#6b7280;width:140px;">Trigger</td>
+          <td style="font-weight:600;">{trigger.name}</td>
+        </tr>
+        <tr>
+          <td style="padding:.4rem 0;color:#6b7280;">Rule</td>
+          <td>{var_label.get(trigger.variable, trigger.variable)}
+              {op_sym.get(trigger.operator, trigger.operator)} {trigger.threshold} mm</td>
+        </tr>
+        <tr>
+          <td style="padding:.4rem 0;color:#6b7280;">Observed</td>
+          <td style="font-weight:700;color:#dc2626;">{activation.value:.3f} mm</td>
+        </tr>
+        <tr>
+          <td style="padding:.4rem 0;color:#6b7280;">Fired at</td>
+          <td>{activation.triggered_at.strftime('%d %b %Y, %H:%M UTC')}</td>
+        </tr>
+      </table>
+      <p>
+        <a href="{url}"
+           style="display:inline-block;padding:.65rem 1.25rem;background:#ea580c;
+                  color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">
+          Acknowledge now →
+        </a>
+      </p>
+      <p style="color:#9ca3af;font-size:.8rem;margin-top:1rem;">IBF App — {base_url}</p>
+    </div>
+    """
+
+    for email in admin_emails:
+        try:
+            await asyncio.to_thread(_send_sync, email, subject, html)
+            logger.info("Escalation email sent to %s for activation %d", email, activation.id)
+        except Exception as exc:
+            logger.error("Failed to send escalation email to %s: %s", email, exc)
+
+
+async def send_weekly_digest_email(
+    admin_emails: list[str],
+    stats: dict,
+    base_url: str,
+) -> None:
+    """Monday morning digest summarising the past week's activations, impacts, and coverage."""
+    if not settings.SMTP_HOST:
+        logger.warning("SMTP not configured. Weekly digest skipped.")
+        return
+
+    n_activations = stats.get("n_activations", 0)
+    n_acknowledged = stats.get("n_acknowledged", 0)
+    n_impacts = stats.get("n_impacts", 0)
+    n_forecasts = stats.get("n_forecasts", 0)
+    coverage_gaps = stats.get("coverage_gaps", [])
+    top_hazards = stats.get("top_hazards", [])
+    week_label = stats.get("week_label", "last week")
+
+    hazard_rows = "".join(
+        f"<tr><td style='padding:.35rem .6rem;text-transform:capitalize'>{h}</td>"
+        f"<td style='padding:.35rem .6rem;font-weight:600;color:#4f46e5'>{c}</td></tr>"
+        for h, c in top_hazards
+    )
+    gap_items = "".join(f"<li style='margin:.2rem 0'>{g}</li>" for g in coverage_gaps) or "<li>None</li>"
+
+    subject = f"[IBF] Weekly digest — {week_label}"
+    html = f"""
+    <div style="font-family:system-ui,sans-serif;max-width:600px;margin:0 auto;padding:2rem;">
+      <h2 style="color:#1a1a2e;margin-bottom:.25rem;">Weekly IBF Digest</h2>
+      <p style="color:#6b7280;margin-top:0;">{week_label}</p>
+
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin:1.25rem 0;">
+        <div style="background:#f0f9ff;border-radius:8px;padding:1rem 1.25rem;">
+          <div style="font-size:1.8rem;font-weight:700;color:#0369a1">{n_activations}</div>
+          <div style="color:#6b7280;font-size:.85rem">Trigger activations</div>
+        </div>
+        <div style="background:#f0fdf4;border-radius:8px;padding:1rem 1.25rem;">
+          <div style="font-size:1.8rem;font-weight:700;color:#16a34a">{n_acknowledged}</div>
+          <div style="color:#6b7280;font-size:.85rem">Acknowledged</div>
+        </div>
+        <div style="background:#fef9c3;border-radius:8px;padding:1rem 1.25rem;">
+          <div style="font-size:1.8rem;font-weight:700;color:#ca8a04">{n_impacts}</div>
+          <div style="color:#6b7280;font-size:.85rem">Impact records</div>
+        </div>
+        <div style="background:#faf5ff;border-radius:8px;padding:1rem 1.25rem;">
+          <div style="font-size:1.8rem;font-weight:700;color:#7c3aed">{n_forecasts}</div>
+          <div style="color:#6b7280;font-size:.85rem">Forecasts ingested</div>
+        </div>
+      </div>
+
+      {'<h3 style="color:#374151;font-size:.95rem;">Activations by hazard type</h3><table style="width:100%;border-collapse:collapse;font-size:.9rem;margin-bottom:1.25rem;"><tbody>' + hazard_rows + '</tbody></table>' if top_hazards else ''}
+
+      <h3 style="color:#374151;font-size:.95rem;">Coverage gaps (sources with no forecast this week)</h3>
+      <ul style="margin:.5rem 0 1.25rem;padding-left:1.25rem;color:#4b5563;font-size:.9rem;">
+        {gap_items}
+      </ul>
+
+      <p>
+        <a href="{base_url}/dashboard"
+           style="display:inline-block;padding:.65rem 1.25rem;background:#4f46e5;
+                  color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">
+          Open dashboard →
+        </a>
+      </p>
+      <p style="color:#9ca3af;font-size:.8rem;margin-top:1rem;">IBF App — {base_url}</p>
+    </div>
+    """
+
+    for email in admin_emails:
+        try:
+            await asyncio.to_thread(_send_sync, email, subject, html)
+            logger.info("Weekly digest sent to %s", email)
+        except Exception as exc:
+            logger.error("Failed to send weekly digest to %s: %s", email, exc)
+
+
 async def send_trigger_activation_email(
     admin_emails: list[str],
     fired: list[tuple["Trigger", "TriggerActivation", "ForecastUpload"]],

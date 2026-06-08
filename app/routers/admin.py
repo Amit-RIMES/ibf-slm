@@ -46,14 +46,14 @@ async def admin_users(request: Request, db: AsyncSession = Depends(get_db)):
         select(User).where(User.is_active == True).order_by(User.id)  # noqa: E712
     )
     return templates.TemplateResponse(
-        "admin/users.html",
-        {
-            "request": request,
+    request,
+    "admin/users.html",
+    {
             "user": user,
             "pending_users": pending_result.scalars().all(),
             "users": active_result.scalars().all(),
         },
-    )
+)
 
 
 @router.post("/users/{target_id}/approve")
@@ -98,6 +98,39 @@ async def admin_change_role(
         target.role = new_role
         await db.commit()
         await log_action(db, user.id, "user.role_change", f"Changed '{target.username}' role to {new_role}")
+    return RedirectResponse("/admin/users", status_code=303)
+
+
+@router.post("/users/{target_id}/scope")
+async def admin_set_scope(
+    request: Request,
+    target_id: int,
+    country_scope: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    if user.role != "admin":
+        return _FORBIDDEN
+
+    result = await db.execute(select(User).where(User.id == target_id))
+    target = result.scalar_one_or_none()
+    if target:
+        import json
+        raw = country_scope.strip()
+        if raw:
+            # Accept comma-separated or JSON array
+            try:
+                parsed = json.loads(raw) if raw.startswith("[") else [s.strip() for s in raw.split(",") if s.strip()]
+                target.country_scope = json.dumps(parsed) if parsed else None
+            except Exception:
+                target.country_scope = None
+        else:
+            target.country_scope = None
+        await db.commit()
+        await log_action(db, user.id, "user.scope_change",
+                         f"Set country scope for '{target.username}': {target.country_scope or 'unrestricted'}")
     return RedirectResponse("/admin/users", status_code=303)
 
 
@@ -208,9 +241,10 @@ async def admin_audit(
     entries = result.scalars().all()
 
     return templates.TemplateResponse(
-        "admin/audit.html",
-        {
-            "request": request, "user": user, "entries": entries,
+    request,
+    "admin/audit.html",
+    {
+            "user": user, "entries": entries,
             "action_labels": ACTION_LABELS,
             "action_categories": ACTION_CATEGORIES,
             "page": page, "total": total, "total_pages": total_pages,
@@ -218,7 +252,7 @@ async def admin_audit(
             "user_q": user_q, "category": category,
             "date_from": date_from, "date_to": date_to,
         },
-    )
+)
 
 
 @router.get("/api-keys", response_class=HTMLResponse)
@@ -232,8 +266,10 @@ async def admin_api_keys(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(APIKey).order_by(desc(APIKey.created_at)))
     keys = result.scalars().all()
     return templates.TemplateResponse(
-        "admin/api_keys.html", {"request": request, "user": user, "keys": keys}
-    )
+    request,
+    "admin/api_keys.html",
+    {"user": user, "keys": keys},
+)
 
 
 @router.post("/api-keys/generate", response_class=HTMLResponse)
@@ -260,9 +296,10 @@ async def admin_generate_key(
     result = await db.execute(select(APIKey).order_by(desc(APIKey.created_at)))
     keys = result.scalars().all()
     return templates.TemplateResponse(
-        "admin/api_keys.html",
-        {"request": request, "user": user, "keys": keys, "new_key": raw_key, "new_key_name": name},
-    )
+    request,
+    "admin/api_keys.html",
+    {"user": user, "keys": keys, "new_key": raw_key, "new_key_name": name},
+)
 
 
 @router.post("/api-keys/{key_id}/revoke")
@@ -292,8 +329,10 @@ async def admin_webhooks(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Webhook).order_by(desc(Webhook.created_at)))
     webhooks = result.scalars().all()
     return templates.TemplateResponse(
-        "admin/webhooks.html", {"request": request, "user": user, "webhooks": webhooks}
-    )
+    request,
+    "admin/webhooks.html",
+    {"user": user, "webhooks": webhooks},
+)
 
 
 @router.post("/webhooks/create")
@@ -458,9 +497,10 @@ async def admin_health(request: Request, db: AsyncSession = Depends(get_db)):
     now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     return templates.TemplateResponse(
-        "admin/health.html",
-        {
-            "request": request, "user": user,
+    request,
+    "admin/health.html",
+    {
+            "user": user,
             "now_utc": now_utc,
             # counts
             "total_users": total_users, "active_users": active_users, "pending_users": pending_users,
@@ -482,4 +522,4 @@ async def admin_health(request: Request, db: AsyncSession = Depends(get_db)):
             "sys_info": sys_info,
             "table_counts": table_counts,
         },
-    )
+)

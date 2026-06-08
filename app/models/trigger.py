@@ -76,6 +76,7 @@ class TriggerActivation(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_escalated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     trigger: Mapped["Trigger"] = relationship("Trigger", back_populates="activations", lazy="selectin")
     forecast: Mapped["ForecastUpload"] = relationship("ForecastUpload", lazy="selectin")  # noqa: F821

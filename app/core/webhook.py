@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import hmac
 import json
@@ -7,6 +8,31 @@ from datetime import timezone
 import httpx
 
 logger = logging.getLogger(__name__)
+
+_RETRY_DELAYS = [5, 10, 20]  # seconds between retries
+
+
+async def _deliver(client: httpx.AsyncClient, url: str, body: str, headers: dict) -> None:
+    for attempt, delay in enumerate([0] + _RETRY_DELAYS):
+        if delay:
+            await asyncio.sleep(delay)
+        try:
+            resp = await client.post(url, content=body, headers=headers, timeout=10)
+            if resp.status_code < 400:
+                return
+            if 400 <= resp.status_code < 500:
+                logger.warning("Webhook %s returned %d — not retrying", url, resp.status_code)
+                return
+            logger.warning(
+                "Webhook %s returned %d (attempt %d/%d)",
+                url, resp.status_code, attempt + 1, len(_RETRY_DELAYS) + 1,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Webhook delivery failed for %s (attempt %d/%d): %s",
+                url, attempt + 1, len(_RETRY_DELAYS) + 1, exc,
+            )
+    logger.error("Webhook %s failed after %d attempts — giving up", url, len(_RETRY_DELAYS) + 1)
 
 
 async def send_webhook_notifications(fired_rows, webhooks) -> None:
@@ -48,8 +74,5 @@ async def send_webhook_notifications(fired_rows, webhooks) -> None:
             if wh.secret:
                 sig = hmac.new(wh.secret.encode(), body.encode(), hashlib.sha256).hexdigest()
                 headers["X-IBF-Signature"] = f"sha256={sig}"
-            try:
-                async with httpx.AsyncClient() as client:
-                    await client.post(wh.url, content=body, headers=headers, timeout=10)
-            except Exception as exc:
-                logger.warning("Webhook delivery failed for %s: %s", wh.url, exc)
+            async with httpx.AsyncClient() as client:
+                await _deliver(client, wh.url, body, headers)

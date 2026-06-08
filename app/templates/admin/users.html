@@ -119,6 +119,7 @@
         <th>Username</th>
         <th>Email</th>
         <th>Role</th>
+        <th>Country Scope</th>
         <th>Joined</th>
         <th>Action</th>
       </tr>
@@ -136,8 +137,17 @@
             <span class="badge badge-user">User</span>
           {% endif %}
         </td>
+        <td style="font-size:.8rem;color:#6b7280;max-width:180px">
+          {% if u.country_scope %}
+            <span title="{{ u.country_scope }}" style="cursor:help;word-break:break-all">
+              {{ u.country_scope | replace('"', '') | replace('[', '') | replace(']', '') }}
+            </span>
+          {% else %}
+            <span style="color:#9ca3af;font-style:italic">all sources</span>
+          {% endif %}
+        </td>
         <td style="color:#6b7280">{{ u.created_at.strftime("%b %d, %Y") }}</td>
-        <td style="display:flex; gap:.5rem; align-items:center;">
+        <td style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap;">
           {% if u.id == user.id %}
             <span class="you-tag">you</span>
           {% else %}
@@ -152,6 +162,14 @@
                 <button type="submit" class="btn-role btn-demote">Demote to User</button>
               </form>
             {% endif %}
+            <form method="post" action="/admin/users/{{ u.id }}/scope" style="display:inline"
+                  title="Set comma-separated source keys, or leave blank for no restriction">
+              <input type="text" name="country_scope"
+                     value="{{ u.country_scope | replace('"', '') | replace('[', '') | replace(']', '') | replace(' ', '') if u.country_scope else '' }}"
+                     placeholder="e.g. country_bd,country_np"
+                     style="width:160px;padding:.25rem .5rem;border:1px solid #d1d5db;border-radius:6px;font-size:.78rem;">
+              <button type="submit" class="btn-role" style="font-size:.78rem;padding:.25rem .6rem;">Scope</button>
+            </form>
             <form method="post" action="/admin/users/{{ u.id }}/delete" style="display:inline"
                   onsubmit="return confirm('Delete {{ u.username }}? This cannot be undone.')">
               <button type="submit" class="btn-role btn-delete">Delete</button>

@@ -43,14 +43,17 @@ async def sync_page(request: Request, db: AsyncSession = Depends(get_db)):
     )
     logs = logs_result.scalars().all()
 
-    return templates.TemplateResponse("sync.html", {
-        "request": request,
+    return templates.TemplateResponse(
+    request,
+    "sync.html",
+    {
         "user": user,
         "cfg": cfg,
         "sources": SOURCES,
         "selected_sources": selected_sources,
         "logs": logs,
-    })
+    },
+)
 
 
 @router.post("/config")

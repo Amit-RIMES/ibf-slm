@@ -12,7 +12,7 @@ from app.core.audit import log_action
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.email import send_new_registration_email, send_password_reset_email
-from app.core.rate_limit import login_limiter
+from app.core.rate_limit import forgot_password_limiter, login_limiter, register_limiter
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.reset_token import PasswordResetToken
 from app.models.trigger import Trigger, TriggerSubscription
@@ -34,7 +34,7 @@ def _password_error(password: str) -> Optional[str]:
 
 @router.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request):
-    return templates.TemplateResponse("register.html", {"request": request})
+    return templates.TemplateResponse(request, "register.html")
 
 
 @router.post("/register")
@@ -45,20 +45,34 @@ async def register(
     password: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
+    ip = request.client.host if request.client else "unknown"
+    if await register_limiter.is_limited(ip):
+        return templates.TemplateResponse(
+    request,
+    "register.html",
+    {"error": "Too many registration attempts. Please try again later."},
+    status_code=429,
+)
+
     result = await db.execute(select(User).where(User.email == email))
     if result.scalar_one_or_none():
         return templates.TemplateResponse(
-            "register.html",
-            {"request": request, "error": "Email already registered."},
-            status_code=400,
-        )
+    request,
+    "register.html",
+    {"error": "Email already registered."},
+    status_code=400,
+)
 
     pw_err = _password_error(password)
     if pw_err:
         return templates.TemplateResponse(
-            "register.html", {"request": request, "error": pw_err}, status_code=400
-        )
+    request,
+    "register.html",
+    {"error": pw_err},
+    status_code=400,
+)
 
+    await register_limiter.record(ip)
     user = User(email=email, username=username, hashed_password=hash_password(password), is_active=False)
     db.add(user)
     await db.commit()
@@ -73,7 +87,7 @@ async def register(
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(request, "login.html")
 
 
 @router.post("/login")
@@ -90,10 +104,11 @@ async def login(
     if limited:
         minutes = max(1, round(seconds / 60))
         return templates.TemplateResponse(
-            "login.html",
-            {"request": request, "error": f"Too many failed attempts. Try again in {minutes} minute{'s' if minutes != 1 else ''}."},
-            status_code=429,
-        )
+    request,
+    "login.html",
+    {"error": f"Too many failed attempts. Try again in {minutes} minute{'s' if minutes != 1 else ''}."},
+    status_code=429,
+)
 
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
@@ -101,17 +116,19 @@ async def login(
     if not user or not verify_password(password, user.hashed_password):
         await login_limiter.record_failure(ip)
         return templates.TemplateResponse(
-            "login.html",
-            {"request": request, "error": "Invalid email or password."},
-            status_code=401,
-        )
+    request,
+    "login.html",
+    {"error": "Invalid email or password."},
+    status_code=401,
+)
 
     if not user.is_active:
         return templates.TemplateResponse(
-            "login.html",
-            {"request": request, "error": "Your account is pending admin approval."},
-            status_code=403,
-        )
+    request,
+    "login.html",
+    {"error": "Your account is pending admin approval."},
+    status_code=403,
+)
 
     await login_limiter.clear(ip)
     token = create_access_token({"sub": str(user.id)})
@@ -134,9 +151,10 @@ async def edit_profile_page(request: Request, db: AsyncSession = Depends(get_db)
     if not user:
         return RedirectResponse("/login")
     return templates.TemplateResponse(
-        "edit_profile.html",
-        {"request": request, "user": user, "username": user.username, "email": user.email},
-    )
+    request,
+    "edit_profile.html",
+    {"user": user, "username": user.username, "email": user.email},
+)
 
 
 @router.post("/account/profile", response_class=HTMLResponse)
@@ -153,9 +171,10 @@ async def edit_profile(
 
     def err(msg):
         return templates.TemplateResponse(
-            "edit_profile.html",
-            {"request": request, "user": user, "username": username, "email": email, "error": msg},
-        )
+    request,
+    "edit_profile.html",
+    {"user": user, "username": username, "email": email, "error": msg},
+)
 
     username = username.strip()
     email = email.strip().lower()
@@ -185,9 +204,10 @@ async def edit_profile(
     await log_action(db, user.id, "user.profile_edit", f"Updated profile: username='{username}', email='{email}'")
 
     return templates.TemplateResponse(
-        "edit_profile.html",
-        {"request": request, "user": user, "username": username, "email": email, "success": True},
-    )
+    request,
+    "edit_profile.html",
+    {"user": user, "username": username, "email": email, "success": True},
+)
 
 
 @router.get("/account/password", response_class=HTMLResponse)
@@ -196,12 +216,12 @@ async def change_password_page(request: Request, db: AsyncSession = Depends(get_
     user = await get_current_user(request, db)
     if not user:
         return RedirectResponse("/login")
-    return templates.TemplateResponse("change_password.html", {"request": request, "user": user})
+    return templates.TemplateResponse(request, "change_password.html", {"user": user})
 
 
 @router.get("/forgot-password", response_class=HTMLResponse)
 async def forgot_password_page(request: Request):
-    return templates.TemplateResponse("forgot_password.html", {"request": request})
+    return templates.TemplateResponse(request, "forgot_password.html")
 
 
 @router.post("/forgot-password", response_class=HTMLResponse)
@@ -210,6 +230,17 @@ async def forgot_password(
     email: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
+    ip = request.client.host if request.client else "unknown"
+    if await forgot_password_limiter.is_limited(ip):
+        return templates.TemplateResponse(
+    request,
+    "forgot_password.html",
+    {"sent": True},
+    # same neutral message to avoid info leak
+            status_code=429,
+)
+    await forgot_password_limiter.record(ip)
+
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
@@ -226,8 +257,10 @@ async def forgot_password(
 
     # Always show the same message to avoid email enumeration
     return templates.TemplateResponse(
-        "forgot_password.html", {"request": request, "sent": True}
-    )
+    request,
+    "forgot_password.html",
+    {"sent": True},
+)
 
 
 @router.get("/reset-password/{token}", response_class=HTMLResponse)
@@ -243,11 +276,15 @@ async def reset_password_page(request: Request, token: str, db: AsyncSession = D
     reset_token = result.scalar_one_or_none()
     if not reset_token:
         return templates.TemplateResponse(
-            "reset_password.html", {"request": request, "invalid": True}
-        )
+    request,
+    "reset_password.html",
+    {"invalid": True},
+)
     return templates.TemplateResponse(
-        "reset_password.html", {"request": request, "token": token}
-    )
+    request,
+    "reset_password.html",
+    {"token": token},
+)
 
 
 @router.post("/reset-password/{token}", response_class=HTMLResponse)
@@ -270,13 +307,17 @@ async def reset_password(
 
     if not reset_token:
         return templates.TemplateResponse(
-            "reset_password.html", {"request": request, "invalid": True}
-        )
+    request,
+    "reset_password.html",
+    {"invalid": True},
+)
 
     def err(msg):
         return templates.TemplateResponse(
-            "reset_password.html", {"request": request, "token": token, "error": msg}
-        )
+    request,
+    "reset_password.html",
+    {"token": token, "error": msg},
+)
 
     pw_err = _password_error(new_password)
     if pw_err:
@@ -313,10 +354,11 @@ async def notifications_page(request: Request, db: AsyncSession = Depends(get_db
     subscribed_ids = {row[0] for row in subs_result.all()}
 
     return templates.TemplateResponse(
-        "account_notifications.html",
-        {"request": request, "user": user,
+    request,
+    "account_notifications.html",
+    {"user": user,
          "triggers": active_triggers, "subscribed_ids": subscribed_ids},
-    )
+)
 
 
 @router.post("/account/notifications", response_class=HTMLResponse)
@@ -361,10 +403,11 @@ async def save_notifications(
     active_triggers = triggers_result.scalars().all()
 
     return templates.TemplateResponse(
-        "account_notifications.html",
-        {"request": request, "user": user,
+    request,
+    "account_notifications.html",
+    {"user": user,
          "triggers": active_triggers, "subscribed_ids": valid_ids, "success": True},
-    )
+)
 
 
 @router.post("/account/password", response_class=HTMLResponse)
@@ -382,8 +425,10 @@ async def change_password(
 
     def err(msg):
         return templates.TemplateResponse(
-            "change_password.html", {"request": request, "user": user, "error": msg}
-        )
+    request,
+    "change_password.html",
+    {"user": user, "error": msg},
+)
 
     if not verify_password(current_password, user.hashed_password):
         return err("Current password is incorrect.")
@@ -397,5 +442,7 @@ async def change_password(
     await db.commit()
     await log_action(db, user.id, "user.password_change", "Changed password")
     return templates.TemplateResponse(
-        "change_password.html", {"request": request, "user": user, "success": True}
-    )
+    request,
+    "change_password.html",
+    {"user": user, "success": True},
+)

@@ -115,9 +115,10 @@ async def impact_list(
     ])
 
     return templates.TemplateResponse(
-        "impact_list.html",
-        {
-            "request": request, "user": user, "impacts": impacts,
+    request,
+    "impact_list.html",
+    {
+            "user": user, "impacts": impacts,
             "q": q, "hazard": hazard, "country": country,
             "date_from": date_from, "date_to": date_to,
             "hazard_types": HAZARD_TYPES,
@@ -125,7 +126,7 @@ async def impact_list(
             "page_size": PAGE_SIZE, "page_range": _build_page_range(page, total_pages),
             "map_points": map_points, "map_count": len(map_impacts),
         },
-    )
+)
 
 
 @router.get("/export.csv")
@@ -224,14 +225,15 @@ async def impact_new_page(request: Request, db: AsyncSession = Depends(get_db), 
             prefill_forecast_id = act.forecast_id
 
     return templates.TemplateResponse(
-        "impact_form.html",
-        {
-            "request": request, "user": user, "forecasts": forecasts,
+    request,
+    "impact_form.html",
+    {
+            "user": user, "forecasts": forecasts,
             "activations": activations, "hazard_types": HAZARD_TYPES,
             "prefill_activation_id": activation or None,
             "prefill_forecast_id": prefill_forecast_id,
         },
-    )
+)
 
 
 @router.post("/new")
@@ -271,10 +273,11 @@ async def impact_create(
 
     def _err(msg):
         return templates.TemplateResponse(
-            "impact_form.html",
-            {"request": request, "user": user, "impact": None, "error": msg,
+    request,
+    "impact_form.html",
+    {"user": user, "impact": None, "error": msg,
              "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES},
-        )
+)
 
     lat_val = _float(lat)
     lon_val = _float(lon)
@@ -336,10 +339,11 @@ async def impact_import_page(request: Request, db: AsyncSession = Depends(get_db
     if not user:
         return RedirectResponse("/login")
     return templates.TemplateResponse(
-        "impact_import.html",
-        {"request": request, "user": user, "results": None, "error": None,
+    request,
+    "impact_import.html",
+    {"user": user, "results": None, "error": None,
          "hazard_types": HAZARD_TYPES},
-    )
+)
 
 
 @router.post("/import", response_class=HTMLResponse)
@@ -354,10 +358,11 @@ async def impact_import_upload(
 
     def _render(results=None, error=None):
         return templates.TemplateResponse(
-            "impact_import.html",
-            {"request": request, "user": user, "results": results,
+    request,
+    "impact_import.html",
+    {"user": user, "results": results,
              "error": error, "hazard_types": HAZARD_TYPES},
-        )
+)
 
     # Decode file
     raw = await file.read()
@@ -521,8 +526,10 @@ async def impact_detail(impact_id: int, request: Request, db: AsyncSession = Dep
         return RedirectResponse("/impacts")
 
     return templates.TemplateResponse(
-        "impact_detail.html", {"request": request, "user": user, "impact": impact}
-    )
+    request,
+    "impact_detail.html",
+    {"user": user, "impact": impact},
+)
 
 
 @router.get("/{impact_id}/edit", response_class=HTMLResponse)
@@ -539,13 +546,14 @@ async def impact_edit_page(impact_id: int, request: Request, db: AsyncSession = 
     forecasts, activations = await _load_form_data(db)
 
     return templates.TemplateResponse(
-        "impact_form.html",
-        {
-            "request": request, "user": user, "impact": impact,
+    request,
+    "impact_form.html",
+    {
+            "user": user, "impact": impact,
             "forecasts": forecasts, "activations": activations,
             "hazard_types": HAZARD_TYPES,
         },
-    )
+)
 
 
 @router.post("/{impact_id}/edit")
@@ -593,28 +601,32 @@ async def impact_update(
     lon_val = _float(lon)
     if lat.strip() and lat_val is None:
         return templates.TemplateResponse(
-            "impact_form.html",
-            {"request": request, "user": user, "impact": impact, "error": "Latitude must be a number.",
+    request,
+    "impact_form.html",
+    {"user": user, "impact": impact, "error": "Latitude must be a number.",
              "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES},
-        )
+)
     if lon.strip() and lon_val is None:
         return templates.TemplateResponse(
-            "impact_form.html",
-            {"request": request, "user": user, "impact": impact, "error": "Longitude must be a number.",
+    request,
+    "impact_form.html",
+    {"user": user, "impact": impact, "error": "Longitude must be a number.",
              "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES},
-        )
+)
     if lat_val is not None and not (-90 <= lat_val <= 90):
         return templates.TemplateResponse(
-            "impact_form.html",
-            {"request": request, "user": user, "impact": impact, "error": "Latitude must be between -90 and 90.",
+    request,
+    "impact_form.html",
+    {"user": user, "impact": impact, "error": "Latitude must be between -90 and 90.",
              "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES},
-        )
+)
     if lon_val is not None and not (-180 <= lon_val <= 180):
         return templates.TemplateResponse(
-            "impact_form.html",
-            {"request": request, "user": user, "impact": impact, "error": "Longitude must be between -180 and 180.",
+    request,
+    "impact_form.html",
+    {"user": user, "impact": impact, "error": "Longitude must be between -180 and 180.",
              "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES},
-        )
+)
 
     impact.event_name = event_name
     impact.event_date = event_date

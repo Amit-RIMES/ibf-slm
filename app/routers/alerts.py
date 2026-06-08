@@ -59,14 +59,14 @@ async def alert_map(request: Request, db: AsyncSession = Depends(get_db)):
     alerts_json, activations = await _get_active_alerts(db)
 
     return templates.TemplateResponse(
-        "alerts.html",
-        {
-            "request": request,
+    request,
+    "alerts.html",
+    {
             "user": user,
             "activations": activations,
             "alerts_json": json.dumps(alerts_json),
         },
-    )
+)
 
 
 @router.get("/status", response_class=HTMLResponse)
@@ -87,11 +87,11 @@ async def public_status(request: Request, db: AsyncSession = Depends(get_db)):
     ]
 
     return templates.TemplateResponse(
-        "status.html",
-        {
-            "request": request,
+    request,
+    "status.html",
+    {
             "alert_count": len(public_alerts),
             "alerts_json": json.dumps(public_alerts),
             "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         },
-    )
+)

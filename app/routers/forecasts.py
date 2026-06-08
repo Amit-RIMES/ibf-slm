@@ -264,15 +264,16 @@ async def forecast_list(
     forecasts = result.scalars().all()
 
     return templates.TemplateResponse(
-        "forecast_list.html",
-        {
-            "request": request, "user": user, "forecasts": forecasts,
+    request,
+    "forecast_list.html",
+    {
+            "user": user, "forecasts": forecasts,
             "q": q, "date_from": date_from, "date_to": date_to, "source": source,
             "sources": SOURCES,
             "page": page, "total": total, "total_pages": total_pages,
             "page_size": PAGE_SIZE, "page_range": _build_page_range(page, total_pages),
         },
-    )
+)
 
 
 @router.get("/export.csv")
@@ -343,7 +344,7 @@ async def upload_page(request: Request, db: AsyncSession = Depends(get_db)):
     user = await get_current_user(request, db)
     if not user:
         return RedirectResponse("/login")
-    return templates.TemplateResponse("forecast_upload.html", {"request": request, "user": user})
+    return templates.TemplateResponse(request, "forecast_upload.html", {"user": user})
 
 
 @router.post("/upload", response_class=HTMLResponse)
@@ -358,9 +359,10 @@ async def upload_forecast(
 
     if not file.filename.endswith(".nc"):
         return templates.TemplateResponse(
-            "forecast_upload.html",
-            {"request": request, "user": user, "error": "Only .nc (NetCDF) files are supported."},
-        )
+    request,
+    "forecast_upload.html",
+    {"user": user, "error": "Only .nc (NetCDF) files are supported."},
+)
 
     contents = await file.read()
 
@@ -372,9 +374,10 @@ async def upload_forecast(
         stats = _process_netcdf(tmp_path)
     except Exception as exc:
         return templates.TemplateResponse(
-            "forecast_upload.html",
-            {"request": request, "user": user, "error": f"Failed to process file: {exc}"},
-        )
+    request,
+    "forecast_upload.html",
+    {"user": user, "error": f"Failed to process file: {exc}"},
+)
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
@@ -405,10 +408,11 @@ async def import_page(request: Request, db: AsyncSession = Depends(get_db)):
         portal_error = f"Could not reach RIMES portal: {exc}"
 
     return templates.TemplateResponse(
-        "forecast_import.html",
-        {"request": request, "user": user, "sources": SOURCES,
+    request,
+    "forecast_import.html",
+    {"user": user, "sources": SOURCES,
          "dates": dates, "portal_error": portal_error, "portal_base": PORTAL_BASE},
-    )
+)
 
 
 async def do_import(source: str, date: str, db: AsyncSession) -> ForecastUpload:
@@ -486,11 +490,12 @@ async def import_forecast(
         except Exception:
             dates = []
         return templates.TemplateResponse(
-            "forecast_import.html",
-            {"request": request, "user": user, "sources": SOURCES,
+    request,
+    "forecast_import.html",
+    {"user": user, "sources": SOURCES,
              "dates": dates, "portal_error": None,
              "error": f"Import failed: {exc}", "portal_base": PORTAL_BASE},
-        )
+)
     return RedirectResponse(f"/forecasts/{forecast.id}", status_code=303)
 
 
@@ -518,13 +523,14 @@ async def forecast_compare(
     global_max = max(fc_a.precip_max, fc_b.precip_max)
 
     return templates.TemplateResponse(
-        "forecast_compare.html",
-        {
-            "request": request, "user": user,
+    request,
+    "forecast_compare.html",
+    {
+            "user": user,
             "fc_a": fc_a, "fc_b": fc_b,
             "global_min": global_min, "global_max": global_max,
         },
-    )
+)
 
 
 @router.get("/calendar", response_class=HTMLResponse)
@@ -615,9 +621,10 @@ async def forecast_calendar(
         months.append({"name": _cal.month_abbr[m], "cells": cells})
 
     return templates.TemplateResponse(
-        "forecast_calendar.html",
-        {
-            "request": request, "user": user,
+    request,
+    "forecast_calendar.html",
+    {
+            "user": user,
             "year": year, "today": today,
             "source_filter": source,
             "months": months,
@@ -629,7 +636,7 @@ async def forecast_calendar(
             "prev_year": year - 1 if year > 2020 else None,
             "next_year": year + 1 if year <= today.year else None,
         },
-    )
+)
 
 
 @router.get("/{forecast_id}", response_class=HTMLResponse)
@@ -644,9 +651,10 @@ async def forecast_detail(forecast_id: int, request: Request, db: AsyncSession =
         return RedirectResponse("/dashboard")
 
     return templates.TemplateResponse(
-        "forecast_detail.html",
-        {"request": request, "user": user, "forecast": forecast},
-    )
+    request,
+    "forecast_detail.html",
+    {"user": user, "forecast": forecast},
+)
 
 
 @router.post("/{forecast_id}/delete")

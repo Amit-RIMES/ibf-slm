@@ -200,9 +200,9 @@ async def dashboard(
     impacts_filtered = bool(impact_filters)
 
     return templates.TemplateResponse(
-        "dashboard.html",
-        {
-            "request": request,
+    request,
+    "dashboard.html",
+    {
             "user": user,
             "stats": {
                 "total_users": total_users,
@@ -230,4 +230,4 @@ async def dashboard(
             "hazard_types": HAZARD_TYPES,
             "impacts_filtered": impacts_filtered,
         },
-    )
+)

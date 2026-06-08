@@ -1,7 +1,10 @@
+import json
+import os
+import tempfile
 from datetime import date as date_type, datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +15,7 @@ from app.models.api_key import APIKey
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
 from app.models.trigger import OPERATORS, VARIABLES, Trigger, TriggerActivation
+from app.models.user import User
 
 router = APIRouter(prefix="/api/v1")
 
@@ -169,6 +173,18 @@ def _impact_dict(imp: ImpactRecord) -> dict:
     }
 
 
+async def _scope_sources(key: APIKey, db: AsyncSession) -> list[str] | None:
+    """Return allowed source keys for the API key's user, or None if no restriction."""
+    user = await db.scalar(select(User).where(User.id == key.user_id))
+    if not user or not user.country_scope:
+        return None
+    try:
+        allowed = json.loads(user.country_scope)
+    except Exception:
+        return None
+    return allowed if allowed else None
+
+
 def _paginate(total: int, page: int, limit: int) -> dict:
     return {
         "total": total,
@@ -235,6 +251,9 @@ async def api_forecasts(
     _key: APIKey = Depends(require_api_key),
 ):
     filters = []
+    allowed_sources = await _scope_sources(_key, db)
+    if allowed_sources is not None:
+        filters.append(ForecastUpload.source.in_(allowed_sources))
     if source:
         filters.append(ForecastUpload.source == source)
     if date_from:
@@ -254,6 +273,79 @@ async def api_forecasts(
         .offset((page - 1) * limit).limit(limit)
     )
     return {**_paginate(total, page, limit), "data": [_forecast_dict(f) for f in result.scalars()]}
+
+
+@router.post("/forecasts/upload", summary="Upload a NetCDF forecast file", status_code=201)
+async def api_upload_forecast(
+    file: UploadFile = File(..., description="NetCDF (.nc) forecast file"),
+    source: str = Query(..., description="Source key, e.g. country_bd or regional_rimes"),
+    db: AsyncSession = Depends(get_db),
+    _key: APIKey = Depends(require_api_key),
+):
+    from app.core.anomaly import compute_anomaly
+    from app.routers.forecasts import _process_netcdf
+    from app.routers.triggers import evaluate_triggers
+
+    if not file.filename or not file.filename.endswith(".nc"):
+        raise HTTPException(status_code=400, detail="File must be a NetCDF (.nc) file")
+
+    # Reject if the user's scope doesn't cover this source
+    allowed_sources = await _scope_sources(_key, db)
+    if allowed_sources is not None and source not in allowed_sources:
+        raise HTTPException(status_code=403, detail=f"Your API key is not scoped to source '{source}'")
+
+    # Check for duplicate filename on same source
+    date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+    filename = f"api_{source}_{date_str}_{file.filename}"
+    existing = await db.scalar(select(ForecastUpload).where(ForecastUpload.filename == filename))
+    if existing:
+        raise HTTPException(status_code=409, detail="A forecast with this filename already exists today")
+
+    # Write to a temp file and process
+    suffix = os.path.splitext(file.filename)[-1] or ".nc"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        meta = await __import__("asyncio").get_event_loop().run_in_executor(None, _process_netcdf, tmp_path)
+    except Exception as exc:
+        os.unlink(tmp_path)
+        raise HTTPException(status_code=422, detail=f"Failed to process NetCDF file: {exc}")
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+    fc = ForecastUpload(
+        filename=filename,
+        source=source,
+        lat_min=meta["lat_min"], lat_max=meta["lat_max"],
+        lon_min=meta["lon_min"], lon_max=meta["lon_max"],
+        time_start=meta["time_start"], time_end=meta["time_end"],
+        time_steps=meta["time_steps"],
+        precip_min=meta["precip_min"], precip_max=meta["precip_max"],
+        precip_mean=meta["precip_mean"],
+        geojson=meta["geojson"],
+    )
+    db.add(fc)
+    await db.flush()
+
+    # Anomaly detection
+    anomaly_score, is_anomaly = await compute_anomaly(fc, db)
+    fc.anomaly_score = anomaly_score
+    fc.is_anomaly = is_anomaly
+
+    await db.commit()
+    await db.refresh(fc)
+
+    # Evaluate triggers
+    import asyncio
+    asyncio.create_task(evaluate_triggers(fc, db))
+
+    return _forecast_dict(fc)
 
 
 @router.get("/forecasts/{forecast_id}", summary="Get a single forecast")
@@ -325,6 +417,13 @@ async def api_activations(
     _key: APIKey = Depends(require_api_key),
 ):
     filters = []
+    allowed_sources = await _scope_sources(_key, db)
+    if allowed_sources is not None:
+        filters.append(
+            TriggerActivation.forecast_id.in_(
+                select(ForecastUpload.id).where(ForecastUpload.source.in_(allowed_sources))
+            )
+        )
     if status and status != "all":
         if status not in ("active", "acknowledged"):
             raise HTTPException(status_code=400, detail="status must be 'active', 'acknowledged', or 'all'")
