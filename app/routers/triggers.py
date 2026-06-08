@@ -11,13 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import log_action
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.email import send_trigger_activation_email
+from app.core.email import send_subscriber_alert_emails, send_trigger_activation_email
 from app.core.webhook import send_webhook_notifications
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
 from app.models.trigger import (
     OPERATOR_LABELS, OPERATOR_SYMBOLS, OPERATORS, VARIABLES,
-    Trigger, TriggerActivation,
+    Trigger, TriggerActivation, TriggerSubscription,
 )
 from app.models.user import User
 from app.models.webhook import Webhook
@@ -102,6 +102,23 @@ async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
         )
         webhooks = webhooks_result.scalars().all()
         asyncio.create_task(send_webhook_notifications(fired_rows, webhooks))
+
+        # Email non-admin subscribers for the triggers they opted into
+        fired_trigger_ids = [t.id for t, _, _ in fired_rows]
+        subs_result = await db.execute(
+            select(User.email, TriggerSubscription.trigger_id)
+            .join(TriggerSubscription, TriggerSubscription.user_id == User.id)
+            .where(
+                TriggerSubscription.trigger_id.in_(fired_trigger_ids),
+                User.is_active == True,  # noqa: E712
+                User.role != "admin",
+            )
+        )
+        email_to_tids: dict[str, set[int]] = {}
+        for email, tid in subs_result.all():
+            email_to_tids.setdefault(email, set()).add(tid)
+        if email_to_tids:
+            asyncio.create_task(send_subscriber_alert_emails(fired_rows, email_to_tids))
 
     return len(fired_rows)
 

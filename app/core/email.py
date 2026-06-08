@@ -147,6 +147,33 @@ async def send_new_registration_email(admin_emails: list[str], username: str, em
             logger.error("Failed to send registration alert to %s: %s", admin_email, exc)
 
 
+async def send_subscriber_alert_emails(
+    fired: list[tuple["Trigger", "TriggerActivation", "ForecastUpload"]],
+    email_to_trigger_ids: dict[str, set[int]],
+) -> None:
+    """Send each subscriber an email for only the triggers they opted into."""
+    if not fired:
+        return
+    if not settings.SMTP_HOST:
+        logger.warning("SMTP not configured. Subscriber alerts skipped.")
+        return
+
+    trigger_map = {trig.id: (trig, act, fc) for trig, act, fc in fired}
+    for email, subscribed_ids in email_to_trigger_ids.items():
+        subscriber_fired = [trigger_map[tid] for tid in subscribed_ids if tid in trigger_map]
+        if not subscriber_fired:
+            continue
+        n = len(subscriber_fired)
+        forecast_name = subscriber_fired[0][2].filename
+        subject = f"[IBF Alert] {n} trigger activation{'s' if n != 1 else ''} — {forecast_name}"
+        html = _build_trigger_html(subscriber_fired, settings.APP_BASE_URL)
+        try:
+            await asyncio.to_thread(_send_sync, email, subject, html)
+            logger.info("Subscriber alert sent to %s", email)
+        except Exception as exc:
+            logger.error("Failed to send subscriber alert to %s: %s", email, exc)
+
+
 async def send_trigger_activation_email(
     admin_emails: list[str],
     fired: list[tuple["Trigger", "TriggerActivation", "ForecastUpload"]],

@@ -36,6 +36,21 @@ class Trigger(Base):
     )
 
 
+class TriggerSubscription(Base):
+    __tablename__ = "trigger_subscriptions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    trigger_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("triggers.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
 class TriggerActivation(Base):
     __tablename__ = "trigger_activations"
 
