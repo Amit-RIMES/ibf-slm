@@ -4,7 +4,7 @@ import json
 from datetime import date
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc, select
@@ -309,6 +309,204 @@ async def impact_create(
     await log_action(db, user.id, "impact.create", f"Created impact record '{event_name}' ({hazard_type}, {country})")
 
     return RedirectResponse(f"/impacts/{record.id}", status_code=303)
+
+
+@router.get("/import/template.csv")
+async def impact_import_template(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    rows = [
+        "event_name,event_date,hazard_type,country,region,lat,lon,"
+        "affected_population,casualties,displaced,damage_usd,description,"
+        "forecast_id,trigger_activation_id\n",
+        "Example flood event,2026-06-01,flood,Philippines,Luzon,14.5,121.0,"
+        "5000,2,800,125000.00,Heavy rainfall caused flooding,,\n",
+    ]
+    return StreamingResponse(
+        iter(rows),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=impacts_template.csv"},
+    )
+
+
+@router.get("/import", response_class=HTMLResponse)
+async def impact_import_page(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    return templates.TemplateResponse(
+        "impact_import.html",
+        {"request": request, "user": user, "results": None, "error": None,
+         "hazard_types": HAZARD_TYPES},
+    )
+
+
+@router.post("/import", response_class=HTMLResponse)
+async def impact_import_upload(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    file: UploadFile = File(...),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    def _render(results=None, error=None):
+        return templates.TemplateResponse(
+            "impact_import.html",
+            {"request": request, "user": user, "results": results,
+             "error": error, "hazard_types": HAZARD_TYPES},
+        )
+
+    # Decode file
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        try:
+            text = raw.decode("latin-1")
+        except Exception:
+            return _render(error="Cannot decode file. Please save as UTF-8 CSV.")
+
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        return _render(error="File appears empty or has no header row.")
+
+    # Normalise header names
+    fieldnames = [f.strip().lower() for f in reader.fieldnames]
+    required = {"event_name", "event_date", "hazard_type", "country"}
+    missing = required - set(fieldnames)
+    if missing:
+        return _render(error=f"Missing required columns: {', '.join(sorted(missing))}. "
+                             "Download the template for the correct format.")
+
+    # Pre-load valid FK sets for fast lookup
+    from sqlalchemy import func
+    fc_ids  = {r[0] for r in (await db.execute(select(ForecastUpload.id))).all()}
+    act_ids = {r[0] for r in (await db.execute(select(TriggerActivation.id))).all()}
+
+    def _int(v, key):
+        if not v:
+            return None, None
+        try:
+            n = int(float(v))
+            return (n, None) if n >= 0 else (None, f"{key} must be non-negative")
+        except ValueError:
+            return None, f"{key} '{v}' is not a valid integer"
+
+    def _float(v, key):
+        if not v:
+            return None, None
+        try:
+            return float(v), None
+        except ValueError:
+            return None, f"{key} '{v}' is not a valid number"
+
+    imported, skipped = [], []
+
+    for row_num, raw_row in enumerate(reader, start=2):
+        row = {k.strip().lower(): (v.strip() if v else "") for k, v in raw_row.items()}
+        errors = []
+
+        event_name = row.get("event_name", "")
+        if not event_name:
+            errors.append("event_name is required")
+
+        event_date_val = None
+        eds = row.get("event_date", "")
+        if not eds:
+            errors.append("event_date is required")
+        else:
+            try:
+                from datetime import date as _date
+                event_date_val = _date.fromisoformat(eds)
+            except ValueError:
+                errors.append(f"event_date '{eds}' must be YYYY-MM-DD")
+
+        hazard = row.get("hazard_type", "").lower()
+        if not hazard:
+            errors.append("hazard_type is required")
+        elif hazard not in HAZARD_TYPES:
+            errors.append(f"hazard_type '{hazard}' must be one of: {', '.join(HAZARD_TYPES)}")
+
+        country = row.get("country", "")
+        if not country:
+            errors.append("country is required")
+
+        affected, err = _int(row.get("affected_population"), "affected_population"); err and errors.append(err)
+        casualties, err = _int(row.get("casualties"), "casualties"); err and errors.append(err)
+        displaced, err = _int(row.get("displaced"), "displaced"); err and errors.append(err)
+        damage, err = _float(row.get("damage_usd"), "damage_usd"); err and errors.append(err)
+
+        lat, err = _float(row.get("lat"), "lat"); err and errors.append(err)
+        lon, err = _float(row.get("lon"), "lon"); err and errors.append(err)
+        if lat is not None and not (-90 <= lat <= 90):
+            errors.append("lat must be between -90 and 90"); lat = None
+        if lon is not None and not (-180 <= lon <= 180):
+            errors.append("lon must be between -180 and 180"); lon = None
+        if (lat is None) != (lon is None) and not any("lat" in e or "lon" in e for e in errors):
+            errors.append("lat and lon must both be provided or both omitted")
+
+        forecast_id_val = None
+        fid_s = row.get("forecast_id", "")
+        if fid_s:
+            try:
+                fid = int(fid_s)
+                if fid not in fc_ids:
+                    errors.append(f"forecast_id {fid} does not exist")
+                else:
+                    forecast_id_val = fid
+            except ValueError:
+                errors.append(f"forecast_id '{fid_s}' must be an integer")
+
+        act_id_val = None
+        aid_s = row.get("trigger_activation_id", "")
+        if aid_s:
+            try:
+                aid = int(aid_s)
+                if aid not in act_ids:
+                    errors.append(f"trigger_activation_id {aid} does not exist")
+                else:
+                    act_id_val = aid
+            except ValueError:
+                errors.append(f"trigger_activation_id '{aid_s}' must be an integer")
+
+        if errors:
+            skipped.append({"row": row_num, "event_name": event_name or "—", "errors": errors})
+            continue
+
+        db.add(ImpactRecord(
+            event_name=event_name,
+            event_date=event_date_val,
+            hazard_type=hazard,
+            country=country,
+            region=row.get("region") or None,
+            lat=lat, lon=lon,
+            affected_population=affected,
+            casualties=casualties,
+            displaced=displaced,
+            damage_usd=damage,
+            description=row.get("description") or None,
+            forecast_id=forecast_id_val,
+            trigger_activation_id=act_id_val,
+        ))
+        imported.append({"row": row_num, "event_name": event_name})
+
+    if imported:
+        await db.commit()
+        await log_action(
+            db, user.id, "impact.bulk_import",
+            f"Bulk imported {len(imported)} impact record{'s' if len(imported) != 1 else ''} "
+            f"from {file.filename}",
+        )
+
+    return _render(results={
+        "filename": file.filename,
+        "total": len(imported) + len(skipped),
+        "imported": imported,
+        "skipped": skipped,
+    })
 
 
 @router.get("/{impact_id}", response_class=HTMLResponse)

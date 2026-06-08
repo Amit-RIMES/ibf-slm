@@ -1,0 +1,334 @@
+{% extends "base.html" %}
+{% block title %}Import Impact Records — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.active { color: #4f46e5; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.5rem; flex-wrap: wrap; gap: .75rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; }
+
+  .upload-card { background: #fff; border-radius: 10px; padding: 1.5rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07); margin-bottom: 1.5rem; }
+  .card-title { font-size: .78rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: #9ca3af; margin-bottom: 1.1rem; }
+
+  .drop-zone {
+    border: 2px dashed #d1d5db; border-radius: 10px; padding: 2rem 1.5rem;
+    text-align: center; cursor: pointer; transition: border-color .15s, background .15s;
+    margin-bottom: 1rem; position: relative;
+  }
+  .drop-zone.drag-over { border-color: #4f46e5; background: #f5f3ff; }
+  .drop-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .drop-icon { font-size: 2rem; margin-bottom: .5rem; }
+  .drop-label { font-weight: 600; color: #374151; font-size: .95rem; }
+  .drop-sub { font-size: .82rem; color: #9ca3af; margin-top: .3rem; }
+  .file-chosen { font-size: .82rem; color: #4f46e5; margin-top: .5rem; font-weight: 600; }
+
+  .btn-import {
+    background: #4f46e5; color: #fff; border: none; border-radius: 8px;
+    padding: .55rem 1.4rem; font-size: .9rem; font-weight: 700; cursor: pointer; width: 100%;
+  }
+  .btn-import:hover { opacity: .85; }
+  .btn-import:disabled { opacity: .45; cursor: not-allowed; }
+
+  .template-link { display: inline-flex; align-items: center; gap: .4rem;
+    font-size: .83rem; color: #4f46e5; font-weight: 600; margin-bottom: 1rem; }
+
+  /* Column reference table */
+  .col-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  .col-table th { text-align: left; padding: .45rem .75rem; font-size: .7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af;
+    border-bottom: 1px solid #e5e7eb; }
+  .col-table td { padding: .5rem .75rem; border-bottom: 1px solid #f3f4f6;
+    vertical-align: top; }
+  .col-table tr:last-child td { border-bottom: none; }
+  .req-badge { display: inline-block; padding: .1rem .45rem; border-radius: 4px;
+    font-size: .68rem; font-weight: 700; background: #fef3c7; color: #92400e; }
+  .opt-badge { display: inline-block; padding: .1rem .45rem; border-radius: 4px;
+    font-size: .68rem; font-weight: 700; background: #f3f4f6; color: #6b7280; }
+
+  /* Error notice */
+  .error-notice { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;
+    padding: .85rem 1.1rem; font-size: .875rem; color: #991b1b; margin-bottom: 1.5rem; }
+
+  /* Results */
+  .results-card { background: #fff; border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07); margin-bottom: 1.5rem; overflow: hidden; }
+  .results-header { padding: 1rem 1.25rem;
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .results-header.success { background: #f0fdf4; border-bottom: 1px solid #bbf7d0; }
+  .results-header.partial { background: #fffbeb; border-bottom: 1px solid #fde68a; }
+  .results-header.failed  { background: #fef2f2; border-bottom: 1px solid #fecaca; }
+  .results-summary { font-size: .95rem; font-weight: 700; }
+  .results-sub { font-size: .82rem; color: #6b7280; margin-top: .15rem; }
+
+  .results-stats { display: flex; gap: 1.5rem; }
+  .rs-item { text-align: center; }
+  .rs-val { font-size: 1.5rem; font-weight: 800; }
+  .rs-label { font-size: .72rem; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; }
+  .rs-green { color: #16a34a; }
+  .rs-red   { color: #dc2626; }
+  .rs-grey  { color: #374151; }
+
+  .results-body { padding: 1.1rem 1.25rem; }
+  .skipped-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  .skipped-table th { text-align: left; padding: .4rem .6rem; font-size: .7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af;
+    border-bottom: 1px solid #e5e7eb; }
+  .skipped-table td { padding: .45rem .6rem; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+  .skipped-table tr:last-child td { border-bottom: none; }
+  .err-list { margin: 0; padding: 0; list-style: none; }
+  .err-list li { color: #dc2626; font-size: .78rem; }
+  .err-list li::before { content: "• "; }
+  .view-link { display: inline-block; margin-top: .75rem;
+    font-size: .85rem; font-weight: 600; color: #4f46e5; }
+
+  details summary { cursor: pointer; font-size: .82rem; font-weight: 600;
+    color: #6b7280; user-select: none; }
+  details summary:hover { color: #374151; }
+  details[open] summary { margin-bottom: .75rem; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/impacts" class="active">Impacts</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/sync">Auto-Sync</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <div>
+      <div style="font-size:.82rem; color:#9ca3af; margin-bottom:.3rem;">
+        <a href="/impacts" style="color:#9ca3af;">Impact Records</a> &rsaquo; Import CSV
+      </div>
+      <h1>Import Impact Records</h1>
+    </div>
+    <a href="/impacts" style="font-size:.85rem; color:#6b7280; border:1px solid #d1d5db;
+       border-radius:8px; padding:.45rem .9rem; text-decoration:none; font-weight:600;">
+      ← Back to records
+    </a>
+  </div>
+
+  {% if error %}
+  <div class="error-notice">{{ error }}</div>
+  {% endif %}
+
+  <!-- Results (shown after import) -->
+  {% if results %}
+  {% set n_ok = results.imported | length %}
+  {% set n_skip = results.skipped | length %}
+  <div class="results-card">
+    <div class="results-header {% if n_skip == 0 %}success{% elif n_ok == 0 %}failed{% else %}partial{% endif %}">
+      <div>
+        <div class="results-summary">
+          {% if n_ok == 0 and n_skip > 0 %}
+            Import failed — no rows could be saved
+          {% elif n_skip == 0 %}
+            Import complete
+          {% else %}
+            Import complete with {{ n_skip }} skipped row{{ 's' if n_skip != 1 }}
+          {% endif %}
+        </div>
+        <div class="results-sub">File: {{ results.filename }} &nbsp;·&nbsp; {{ results.total }} row{{ 's' if results.total != 1 }} processed</div>
+      </div>
+      <div class="results-stats">
+        <div class="rs-item">
+          <div class="rs-val rs-green">{{ n_ok }}</div>
+          <div class="rs-label">Imported</div>
+        </div>
+        <div class="rs-item">
+          <div class="rs-val {% if n_skip > 0 %}rs-red{% else %}rs-grey{% endif %}">{{ n_skip }}</div>
+          <div class="rs-label">Skipped</div>
+        </div>
+      </div>
+    </div>
+
+    {% if n_ok > 0 %}
+    <div class="results-body" style="border-bottom: 1px solid #f3f4f6;">
+      <a href="/impacts" class="view-link">View imported records →</a>
+    </div>
+    {% endif %}
+
+    {% if n_skip > 0 %}
+    <div class="results-body">
+      <details {% if n_ok == 0 %}open{% endif %}>
+        <summary>{{ n_skip }} skipped row{{ 's' if n_skip != 1 }} — click to expand</summary>
+        <table class="skipped-table">
+          <thead>
+            <tr><th>Row</th><th>Event name</th><th>Errors</th></tr>
+          </thead>
+          <tbody>
+            {% for s in results.skipped %}
+            <tr>
+              <td style="color:#9ca3af;">{{ s.row }}</td>
+              <td>{{ s.event_name }}</td>
+              <td>
+                <ul class="err-list">
+                  {% for e in s.errors %}<li>{{ e }}</li>{% endfor %}
+                </ul>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </details>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Upload form -->
+  <div class="upload-card">
+    <div class="card-title">Upload CSV file</div>
+
+    <a href="/impacts/import/template.csv" class="template-link">
+      ↓ Download template CSV
+    </a>
+
+    <form method="post" action="/impacts/import" enctype="multipart/form-data" id="importForm">
+      <div class="drop-zone" id="dropZone">
+        <input type="file" name="file" id="fileInput" accept=".csv,text/csv" required>
+        <div class="drop-icon">📄</div>
+        <div class="drop-label">Choose a CSV file or drag it here</div>
+        <div class="drop-sub">.csv files only</div>
+        <div class="file-chosen" id="fileChosen" style="display:none;"></div>
+      </div>
+      <button type="submit" class="btn-import" id="submitBtn" disabled>Import records</button>
+    </form>
+  </div>
+
+  <!-- Column reference -->
+  <div class="upload-card">
+    <div class="card-title">Column reference</div>
+    <table class="col-table">
+      <thead>
+        <tr><th>Column</th><th>Required</th><th>Format / notes</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>event_name</code></td>
+          <td><span class="req-badge">Required</span></td>
+          <td>Free text, e.g. "June 2026 Bangladesh floods"</td>
+        </tr>
+        <tr>
+          <td><code>event_date</code></td>
+          <td><span class="req-badge">Required</span></td>
+          <td>ISO date — <code>YYYY-MM-DD</code></td>
+        </tr>
+        <tr>
+          <td><code>hazard_type</code></td>
+          <td><span class="req-badge">Required</span></td>
+          <td>One of: {{ hazard_types | join(', ') }}</td>
+        </tr>
+        <tr>
+          <td><code>country</code></td>
+          <td><span class="req-badge">Required</span></td>
+          <td>Country name, e.g. "Philippines"</td>
+        </tr>
+        <tr>
+          <td><code>region</code></td>
+          <td><span class="opt-badge">Optional</span></td>
+          <td>Sub-national region or province</td>
+        </tr>
+        <tr>
+          <td><code>lat</code> / <code>lon</code></td>
+          <td><span class="opt-badge">Optional</span></td>
+          <td>Decimal degrees. Must provide both or neither. lat: −90 to 90, lon: −180 to 180</td>
+        </tr>
+        <tr>
+          <td><code>affected_population</code></td>
+          <td><span class="opt-badge">Optional</span></td>
+          <td>Non-negative integer</td>
+        </tr>
+        <tr>
+          <td><code>casualties</code></td>
+          <td><span class="opt-badge">Optional</span></td>
+          <td>Non-negative integer</td>
+        </tr>
+        <tr>
+          <td><code>displaced</code></td>
+          <td><span class="opt-badge">Optional</span></td>
+          <td>Non-negative integer</td>
+        </tr>
+        <tr>
+          <td><code>damage_usd</code></td>
+          <td><span class="opt-badge">Optional</span></td>
+          <td>Decimal number, e.g. <code>125000.00</code></td>
+        </tr>
+        <tr>
+          <td><code>description</code></td>
+          <td><span class="opt-badge">Optional</span></td>
+          <td>Free text narrative</td>
+        </tr>
+        <tr>
+          <td><code>forecast_id</code></td>
+          <td><span class="opt-badge">Optional</span></td>
+          <td>Integer ID of a forecast in this system</td>
+        </tr>
+        <tr>
+          <td><code>trigger_activation_id</code></td>
+          <td><span class="opt-badge">Optional</span></td>
+          <td>Integer ID of a trigger activation in this system</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size:.78rem; color:#9ca3af; margin-top:.85rem;">
+      Column order does not matter. Extra columns are ignored. Headers are case-insensitive.
+      Rows with validation errors are skipped; valid rows are always saved.
+    </p>
+  </div>
+</div>
+
+<script>
+  const input = document.getElementById('fileInput');
+  const zone  = document.getElementById('dropZone');
+  const label = document.getElementById('fileChosen');
+  const btn   = document.getElementById('submitBtn');
+
+  function onFile(file) {
+    if (!file) return;
+    label.textContent = file.name;
+    label.style.display = 'block';
+    btn.disabled = false;
+  }
+
+  input.addEventListener('change', () => onFile(input.files[0]));
+
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      onFile(file);
+    }
+  });
+</script>
+{% endblock %}
