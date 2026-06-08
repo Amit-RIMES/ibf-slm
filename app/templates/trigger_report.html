@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}Trigger Performance Report — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.active { color: #4f46e5; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; }
+
+  /* Summary cards */
+  .summary-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem;
+  }
+  .stat-card {
+    background: #fff; border-radius: 10px; padding: 1.1rem 1.25rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07); border: 1px solid #e5e7eb;
+  }
+  .stat-label { font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: #9ca3af; margin-bottom: .4rem; }
+  .stat-value { font-size: 1.75rem; font-weight: 800; color: #111827; line-height: 1; }
+  .stat-sub { font-size: .78rem; color: #6b7280; margin-top: .3rem; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  th { text-align: left; padding: .6rem .75rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; border-bottom: 1px solid #e5e7eb; }
+  td { padding: .75rem .75rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f9fafb; }
+
+  .trigger-name { font-weight: 600; }
+  .trigger-status { font-size: .75rem; color: #9ca3af; }
+
+  .hazard-badge { display: inline-block; padding: .2rem .6rem; border-radius: 999px;
+    font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .hazard-flood     { background: #dbeafe; color: #1d4ed8; }
+  .hazard-storm     { background: #f3e8ff; color: #7e22ce; }
+  .hazard-drought   { background: #fef3c7; color: #92400e; }
+  .hazard-landslide { background: #dcfce7; color: #166534; }
+  .hazard-heatwave  { background: #fee2e2; color: #991b1b; }
+  .hazard-cyclone   { background: #e0f2fe; color: #0369a1; }
+  .hazard-other     { background: #f3f4f6; color: #374151; }
+
+  /* Hit rate bar */
+  .rate-cell { min-width: 160px; }
+  .rate-bar-wrap { display: flex; align-items: center; gap: .6rem; }
+  .rate-bar-bg { flex: 1; height: 7px; border-radius: 999px; background: #f3f4f6; }
+  .rate-bar-fill { height: 7px; border-radius: 999px; }
+  .rate-label { font-size: .82rem; font-weight: 700; min-width: 36px; text-align: right; }
+
+  /* Assessment badges */
+  .assess { display: inline-flex; align-items: center; gap: .35rem;
+    padding: .25rem .7rem; border-radius: 999px; font-size: .72rem; font-weight: 700; text-transform: uppercase; }
+  .assess-reliable       { background: #dcfce7; color: #15803d; }
+  .assess-mixed          { background: #fef9c3; color: #92400e; }
+  .assess-high_false_alarm { background: #fee2e2; color: #991b1b; }
+  .assess-never_fired    { background: #f3f4f6; color: #6b7280; }
+  .assess-insufficient   { background: #f3f4f6; color: #6b7280; }
+
+  .assess-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .dot-reliable       { background: #16a34a; }
+  .dot-mixed          { background: #d97706; }
+  .dot-high_false_alarm { background: #dc2626; }
+  .dot-never_fired    { background: #9ca3af; }
+  .dot-insufficient   { background: #9ca3af; }
+
+  .hint { font-size: .75rem; color: #9ca3af; margin-top: .2rem; }
+  .empty { color: #9ca3af; font-size: .9rem; padding: 2rem 0; text-align: center; }
+
+  /* Legend */
+  .legend { display: flex; flex-wrap: wrap; gap: .6rem 1.25rem; margin-bottom: 1.25rem; font-size: .8rem; color: #6b7280; }
+  .legend-item { display: flex; align-items: center; gap: .35rem; }
+
+  @media(max-width:900px) {
+    .summary-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/triggers" class="active">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/impacts">Impact Records</a>
+    <a href="/sync">Auto-Sync</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <div>
+      <h1>Trigger Performance Report</h1>
+      <p style="color:#6b7280;font-size:.875rem;margin-top:.2rem;">
+        Hit rate = activations with at least one validated impact record ÷ total activations
+      </p>
+    </div>
+    <a href="/triggers" style="font-size:.875rem;color:#6b7280;border:1px solid #d1d5db;
+       border-radius:7px;padding:.45rem .9rem;text-decoration:none;">← All triggers</a>
+  </div>
+
+  <!-- Summary -->
+  <div class="summary-grid">
+    <div class="stat-card">
+      <div class="stat-label">Triggers</div>
+      <div class="stat-value">{{ trigger_count }}</div>
+      <div class="stat-sub">{{ rows | selectattr('trigger.is_active') | list | length }} active</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total activations</div>
+      <div class="stat-value">{{ total_activations }}</div>
+      <div class="stat-sub">{{ total_validated }} validated by impact records</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Overall hit rate</div>
+      {% if overall_hit_rate is not none %}
+      <div class="stat-value" style="color:{% if overall_hit_rate >= 0.67 %}#16a34a{% elif overall_hit_rate >= 0.33 %}#d97706{% else %}#dc2626{% endif %};">
+        {{ (overall_hit_rate * 100) | round(0) | int }}%
+      </div>
+      <div class="stat-sub">across all triggers with activations</div>
+      {% else %}
+      <div class="stat-value" style="color:#9ca3af;">—</div>
+      <div class="stat-sub">no activations yet</div>
+      {% endif %}
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Never fired</div>
+      <div class="stat-value" style="color:{% if never_fired > 0 %}#6b7280{% else %}#16a34a{% endif %};">
+        {{ never_fired }}
+      </div>
+      <div class="stat-sub">trigger{{ 's' if never_fired != 1 }} with zero activations</div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <span style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;margin-right:.25rem;">Assessment:</span>
+    <span class="legend-item"><span class="assess-dot dot-reliable"></span> Reliable (≥67% hit rate, ≥3 activations)</span>
+    <span class="legend-item"><span class="assess-dot dot-mixed"></span> Mixed (33–66%)</span>
+    <span class="legend-item"><span class="assess-dot dot-high_false_alarm"></span> High false-alarm rate (&lt;33%)</span>
+    <span class="legend-item"><span class="assess-dot dot-insufficient"></span> Insufficient data (&lt;3 activations) / Never fired</span>
+  </div>
+
+  <div class="card">
+    {% if rows %}
+    <table>
+      <thead>
+        <tr>
+          <th>Trigger</th>
+          <th>Hazard</th>
+          <th>Threshold rule</th>
+          <th style="text-align:right;">Activations</th>
+          <th style="text-align:right;">Validated</th>
+          <th style="text-align:right;">False alarms</th>
+          <th>Hit rate</th>
+          <th style="text-align:right;">Avg value</th>
+          <th style="text-align:right;">Max value</th>
+          <th>Last activated</th>
+          <th>Assessment</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        {% set t = r.trigger %}
+        <tr>
+          <td>
+            <div class="trigger-name"><a href="/triggers/{{ t.id }}" style="color:inherit;">{{ t.name }}</a></div>
+            <div class="trigger-status">{{ 'Active' if t.is_active else 'Inactive' }}</div>
+          </td>
+          <td><span class="hazard-badge hazard-{{ t.hazard_type }}">{{ t.hazard_type }}</span></td>
+          <td style="font-family:monospace;font-size:.8rem;">
+            {{ VARIABLE_LABELS[t.variable] }} {{ OPERATOR_SYMBOLS[t.operator] }} {{ t.threshold }} mm
+          </td>
+          <td style="text-align:right;font-weight:600;">{{ r.activation_count }}</td>
+          <td style="text-align:right;color:#16a34a;font-weight:600;">{{ r.validated_count }}</td>
+          <td style="text-align:right;color:{% if r.false_alarm_count > 0 %}#dc2626{% else %}#9ca3af{% endif %};font-weight:600;">
+            {{ r.false_alarm_count }}
+          </td>
+          <td class="rate-cell">
+            {% if r.hit_rate is not none %}
+            {% set pct = (r.hit_rate * 100) | round(0) | int %}
+            {% set bar_color = '#16a34a' if r.hit_rate >= 0.67 else ('#d97706' if r.hit_rate >= 0.33 else '#dc2626') %}
+            <div class="rate-bar-wrap">
+              <div class="rate-bar-bg">
+                <div class="rate-bar-fill" style="width:{{ pct }}%;background:{{ bar_color }};"></div>
+              </div>
+              <span class="rate-label" style="color:{{ bar_color }};">{{ pct }}%</span>
+            </div>
+            {% else %}
+            <span style="color:#9ca3af;font-size:.82rem;">—</span>
+            {% endif %}
+          </td>
+          <td style="text-align:right;font-size:.85rem;">{{ r.avg_value if r.avg_value is not none else '—' }}{% if r.avg_value is not none %} mm{% endif %}</td>
+          <td style="text-align:right;font-size:.85rem;">{{ r.max_value if r.max_value is not none else '—' }}{% if r.max_value is not none %} mm{% endif %}</td>
+          <td style="font-size:.82rem;color:#6b7280;">
+            {% if r.last_activated %}{{ r.last_activated.strftime('%Y-%m-%d') }}{% else %}—{% endif %}
+          </td>
+          <td>
+            {% set a = r.assessment %}
+            <span class="assess assess-{{ a }}">
+              <span class="assess-dot dot-{{ a }}"></span>
+              {% if a == 'reliable' %}Reliable
+              {% elif a == 'mixed' %}Mixed
+              {% elif a == 'high_false_alarm' %}High false-alarm
+              {% elif a == 'never_fired' %}Never fired
+              {% else %}Insufficient data
+              {% endif %}
+            </span>
+            <div class="hint">
+              {% if a == 'high_false_alarm' %}Consider raising threshold
+              {% elif a == 'never_fired' %}Check threshold or geographic scope
+              {% elif a == 'reliable' %}Threshold well-calibrated
+              {% elif a == 'mixed' %}Monitor — more data needed
+              {% elif a == 'insufficient' %}Too few activations to assess
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No triggers defined yet. <a href="/triggers/new">Create one.</a></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

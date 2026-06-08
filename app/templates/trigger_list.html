@@ -60,7 +60,14 @@
 <div class="main">
   <div class="page-header">
     <h1>Triggers</h1>
-    <a href="/triggers/new" class="btn-new">+ New Trigger</a>
+    <div style="display:flex;gap:.6rem;align-items:center;">
+      <a href="/triggers/report"
+         style="font-size:.875rem;font-weight:600;color:#6b7280;border:1px solid #d1d5db;
+                border-radius:7px;padding:.45rem .9rem;text-decoration:none;">
+        Performance report
+      </a>
+      <a href="/triggers/new" class="btn-new">+ New Trigger</a>
+    </div>
   </div>
 
   {% if scoped_count %}

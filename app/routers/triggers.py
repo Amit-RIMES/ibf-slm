@@ -123,6 +123,86 @@ async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
     return len(fired_rows)
 
 
+@router.get("/report", response_class=HTMLResponse)
+async def trigger_report(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    triggers_result = await db.execute(select(Trigger).order_by(desc(Trigger.created_at)))
+    triggers = triggers_result.scalars().all()
+
+    activations_result = await db.execute(select(TriggerActivation))
+    all_activations = activations_result.scalars().all()
+
+    # Activation IDs that have at least one linked impact record
+    validated_result = await db.execute(
+        select(ImpactRecord.trigger_activation_id)
+        .where(ImpactRecord.trigger_activation_id.isnot(None))
+        .distinct()
+    )
+    validated_ids = {row[0] for row in validated_result.all()}
+
+    from collections import defaultdict
+    acts_by_trigger: dict[int, list] = defaultdict(list)
+    for act in all_activations:
+        acts_by_trigger[act.trigger_id].append(act)
+
+    def _assess(n: int, hit_rate) -> str:
+        if n == 0:
+            return "never_fired"
+        if n < 3:
+            return "insufficient"
+        if hit_rate >= 0.67:
+            return "reliable"
+        if hit_rate >= 0.33:
+            return "mixed"
+        return "high_false_alarm"
+
+    rows = []
+    for t in triggers:
+        acts = acts_by_trigger[t.id]
+        n = len(acts)
+        validated = sum(1 for a in acts if a.id in validated_ids)
+        hit_rate = validated / n if n > 0 else None
+        avg_val = round(sum(a.value for a in acts) / n, 2) if n else None
+        max_val = round(max(a.value for a in acts), 2) if n else None
+        last_act = max((a.triggered_at for a in acts), default=None)
+        rows.append({
+            "trigger": t,
+            "activation_count": n,
+            "validated_count": validated,
+            "false_alarm_count": n - validated,
+            "hit_rate": hit_rate,
+            "avg_value": avg_val,
+            "max_value": max_val,
+            "last_activated": last_act,
+            "assessment": _assess(n, hit_rate),
+        })
+
+    # Sort: most activations first; ties broken by hit rate desc; never-fired last
+    rows.sort(key=lambda r: (r["activation_count"] == 0, -(r["activation_count"]), -(r["hit_rate"] or 0)))
+
+    total_activations = len(all_activations)
+    total_validated = len(validated_ids & {a.id for a in all_activations})
+    overall_hit_rate = total_validated / total_activations if total_activations else None
+    never_fired = sum(1 for r in rows if r["activation_count"] == 0)
+
+    return templates.TemplateResponse(
+        "trigger_report.html",
+        {
+            "request": request, "user": user, "rows": rows,
+            "total_activations": total_activations,
+            "total_validated": total_validated,
+            "overall_hit_rate": overall_hit_rate,
+            "never_fired": never_fired,
+            "trigger_count": len(triggers),
+            "OPERATOR_SYMBOLS": OPERATOR_SYMBOLS,
+            "VARIABLE_LABELS": VARIABLE_LABELS,
+        },
+    )
+
+
 @router.get("", response_class=HTMLResponse)
 async def trigger_list(request: Request, db: AsyncSession = Depends(get_db)):
     user = await get_current_user(request, db)
