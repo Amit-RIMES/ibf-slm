@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+{% block title %}Forecast Calendar {{ year }} — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.active { color: #4f46e5; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.5rem; flex-wrap: wrap; gap: .75rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; }
+
+  /* ── Controls ──────────────────────────────────────────────── */
+  .controls {
+    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+    background: #fff; border-radius: 10px; padding: .85rem 1.25rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07); margin-bottom: 1.5rem;
+  }
+  .year-nav { display: flex; align-items: center; gap: .5rem; }
+  .year-btn { display: inline-flex; align-items: center; justify-content: center;
+    width: 2rem; height: 2rem; border-radius: 6px; border: 1px solid #e5e7eb;
+    background: #fff; color: #374151; text-decoration: none; font-size: .9rem;
+    font-weight: 600; }
+  .year-btn:hover { background: #f3f4f6; text-decoration: none; }
+  .year-btn.disabled { color: #d1d5db; pointer-events: none; }
+  .year-label { font-size: 1.05rem; font-weight: 800; color: #111827; min-width: 3rem;
+    text-align: center; }
+  .source-sel { padding: .45rem .75rem; border: 1px solid #d1d5db; border-radius: 7px;
+    font-size: .875rem; background: #fff; outline: none; }
+  .source-sel:focus { border-color: #4f46e5; }
+
+  /* ── Summary bar ───────────────────────────────────────────── */
+  .summary-bar {
+    display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;
+    background: #fff; border-radius: 10px; padding: 1rem 1.25rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07); margin-bottom: 1.5rem;
+  }
+  .s-stat { text-align: center; }
+  .s-val { font-size: 1.5rem; font-weight: 800; color: #111827; }
+  .s-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
+    color: #9ca3af; margin-top: .1rem; }
+
+  /* Progress bar */
+  .pbar-wrap { flex: 1; min-width: 200px; }
+  .pbar-label { font-size: .78rem; color: #6b7280; margin-bottom: .3rem;
+    display: flex; justify-content: space-between; }
+  .pbar { height: 8px; background: #e5e7eb; border-radius: 99px; overflow: hidden; }
+  .pbar-fill { height: 100%; border-radius: 99px; background: #16a34a;
+    transition: width .4s ease; }
+
+  /* ── Calendar grid ─────────────────────────────────────────── */
+  .cal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem;
+    margin-bottom: 1.5rem; }
+
+  .month-block { background: #fff; border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07); padding: .9rem; }
+  .month-name { font-size: .78rem; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .06em; color: #374151; margin-bottom: .6rem; text-align: center; }
+
+  .day-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .dow-header { font-size: .6rem; font-weight: 700; text-transform: uppercase;
+    color: #d1d5db; text-align: center; padding: .2rem 0; }
+
+  .day-cell {
+    aspect-ratio: 1; border-radius: 4px; display: flex; align-items: center;
+    justify-content: center; font-size: .65rem; font-weight: 600;
+    cursor: default; position: relative;
+  }
+  .day-cell.blank { background: transparent; }
+  .day-cell.future { background: #f9fafb; color: #d1d5db; }
+  .day-cell.missing { background: #fee2e2; color: #991b1b; }
+  .day-cell.has-1   { background: #bbf7d0; color: #166534; }
+  .day-cell.has-2   { background: #4ade80; color: #14532d; }
+  .day-cell.has-many { background: #16a34a; color: #fff; }
+  .day-cell.today-cell { outline: 2px solid #4f46e5; outline-offset: -1px; }
+
+  /* ── Legend ────────────────────────────────────────────────── */
+  .legend {
+    display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+    font-size: .78rem; color: #6b7280; margin-bottom: 1.5rem;
+  }
+  .legend-item { display: flex; align-items: center; gap: .3rem; }
+  .legend-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+
+  /* ── Source breakdown ──────────────────────────────────────── */
+  .section-title { font-size: .78rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: #9ca3af; margin-bottom: .85rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  th { text-align: left; padding: .5rem .75rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af;
+    border-bottom: 1px solid #e5e7eb; }
+  td { padding: .6rem .75rem; border-bottom: 1px solid #f3f4f6; }
+  tr:last-child td { border-bottom: none; }
+  .pct-bar { height: 6px; background: #e5e7eb; border-radius: 99px;
+    overflow: hidden; width: 120px; display: inline-block; vertical-align: middle; margin-left: .5rem; }
+  .pct-fill { height: 100%; border-radius: 99px; background: #4ade80; }
+
+  @media (max-width: 768px) {
+    .cal-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 480px) {
+    .cal-grid { grid-template-columns: 1fr; }
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts" class="active">Forecasts</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/sync">Auto-Sync</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <h1>Forecast Data Calendar</h1>
+    <a href="/forecasts" style="font-size:.85rem;color:#6b7280;border:1px solid #d1d5db;
+       border-radius:8px;padding:.45rem .9rem;text-decoration:none;font-weight:600;">
+      ← Forecast list
+    </a>
+  </div>
+
+  <!-- Controls -->
+  <form method="get" action="/forecasts/calendar" class="controls" id="calForm">
+    <div class="year-nav">
+      {% if prev_year %}
+      <a class="year-btn" href="/forecasts/calendar?year={{ prev_year }}&source={{ source_filter }}">‹</a>
+      {% else %}
+      <span class="year-btn disabled">‹</span>
+      {% endif %}
+      <span class="year-label">{{ year }}</span>
+      {% if next_year %}
+      <a class="year-btn" href="/forecasts/calendar?year={{ next_year }}&source={{ source_filter }}">›</a>
+      {% else %}
+      <span class="year-btn disabled">›</span>
+      {% endif %}
+    </div>
+    <input type="hidden" name="year" value="{{ year }}">
+    <select name="source" class="source-sel" onchange="document.getElementById('calForm').submit()">
+      <option value="">All sources</option>
+      {% for s in sources %}
+      <option value="{{ s.value }}" {% if source_filter == s.value %}selected{% endif %}>{{ s.label }}</option>
+      {% endfor %}
+    </select>
+    {% if source_filter %}
+    <a href="/forecasts/calendar?year={{ year }}" style="font-size:.82rem;color:#6b7280;">✕ Clear filter</a>
+    {% endif %}
+  </form>
+
+  <!-- Summary -->
+  <div class="summary-bar">
+    <div class="s-stat">
+      <div class="s-val" style="color:{% if coverage_pct >= 80 %}#16a34a{% elif coverage_pct >= 50 %}#d97706{% else %}#dc2626{% endif %};">
+        {{ coverage_pct }}%
+      </div>
+      <div class="s-label">Coverage</div>
+    </div>
+    <div class="s-stat">
+      <div class="s-val">{{ covered_days }}</div>
+      <div class="s-label">Days with data</div>
+    </div>
+    <div class="s-stat">
+      <div class="s-val" style="color:#dc2626;">{{ total_days - covered_days }}</div>
+      <div class="s-label">Days missing</div>
+    </div>
+    <div class="pbar-wrap">
+      <div class="pbar-label">
+        <span>{{ covered_days }} / {{ total_days }} days{% if year == today.year %} (year to date){% endif %}</span>
+        <span style="font-weight:700;color:{% if coverage_pct >= 80 %}#16a34a{% elif coverage_pct >= 50 %}#d97706{% else %}#dc2626{% endif %};">
+          {{ coverage_pct }}%
+        </span>
+      </div>
+      <div class="pbar"><div class="pbar-fill" style="width:{{ coverage_pct }}%;"></div></div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <span style="font-size:.78rem;font-weight:600;color:#374151;">Legend:</span>
+    <div class="legend-item"><div class="legend-swatch" style="background:#fee2e2;border:1px solid #fca5a5;"></div>Missing</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#bbf7d0;"></div>1 upload</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#4ade80;"></div>2–4 uploads</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#16a34a;"></div>5+ uploads</div>
+    <div class="legend-item"><div class="legend-swatch" style="background:#f9fafb;border:1px solid #e5e7eb;"></div>Future</div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:#f9fafb;outline:2px solid #4f46e5;outline-offset:-1px;"></div>Today
+    </div>
+  </div>
+
+  <!-- Calendar -->
+  <div class="cal-grid">
+    {% for month in months %}
+    <div class="month-block">
+      <div class="month-name">{{ month.name }}</div>
+      <div class="day-grid">
+        {% for dow in ["M","T","W","T","F","S","S"] %}
+        <div class="dow-header">{{ dow }}</div>
+        {% endfor %}
+        {% for cell in month.cells %}
+        {% if cell is none %}
+        <div class="day-cell blank"></div>
+        {% elif cell.future %}
+        <div class="day-cell future" title="{{ cell.date }}">{{ cell.day }}</div>
+        {% elif cell.count == 0 %}
+        <div class="day-cell missing" title="{{ cell.date }} — no data">{{ cell.day }}</div>
+        {% elif cell.count == 1 %}
+        <div class="day-cell has-1{% if cell.date == today %} today-cell{% endif %}"
+             title="{{ cell.date }} — {{ cell.count }} upload">{{ cell.day }}</div>
+        {% elif cell.count <= 4 %}
+        <div class="day-cell has-2{% if cell.date == today %} today-cell{% endif %}"
+             title="{{ cell.date }} — {{ cell.count }} uploads">{{ cell.day }}</div>
+        {% else %}
+        <div class="day-cell has-many{% if cell.date == today %} today-cell{% endif %}"
+             title="{{ cell.date }} — {{ cell.count }} uploads">{{ cell.day }}</div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Per-source breakdown -->
+  {% if source_stats %}
+  <div class="card">
+    <div class="section-title">Coverage by source ({{ year }}{% if year == today.year %}, year to date{% endif %})</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Source</th>
+          <th style="text-align:right;">Days with data</th>
+          <th>Coverage</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in source_stats %}
+        <tr>
+          <td>
+            <a href="/forecasts/calendar?year={{ year }}&source={{ s.source }}"
+               style="color:{% if source_filter == s.source %}#4f46e5{% else %}#374151{% endif %};
+                      font-weight:{% if source_filter == s.source %}700{% else %}400{% endif %};">
+              {{ s.label }}
+            </a>
+          </td>
+          <td style="text-align:right; font-weight:600;">{{ s.days }}</td>
+          <td>
+            <span style="font-size:.82rem; color:#6b7280; margin-right:.3rem;">{{ s.pct }}%</span>
+            <span class="pct-bar">
+              <span class="pct-fill" style="width:{{ s.pct }}%;
+                background:{% if s.pct >= 80 %}#4ade80{% elif s.pct >= 50 %}#fbbf24{% else %}#f87171{% endif %};"></span>
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

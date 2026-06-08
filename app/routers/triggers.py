@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import log_action
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.core.email import send_subscriber_alert_emails, send_trigger_activation_email
+from app.core.email import send_acknowledgement_emails, send_subscriber_alert_emails, send_trigger_activation_email
 from app.core.webhook import send_webhook_notifications
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
@@ -870,5 +870,23 @@ async def acknowledge_activation(
         await db.commit()
         await log_action(db, user.id, "trigger.acknowledge",
                          f"Acknowledged '{activation.trigger.name}' (value: {activation.value} mm)")
+
+        # Notify subscribers
+        import asyncio as _asyncio
+        subs_result = await db.execute(
+            select(User.email)
+            .join(TriggerSubscription, TriggerSubscription.user_id == User.id)
+            .where(
+                TriggerSubscription.trigger_id == activation.trigger_id,
+                User.is_active == True,  # noqa: E712
+                User.role != "admin",
+            )
+        )
+        sub_emails = [row[0] for row in subs_result.all()]
+        if sub_emails:
+            _asyncio.create_task(
+                send_acknowledgement_emails(sub_emails, activation, activation.trigger, notes or "")
+            )
+
         return RedirectResponse(f"/triggers/{activation.trigger_id}", status_code=303)
     return RedirectResponse("/triggers", status_code=303)

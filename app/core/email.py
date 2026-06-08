@@ -174,6 +174,77 @@ async def send_subscriber_alert_emails(
             logger.error("Failed to send subscriber alert to %s: %s", email, exc)
 
 
+async def send_acknowledgement_emails(
+    emails: list[str],
+    activation: "TriggerActivation",
+    trigger: "Trigger",
+    notes: str,
+) -> None:
+    """Notify subscribers that an alert they follow has been acknowledged."""
+    if not emails:
+        return
+    if not settings.SMTP_HOST:
+        logger.warning("SMTP not configured. Acknowledgement emails skipped.")
+        return
+
+    op_sym = {"gt": ">", "gte": "≥", "lt": "<", "lte": "≤"}
+    var_label = {"precip_mean": "Mean precip", "precip_max": "Max precip", "precip_min": "Min precip"}
+    base_url = settings.APP_BASE_URL
+    trigger_url = f"{base_url}/triggers/{trigger.id}"
+    ack_time = activation.acknowledged_at.strftime("%d %b %Y, %H:%M UTC") if activation.acknowledged_at else "—"
+
+    subject = f"[IBF Alert] Acknowledged — {trigger.name}"
+    html = f"""
+    <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:2rem;">
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;
+                  padding:1rem 1.25rem;margin-bottom:1.5rem;">
+        <span style="font-size:1.1rem">✓</span>
+        <strong style="color:#0369a1;margin-left:.4rem;">
+          Alert acknowledged — {trigger.name}
+        </strong>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:.9rem;margin-bottom:1.25rem;">
+        <tr>
+          <td style="padding:.4rem 0;color:#6b7280;width:140px;">Trigger</td>
+          <td style="font-weight:600;">{trigger.name}</td>
+        </tr>
+        <tr>
+          <td style="padding:.4rem 0;color:#6b7280;">Rule</td>
+          <td>{var_label.get(trigger.variable, trigger.variable)}
+              {op_sym.get(trigger.operator, trigger.operator)} {trigger.threshold} mm</td>
+        </tr>
+        <tr>
+          <td style="padding:.4rem 0;color:#6b7280;">Observed value</td>
+          <td style="font-weight:700;">{activation.value:.3f} mm</td>
+        </tr>
+        <tr>
+          <td style="padding:.4rem 0;color:#6b7280;">Acknowledged at</td>
+          <td>{ack_time}</td>
+        </tr>
+        {"<tr><td style='padding:.4rem 0;color:#6b7280;'>Response notes</td>"
+         f"<td style='font-style:italic;'>{notes}</td></tr>" if notes else ""}
+      </table>
+      <p>
+        <a href="{trigger_url}"
+           style="display:inline-block;padding:.65rem 1.25rem;background:#0369a1;
+                  color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">
+          View trigger →
+        </a>
+      </p>
+      <p style="color:#9ca3af;font-size:.8rem;margin-top:1.25rem;">
+        You received this because you subscribed to alerts for this trigger.
+        <a href="{base_url}/account/notifications" style="color:#6b7280;">Manage subscriptions</a>
+      </p>
+    </div>"""
+
+    for email in emails:
+        try:
+            await asyncio.to_thread(_send_sync, email, subject, html)
+            logger.info("Acknowledgement email sent to %s", email)
+        except Exception as exc:
+            logger.error("Failed to send acknowledgement email to %s: %s", email, exc)
+
+
 async def send_trigger_activation_email(
     admin_emails: list[str],
     fired: list[tuple["Trigger", "TriggerActivation", "ForecastUpload"]],

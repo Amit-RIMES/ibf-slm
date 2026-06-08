@@ -527,6 +527,111 @@ async def forecast_compare(
     )
 
 
+@router.get("/calendar", response_class=HTMLResponse)
+async def forecast_calendar(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    year: int = 0,
+    source: str = "",
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    import calendar as _cal
+    from datetime import date as _date, datetime as _dt, timezone as _tz
+    from sqlalchemy import and_, func
+
+    today = _date.today()
+    if not year or year < 2000 or year > today.year + 1:
+        year = today.year
+
+    year_start = _dt(year, 1, 1, tzinfo=_tz.utc)
+    year_end   = _dt(year + 1, 1, 1, tzinfo=_tz.utc)
+
+    # Daily upload counts (optionally filtered by source)
+    count_stmt = (
+        select(
+            func.date(ForecastUpload.uploaded_at).label("day"),
+            func.count().label("cnt"),
+        )
+        .where(
+            ForecastUpload.uploaded_at >= year_start,
+            ForecastUpload.uploaded_at < year_end,
+        )
+        .group_by(func.date(ForecastUpload.uploaded_at))
+    )
+    if source:
+        count_stmt = count_stmt.where(ForecastUpload.source == source)
+    day_counts = {
+        _date.fromisoformat(row.day): row.cnt
+        for row in (await db.execute(count_stmt)).all()
+    }
+
+    # Per-source coverage (for the breakdown table)
+    src_stmt = (
+        select(
+            ForecastUpload.source,
+            func.date(ForecastUpload.uploaded_at).label("day"),
+        )
+        .where(
+            ForecastUpload.uploaded_at >= year_start,
+            ForecastUpload.uploaded_at < year_end,
+        )
+        .distinct()
+    )
+    src_rows = (await db.execute(src_stmt)).all()
+    src_days: dict[str, set] = {}
+    for row in src_rows:
+        src_days.setdefault(row.source or "unknown", set()).add(row.day)
+
+    # How many "expected" days so far this year
+    last_day = _date(year, 12, 31) if year < today.year else today
+    total_days = (last_day - _date(year, 1, 1)).days + 1
+    covered_days = sum(1 for d, _ in day_counts.items() if d <= last_day)
+    coverage_pct = round(covered_days / total_days * 100, 1) if total_days else 0
+
+    # Source coverage breakdown
+    source_stats = sorted([
+        {
+            "source": src,
+            "label": next((s["label"] for s in SOURCES if s["value"] == src), src or "Unknown"),
+            "days": len(days),
+            "pct": round(len(days) / total_days * 100, 1),
+        }
+        for src, days in src_days.items()
+    ], key=lambda x: -x["days"])
+
+    # Build 12 month structures
+    months = []
+    for m in range(1, 13):
+        first_wd, n_days = _cal.monthrange(year, m)
+        cells = [None] * first_wd  # leading blanks
+        for d in range(1, n_days + 1):
+            dt = _date(year, m, d)
+            cnt = day_counts.get(dt, 0)
+            is_future = dt > today
+            cells.append({"date": dt, "day": d, "count": cnt, "future": is_future})
+        months.append({"name": _cal.month_abbr[m], "cells": cells})
+
+    return templates.TemplateResponse(
+        "forecast_calendar.html",
+        {
+            "request": request, "user": user,
+            "year": year, "today": today,
+            "source_filter": source,
+            "months": months,
+            "total_days": total_days,
+            "covered_days": covered_days,
+            "coverage_pct": coverage_pct,
+            "source_stats": source_stats,
+            "sources": SOURCES,
+            "prev_year": year - 1 if year > 2020 else None,
+            "next_year": year + 1 if year <= today.year else None,
+        },
+    )
+
+
 @router.get("/{forecast_id}", response_class=HTMLResponse)
 async def forecast_detail(forecast_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     user = await get_current_user(request, db)
