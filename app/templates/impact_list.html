@@ -67,7 +67,9 @@
   .page-btn.active { background:#4f46e5; color:#fff; border-color:#4f46e5; font-weight:600; pointer-events:none; }
   .page-btn.disabled { color:#d1d5db; pointer-events:none; border-color:#f3f4f6; }
   .page-ellipsis { color:#9ca3af; padding:0 .2rem; }
+  #impact-map { height: 360px; border-radius: 10px; }
 </style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 {% endblock %}
 
 {% block body %}
@@ -116,6 +118,19 @@
     {% endif %}
     <span class="result-count">{{ total }} result{{ 's' if total != 1 else '' }}</span>
   </form>
+
+  {% if map_count %}
+  <div class="card" style="margin-bottom:1.25rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.85rem;">
+      <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;
+                  letter-spacing:.06em;color:#9ca3af;">
+        Impact Map — {{ map_count }} record{{ 's' if map_count != 1 }} with coordinates
+        {% if map_count == 500 %}<span style="font-weight:400;">(capped at 500)</span>{% endif %}
+      </div>
+    </div>
+    <div id="impact-map"></div>
+  </div>
+  {% endif %}
 
   <div class="card">
     {% if impacts %}
@@ -191,4 +206,54 @@
   </div>
   {% endif %}
 </div>
+
+{% if map_count %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function () {
+  const HAZARD_COLORS = {
+    flood: '#3b82f6', storm: '#8b5cf6', drought: '#f59e0b',
+    landslide: '#10b981', heatwave: '#ef4444', cyclone: '#0ea5e9', other: '#6b7280',
+  };
+
+  const points = {{ map_points | safe }};
+  const map = L.map('impact-map', { zoomControl: true });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 18,
+  }).addTo(map);
+
+  const allLatLngs = [];
+  points.forEach(p => {
+    const color = HAZARD_COLORS[p.hazard_type] || '#6b7280';
+    const radius = p.affected
+      ? Math.max(6, Math.min(22, Math.log10(p.affected + 1) * 6))
+      : 8;
+
+    const affected = p.affected ? p.affected.toLocaleString() + ' affected' : null;
+    const casualties = p.casualties ? p.casualties + ' casualties' : null;
+    const meta = [affected, casualties].filter(Boolean).join(' · ');
+
+    const marker = L.circleMarker([p.lat, p.lon], {
+      radius, color, fillColor: color, fillOpacity: 0.65, weight: 1.5,
+    }).addTo(map);
+
+    marker.bindPopup(
+      `<strong style="font-size:.9rem;">${p.event_name}</strong><br>` +
+      `<span style="text-transform:capitalize;font-size:.82rem;">${p.hazard_type}</span>` +
+      ` &nbsp;·&nbsp; <span style="font-size:.82rem;">${p.country}</span><br>` +
+      `<span style="color:#6b7280;font-size:.78rem;">${p.event_date}</span>` +
+      (meta ? `<br><span style="font-size:.78rem;color:#374151;">${meta}</span>` : '') +
+      `<br><a href="/impacts/${p.id}" style="font-size:.8rem;color:#4f46e5;font-weight:600;">View record →</a>`
+    );
+    allLatLngs.push([p.lat, p.lon]);
+  });
+
+  if (allLatLngs.length === 1) {
+    map.setView(allLatLngs[0], 7);
+  } else if (allLatLngs.length > 1) {
+    map.fitBounds(allLatLngs, { padding: [30, 30] });
+  }
+})();
+</script>
+{% endif %}
 {% endblock %}

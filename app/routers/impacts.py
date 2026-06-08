@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 from datetime import date
 from typing import Optional
 
@@ -90,6 +91,29 @@ async def impact_list(
     )
     impacts = result.scalars().all()
 
+    # Map data — all filtered impacts with coordinates (up to 500)
+    map_stmt = (
+        base.where(ImpactRecord.lat.isnot(None), ImpactRecord.lon.isnot(None))
+        .order_by(desc(ImpactRecord.event_date))
+        .limit(500)
+    )
+    map_result = await db.execute(map_stmt)
+    map_impacts = map_result.scalars().all()
+    map_points = json.dumps([
+        {
+            "id": imp.id,
+            "lat": imp.lat,
+            "lon": imp.lon,
+            "event_name": imp.event_name,
+            "event_date": str(imp.event_date),
+            "hazard_type": imp.hazard_type,
+            "country": imp.country,
+            "affected": imp.affected_population,
+            "casualties": imp.casualties,
+        }
+        for imp in map_impacts
+    ])
+
     return templates.TemplateResponse(
         "impact_list.html",
         {
@@ -99,6 +123,7 @@ async def impact_list(
             "hazard_types": HAZARD_TYPES,
             "page": page, "total": total, "total_pages": total_pages,
             "page_size": PAGE_SIZE, "page_range": _build_page_range(page, total_pages),
+            "map_points": map_points, "map_count": len(map_impacts),
         },
     )
 
