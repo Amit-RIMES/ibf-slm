@@ -181,6 +181,10 @@
               {% if a.notes %}<br><em>{{ a.notes }}</em>{% endif %}
             </span>
             {% endif %}
+            <div style="margin-top:.4rem;">
+              <a href="/triggers/activations/{{ a.id }}/sitrep" target="_blank"
+                 style="font-size:.78rem; color:#4f46e5; font-weight:600;">Situation report →</a>
+            </div>
           </td>
         </tr>
         {% endfor %}

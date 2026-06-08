@@ -743,6 +743,111 @@ async def trigger_delete(trigger_id: int, request: Request, db: AsyncSession = D
     return RedirectResponse("/triggers", status_code=303)
 
 
+@router.get("/activations/{activation_id}/sitrep", response_class=HTMLResponse)
+async def activation_sitrep(
+    activation_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    from sqlalchemy import and_, or_
+
+    result = await db.execute(
+        select(TriggerActivation).where(TriggerActivation.id == activation_id)
+    )
+    activation = result.scalar_one_or_none()
+    if not activation:
+        return RedirectResponse("/triggers")
+
+    trigger = activation.trigger
+    forecast = activation.forecast
+
+    # Impacts directly linked to this activation
+    linked_result = await db.execute(
+        select(ImpactRecord)
+        .where(ImpactRecord.trigger_activation_id == activation_id)
+        .order_by(ImpactRecord.event_date)
+    )
+    linked_impacts = linked_result.scalars().all()
+
+    # Nearby unlinked impacts — same hazard type within ±30 days
+    nearby_impacts = []
+    if trigger and trigger.hazard_type:
+        act_date = activation.triggered_at.date()
+        ws = act_date - timedelta(days=30)
+        we = act_date + timedelta(days=30)
+        linked_ids = [imp.id for imp in linked_impacts]
+        nearby_stmt = (
+            select(ImpactRecord)
+            .where(
+                ImpactRecord.hazard_type == trigger.hazard_type,
+                ImpactRecord.event_date >= ws,
+                ImpactRecord.event_date <= we,
+            )
+            .order_by(ImpactRecord.event_date)
+        )
+        if linked_ids:
+            nearby_stmt = nearby_stmt.where(~ImpactRecord.id.in_(linked_ids))
+        nearby_impacts = (await db.execute(nearby_stmt)).scalars().all()
+
+    # Pre-format rule and deviation
+    op_sym = OPERATOR_SYMBOLS.get(trigger.operator, trigger.operator) if trigger else "?"
+    var_label = VARIABLE_LABELS.get(trigger.variable, trigger.variable) if trigger else "?"
+    rule_str = f"{var_label} {op_sym} {trigger.threshold} mm" if trigger else "—"
+    if trigger and trigger.threshold:
+        dev_mm = round(activation.value - trigger.threshold, 2)
+        dev_pct = round(dev_mm / trigger.threshold * 100, 1)
+    else:
+        dev_mm = dev_pct = None
+
+    # Impact summary totals
+    def _sum(items, attr):
+        vals = [getattr(i, attr) for i in items if getattr(i, attr) is not None]
+        return sum(vals) if vals else None
+
+    total_affected  = _sum(linked_impacts, "affected_population")
+    total_casualties = _sum(linked_impacts, "casualties")
+    total_displaced  = _sum(linked_impacts, "displaced")
+    total_damage     = _sum(linked_impacts, "damage_usd")
+
+    # Map points (linked impacts with coordinates)
+    map_points = json.dumps([
+        {"id": imp.id, "lat": imp.lat, "lon": imp.lon,
+         "event_name": imp.event_name, "country": imp.country or "",
+         "event_date": str(imp.event_date)}
+        for imp in linked_impacts if imp.lat is not None and imp.lon is not None
+    ])
+    has_map = bool(forecast and forecast.lat_min is not None) or bool(
+        any(imp.lat is not None for imp in linked_impacts)
+    )
+
+    return templates.TemplateResponse(
+        "sitrep.html",
+        {
+            "request": request, "user": user,
+            "activation": activation,
+            "trigger": trigger,
+            "forecast": forecast,
+            "linked_impacts": linked_impacts,
+            "nearby_impacts": nearby_impacts,
+            "rule_str": rule_str,
+            "dev_mm": dev_mm,
+            "dev_pct": dev_pct,
+            "total_affected": total_affected,
+            "total_casualties": total_casualties,
+            "total_displaced": total_displaced,
+            "total_damage": total_damage,
+            "map_points": map_points,
+            "has_map": has_map,
+            "OPERATOR_SYMBOLS": OPERATOR_SYMBOLS,
+            "VARIABLE_LABELS": VARIABLE_LABELS,
+        },
+    )
+
+
 @router.post("/activations/{activation_id}/acknowledge")
 async def acknowledge_activation(
     activation_id: int,

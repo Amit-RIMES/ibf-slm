@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Situation Report — ACT-{{ "%04d"|format(activation.id) }} — IBF-SLM</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; font-size: 13px;
+      color: #1f2937; background: #f3f4f6; }
+
+    /* ── Screen toolbar ─────────────────────────────────────── */
+    .toolbar {
+      background: #fff; border-bottom: 1px solid #e5e7eb;
+      padding: .7rem 1.5rem; display: flex; align-items: center;
+      justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .toolbar-left { display: flex; align-items: center; gap: 1rem; font-size: .85rem; }
+    .toolbar-brand { font-weight: 700; color: #4f46e5; font-size: 1rem; }
+    .toolbar-crumb { color: #9ca3af; }
+    .toolbar-crumb a { color: #6b7280; text-decoration: none; }
+    .toolbar-crumb a:hover { text-decoration: underline; }
+    .btn-print {
+      background: #4f46e5; color: #fff; border: none; border-radius: 7px;
+      padding: .45rem 1.1rem; font-size: .85rem; font-weight: 600; cursor: pointer;
+    }
+    .btn-print:hover { opacity: .85; }
+
+    /* ── Page layout ─────────────────────────────────────────── */
+    .page { max-width: 860px; margin: 1.5rem auto; background: #fff;
+      border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.08); overflow: hidden; }
+
+    /* ── Report header ────────────────────────────────────────── */
+    .rpt-header {
+      padding: 1.5rem 2rem 1.25rem;
+      border-bottom: 3px solid #4f46e5;
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+    }
+    .org-name { font-weight: 800; font-size: 1.05rem; color: #4f46e5; }
+    .org-sub  { font-size: .78rem; color: #6b7280; margin-top: .15rem; }
+    .rpt-meta { text-align: right; font-size: .78rem; color: #6b7280; line-height: 1.7; }
+    .rpt-meta .ref { font-size: .95rem; font-weight: 800; color: #1f2937; }
+
+    /* ── Alert banner ─────────────────────────────────────────── */
+    .alert-banner {
+      padding: 1.1rem 2rem;
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    }
+    .alert-banner.active-banner   { background: #fef2f2; border-bottom: 1px solid #fecaca; }
+    .alert-banner.ack-banner      { background: #f0f9ff; border-bottom: 1px solid #bae6fd; }
+    .alert-title { font-size: 1.2rem; font-weight: 800; letter-spacing: -.01em; }
+    .alert-banner.active-banner .alert-title { color: #991b1b; }
+    .alert-banner.ack-banner    .alert-title { color: #0369a1; }
+    .alert-sub { font-size: .82rem; margin-top: .2rem; color: #6b7280; }
+    .status-badge { display: inline-block; padding: .35rem .9rem; border-radius: 999px;
+      font-size: .78rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+    .badge-active-s { background: #fee2e2; color: #991b1b; }
+    .badge-ack-s    { background: #e0f2fe; color: #0369a1; }
+
+    /* ── Anomaly notice ───────────────────────────────────────── */
+    .anomaly-notice {
+      background: #fffbeb; border-bottom: 1px solid #fde68a;
+      padding: .6rem 2rem; font-size: .82rem; color: #92400e;
+      display: flex; align-items: center; gap: .5rem;
+    }
+
+    /* ── Sections ─────────────────────────────────────────────── */
+    .section { padding: 1.25rem 2rem; border-bottom: 1px solid #f3f4f6; }
+    .section:last-child { border-bottom: none; }
+    .section-heading {
+      font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
+      color: #9ca3af; margin-bottom: .85rem;
+      padding-bottom: .4rem; border-bottom: 1px solid #f3f4f6;
+    }
+
+    /* ── Two-col grid ─────────────────────────────────────────── */
+    .detail-grid { display: grid; grid-template-columns: 160px 1fr; gap: .35rem 1rem; }
+    .detail-grid dt { font-size: .78rem; color: #9ca3af; font-weight: 600;
+      padding-top: .1rem; }
+    .detail-grid dd { font-size: .85rem; color: #1f2937; }
+    .detail-grid dd strong { font-weight: 700; }
+    .dev-positive { color: #991b1b; font-weight: 700; }
+    .dev-negative { color: #16a34a; font-weight: 700; }
+
+    /* ── Stats strip ──────────────────────────────────────────── */
+    .stats-strip {
+      display: flex; gap: 0; border: 1px solid #e5e7eb;
+      border-radius: 8px; overflow: hidden; margin-top: 1rem;
+    }
+    .stat-cell { flex: 1; padding: .7rem .9rem; border-right: 1px solid #e5e7eb;
+      text-align: center; }
+    .stat-cell:last-child { border-right: none; }
+    .stat-cell .sc-label { font-size: .68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: #9ca3af; }
+    .stat-cell .sc-val { font-size: 1.1rem; font-weight: 800; color: #1f2937; margin-top: .15rem; }
+
+    /* ── Map ──────────────────────────────────────────────────── */
+    #sitrep-map { height: 300px; border-radius: 8px; margin-top: .85rem; }
+
+    /* ── Impact table ─────────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; font-size: .82rem; margin-top: .5rem; }
+    th { text-align: left; padding: .45rem .6rem; font-size: .68rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .06em; color: #9ca3af;
+      border-bottom: 2px solid #e5e7eb; }
+    td { padding: .5rem .6rem; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    .totals-row td { font-weight: 700; border-top: 2px solid #e5e7eb;
+      background: #f9fafb; font-size: .82rem; }
+
+    /* ── Footer ───────────────────────────────────────────────── */
+    .rpt-footer {
+      padding: .85rem 2rem; background: #f9fafb; font-size: .72rem; color: #9ca3af;
+      display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    /* ── Print styles ─────────────────────────────────────────── */
+    @media print {
+      body { background: #fff; }
+      .toolbar { display: none; }
+      .page { max-width: 100%; margin: 0; border-radius: 0; box-shadow: none; }
+      #sitrep-map { display: none; }
+      .map-print-note { display: block !important; }
+      a { color: inherit; text-decoration: none; }
+      .section { page-break-inside: avoid; }
+    }
+    .map-print-note { display: none; font-size: .78rem; color: #6b7280;
+      margin-top: .5rem; font-style: italic; }
+  </style>
+</head>
+<body>
+
+<!-- Screen toolbar (hidden when printing) -->
+<div class="toolbar">
+  <div class="toolbar-left">
+    <span class="toolbar-brand">IBF-SLM</span>
+    <span class="toolbar-crumb">
+      <a href="/triggers">Triggers</a> &rsaquo;
+      <a href="/triggers/{{ trigger.id }}">{{ trigger.name }}</a> &rsaquo;
+      Situation Report ACT-{{ "%04d"|format(activation.id) }}
+    </span>
+  </div>
+  <button class="btn-print" onclick="window.print()">Print / Save as PDF</button>
+</div>
+
+<div class="page">
+
+  <!-- Report header -->
+  <div class="rpt-header">
+    <div>
+      <div class="org-name">RIMES</div>
+      <div class="org-sub">Regional Integrated Multi-Hazard Early Warning System</div>
+      <div class="org-sub" style="margin-top:.4rem;">Index-Based Forecasting — Situation Report</div>
+    </div>
+    <div class="rpt-meta">
+      <div class="ref">ACT-{{ "%04d"|format(activation.id) }}</div>
+      <div>{{ activation.triggered_at.strftime("%d %b %Y") }}</div>
+      <div>{{ activation.triggered_at.strftime("%H:%M UTC") }}</div>
+    </div>
+  </div>
+
+  <!-- Anomaly notice -->
+  {% if forecast and forecast.is_anomaly %}
+  <div class="anomaly-notice">
+    <strong>ANOMALY DETECTED</strong> — This forecast's precipitation is
+    {{ "%.1f"|format(forecast.anomaly_score) }}σ above the 60-forecast baseline.
+    Interpret with care.
+  </div>
+  {% endif %}
+
+  <!-- Alert banner -->
+  <div class="alert-banner {% if activation.status == 'active' %}active-banner{% else %}ack-banner{% endif %}">
+    <div>
+      <div class="alert-title">
+        {% if trigger %}{{ trigger.hazard_type | upper }} ALERT — {{ trigger.name | upper }}{% else %}TRIGGER ALERT{% endif %}
+      </div>
+      <div class="alert-sub">
+        Threshold breached on {{ activation.triggered_at.strftime("%d %B %Y at %H:%M UTC") }}
+      </div>
+    </div>
+    {% if activation.status == 'active' %}
+    <span class="status-badge badge-active-s">Active — Unacknowledged</span>
+    {% else %}
+    <span class="status-badge badge-ack-s">Acknowledged</span>
+    {% endif %}
+  </div>
+
+  <!-- Trigger details -->
+  <div class="section">
+    <div class="section-heading">Trigger Details</div>
+    <dl class="detail-grid">
+      <dt>Trigger rule</dt>
+      <dd><strong>{{ rule_str }}</strong></dd>
+
+      <dt>Observed value</dt>
+      <dd>
+        <strong>{{ "%.2f"|format(activation.value) }} mm</strong>
+        {% if dev_mm is not none %}
+        &nbsp;
+        <span class="{% if dev_mm > 0 %}dev-positive{% else %}dev-negative{% endif %}">
+          ({% if dev_mm > 0 %}+{% endif %}{{ "%.2f"|format(dev_mm) }} mm
+          / {% if dev_pct > 0 %}+{% endif %}{{ "%.1f"|format(dev_pct) }}%)
+        </span>
+        {% endif %}
+      </dd>
+
+      <dt>Hazard type</dt>
+      <dd>{{ trigger.hazard_type | capitalize if trigger else "—" }}</dd>
+
+      <dt>Trigger status</dt>
+      <dd>{{ "Active" if trigger and trigger.is_active else "Inactive" }}</dd>
+
+      {% if trigger and trigger.scope_lat_min is not none %}
+      <dt>Geographic scope</dt>
+      <dd>{{ trigger.scope_lat_min }}°–{{ trigger.scope_lat_max }}°N,
+          {{ trigger.scope_lon_min }}°–{{ trigger.scope_lon_max }}°E</dd>
+      {% endif %}
+    </dl>
+  </div>
+
+  <!-- Forecast details -->
+  {% if forecast %}
+  <div class="section">
+    <div class="section-heading">Forecast</div>
+    <dl class="detail-grid">
+      <dt>Filename</dt>
+      <dd>{{ forecast.filename }}</dd>
+      <dt>Source</dt>
+      <dd>{{ forecast.source or "—" }}</dd>
+      <dt>Uploaded</dt>
+      <dd>{{ forecast.uploaded_at.strftime("%d %B %Y, %H:%M UTC") }}</dd>
+      {% if forecast.time_start or forecast.time_end %}
+      <dt>Forecast period</dt>
+      <dd>
+        {{ forecast.time_start or "?" }}
+        {% if forecast.time_end %} → {{ forecast.time_end }}{% endif %}
+        {% if forecast.time_steps %} ({{ forecast.time_steps }} steps){% endif %}
+      </dd>
+      {% endif %}
+      {% if forecast.lat_min is not none %}
+      <dt>Coverage</dt>
+      <dd>{{ forecast.lat_min }}°–{{ forecast.lat_max }}°N,
+          {{ forecast.lon_min }}°–{{ forecast.lon_max }}°E</dd>
+      {% endif %}
+    </dl>
+
+    {% if forecast.precip_mean is not none %}
+    <div class="stats-strip">
+      <div class="stat-cell">
+        <div class="sc-label">Precip Mean</div>
+        <div class="sc-val">{{ "%.1f"|format(forecast.precip_mean) }} mm</div>
+      </div>
+      <div class="stat-cell">
+        <div class="sc-label">Precip Max</div>
+        <div class="sc-val">{{ "%.1f"|format(forecast.precip_max) }} mm</div>
+      </div>
+      <div class="stat-cell">
+        <div class="sc-label">Precip Min</div>
+        <div class="sc-val">{{ "%.1f"|format(forecast.precip_min) }} mm</div>
+      </div>
+      {% if forecast.is_anomaly %}
+      <div class="stat-cell" style="background:#fffbeb;">
+        <div class="sc-label" style="color:#92400e;">Anomaly Score</div>
+        <div class="sc-val" style="color:#d97706;">{{ "%.1f"|format(forecast.anomaly_score) }}σ</div>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if has_map %}
+    <div id="sitrep-map"></div>
+    <div class="map-print-note">
+      Map not available in print view. Access the online report to view the interactive map.
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Linked impacts -->
+  <div class="section">
+    <div class="section-heading">
+      Linked Impact Records ({{ linked_impacts | length }})
+    </div>
+    {% if linked_impacts %}
+    <table>
+      <thead>
+        <tr>
+          <th>Event</th>
+          <th>Date</th>
+          <th>Country / Region</th>
+          <th style="text-align:right;">Affected</th>
+          <th style="text-align:right;">Casualties</th>
+          <th style="text-align:right;">Displaced</th>
+          <th style="text-align:right;">Damage (USD)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for imp in linked_impacts %}
+        <tr>
+          <td style="font-weight:600;">{{ imp.event_name }}</td>
+          <td style="white-space:nowrap;">{{ imp.event_date }}</td>
+          <td>{{ imp.country }}{% if imp.region %}, {{ imp.region }}{% endif %}</td>
+          <td style="text-align:right;">{{ "{:,}".format(imp.affected_population) if imp.affected_population is not none else "—" }}</td>
+          <td style="text-align:right;">{{ imp.casualties if imp.casualties is not none else "—" }}</td>
+          <td style="text-align:right;">{{ "{:,}".format(imp.displaced) if imp.displaced is not none else "—" }}</td>
+          <td style="text-align:right;">{{ "${:,.0f}".format(imp.damage_usd) if imp.damage_usd is not none else "—" }}</td>
+        </tr>
+        {% endfor %}
+        {% if linked_impacts | length > 1 %}
+        <tr class="totals-row">
+          <td colspan="3">Total</td>
+          <td style="text-align:right;">{{ "{:,}".format(total_affected) if total_affected is not none else "—" }}</td>
+          <td style="text-align:right;">{{ total_casualties if total_casualties is not none else "—" }}</td>
+          <td style="text-align:right;">{{ "{:,}".format(total_displaced) if total_displaced is not none else "—" }}</td>
+          <td style="text-align:right;">{{ "${:,.0f}".format(total_damage) if total_damage is not none else "—" }}</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:#9ca3af; font-size:.85rem; padding:.5rem 0;">
+      No impact records have been directly linked to this activation.
+      <a href="/impacts/new?activation={{ activation.id }}" style="color:#4f46e5;">Add one</a>
+    </p>
+    {% endif %}
+  </div>
+
+  <!-- Nearby unlinked impacts -->
+  {% if nearby_impacts %}
+  <div class="section">
+    <div class="section-heading">
+      Related {{ trigger.hazard_type | capitalize if trigger }} Impact Records Within ±30 Days ({{ nearby_impacts | length }})
+    </div>
+    <p style="font-size:.78rem; color:#9ca3af; margin-bottom:.75rem;">
+      These records are not directly linked to this activation but occurred within 30 days and share the same hazard type.
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Event</th>
+          <th>Date</th>
+          <th>Country / Region</th>
+          <th style="text-align:right;">Affected</th>
+          <th style="text-align:right;">Casualties</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for imp in nearby_impacts %}
+        <tr>
+          <td style="font-weight:600;">{{ imp.event_name }}</td>
+          <td style="white-space:nowrap;">{{ imp.event_date }}</td>
+          <td>{{ imp.country }}{% if imp.region %}, {{ imp.region }}{% endif %}</td>
+          <td style="text-align:right;">{{ "{:,}".format(imp.affected_population) if imp.affected_population is not none else "—" }}</td>
+          <td style="text-align:right;">{{ imp.casualties if imp.casualties is not none else "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- Response status -->
+  <div class="section">
+    <div class="section-heading">Response Status</div>
+    <dl class="detail-grid">
+      <dt>Alert status</dt>
+      <dd>
+        {% if activation.status == 'active' %}
+        <strong style="color:#991b1b;">ACTIVE — Awaiting acknowledgement</strong>
+        {% else %}
+        <strong style="color:#0369a1;">ACKNOWLEDGED</strong>
+        {% endif %}
+      </dd>
+      {% if activation.acknowledged_at %}
+      <dt>Acknowledged at</dt>
+      <dd>{{ activation.acknowledged_at.strftime("%d %B %Y, %H:%M UTC") }}</dd>
+      {% endif %}
+      {% if activation.notes %}
+      <dt>Response notes</dt>
+      <dd style="font-style:italic;">{{ activation.notes }}</dd>
+      {% endif %}
+    </dl>
+  </div>
+
+  <!-- Footer -->
+  <div class="rpt-footer">
+    <span>
+      Generated by IBF-SLM &nbsp;·&nbsp; RIMES &nbsp;·&nbsp;
+      Report ref: ACT-{{ "%04d"|format(activation.id) }}
+    </span>
+    <span>
+      This report was automatically generated and should be verified before external distribution.
+    </span>
+  </div>
+
+</div><!-- .page -->
+
+{% if has_map %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function () {
+  const map = L.map('sitrep-map', { zoomControl: true });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors', maxZoom: 18,
+  }).addTo(map);
+
+  const bounds = [];
+
+  {% if forecast and forecast.lat_min is not none %}
+  const fcBounds = [
+    [{{ forecast.lat_min }}, {{ forecast.lon_min }}],
+    [{{ forecast.lat_max }}, {{ forecast.lon_max }}],
+  ];
+  L.rectangle(fcBounds, {
+    color: '#4f46e5', weight: 2, fillOpacity: 0.08, dashArray: '6 4',
+  }).addTo(map).bindPopup(
+    '<strong>Forecast extent</strong><br>{{ forecast.filename }}'
+  );
+  bounds.push(...fcBounds);
+  {% endif %}
+
+  {% if trigger and trigger.scope_lat_min is not none %}
+  L.rectangle([
+    [{{ trigger.scope_lat_min }}, {{ trigger.scope_lon_min }}],
+    [{{ trigger.scope_lat_max }}, {{ trigger.scope_lon_max }}],
+  ], {
+    color: '#dc2626', weight: 2, fill: false, dashArray: '3 3',
+  }).addTo(map).bindPopup('<strong>Trigger scope</strong>');
+  {% endif %}
+
+  const points = {{ map_points | safe }};
+  points.forEach(p => {
+    const m = L.circleMarker([p.lat, p.lon], {
+      radius: 8, color: '#dc2626', fillColor: '#dc2626', fillOpacity: 0.7, weight: 2,
+    }).addTo(map);
+    m.bindPopup(
+      `<strong>${p.event_name}</strong><br>${p.country}<br>` +
+      `<span style="color:#6b7280;font-size:.8rem;">${p.event_date}</span>`
+    );
+    bounds.push([p.lat, p.lon]);
+  });
+
+  if (bounds.length === 1) {
+    map.setView(bounds[0], 7);
+  } else if (bounds.length > 1) {
+    map.fitBounds(bounds, { padding: [30, 30] });
+  } else {
+    map.setView([20, 100], 4);
+  }
+})();
+</script>
+{% endif %}
+
+</body>
+</html>
