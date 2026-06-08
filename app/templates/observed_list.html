@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}Observed Rainfall — IBF App{% endblock %}
+{% block extra_styles %}
+<style>
+  nav { background:#fff; border-bottom:1px solid #e5e7eb; padding:.85rem 2rem;
+        display:flex; align-items:center; justify-content:space-between; }
+  nav .brand { font-weight:700; font-size:1.1rem; color:#4f46e5; }
+  nav .nav-links { display:flex; align-items:center; gap:1.5rem; font-size:.875rem; }
+  nav .nav-links a { color:#6b7280; }
+  nav .nav-links a.active { color:#4f46e5; font-weight:600; }
+  nav .nav-links a.logout { color:#dc2626; font-weight:500; }
+
+  .main { max-width:1000px; margin:2rem auto; padding:0 1rem; }
+  h1 { font-size:1.4rem; font-weight:700; margin-bottom:.25rem; }
+  .sub { color:#6b7280; font-size:.875rem; margin-bottom:1.5rem; }
+
+  .filter-bar { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07);
+    padding:.9rem 1.2rem; margin-bottom:1.25rem; display:flex; gap:.75rem; align-items:flex-end; flex-wrap:wrap; }
+  .filter-bar label { font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+    color:#9ca3af; display:block; margin-bottom:.3rem; }
+  .filter-bar input, .filter-bar select {
+    padding:.45rem .75rem; border:1px solid #d1d5db; border-radius:7px; font-size:.875rem; background:#fff; }
+  .btn { padding:.5rem 1.1rem; background:#4f46e5; color:#fff; border:none; border-radius:8px;
+    font-size:.875rem; font-weight:600; cursor:pointer; }
+  .btn-outline { background:#fff; color:#374151; border:1px solid #d1d5db; }
+  .btn-outline:hover { background:#f3f4f6; }
+
+  .card { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.07);
+    padding:1.25rem; margin-bottom:1.25rem; }
+  .chart-title { font-size:.85rem; font-weight:700; color:#374151; margin-bottom:.75rem; }
+
+  table { width:100%; border-collapse:collapse; font-size:.875rem; }
+  th { text-align:left; padding:.55rem .75rem; font-size:.72rem; font-weight:700;
+    text-transform:uppercase; letter-spacing:.06em; color:#9ca3af; border-bottom:2px solid #e5e7eb; }
+  td { padding:.7rem .75rem; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
+  tr:last-child td { border-bottom:none; }
+
+  .badge-prelim { background:#fff7ed; color:#c2410c; font-size:.72rem; font-weight:700;
+    padding:.15rem .5rem; border-radius:999px; }
+  .badge-final  { background:#f0fdf4; color:#166534; font-size:.72rem; font-weight:700;
+    padding:.15rem .5rem; border-radius:999px; }
+  .wet-bar { display:inline-block; height:8px; border-radius:4px; background:#3b82f6; min-width:2px; }
+
+  .page-bar { display:flex; gap:.5rem; justify-content:center; margin-top:1rem; flex-wrap:wrap; }
+  .page-btn { padding:.4rem .85rem; border:1px solid #d1d5db; border-radius:7px;
+    font-size:.82rem; font-weight:600; color:#374151; background:#fff; cursor:pointer; text-decoration:none; }
+  .page-btn.active { background:#4f46e5; color:#fff; border-color:#4f46e5; }
+  .page-btn.disabled { color:#d1d5db; cursor:default; pointer-events:none; }
+
+  .alert-info { background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px;
+    padding:.6rem 1rem; font-size:.875rem; color:#1d4ed8; margin-bottom:1rem; }
+  .sync-form { display:flex; gap:.6rem; align-items:flex-end; }
+  .sync-form label { font-size:.75rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; color:#9ca3af; display:block; margin-bottom:.3rem; }
+  .sync-form input[type=number] { width:70px; padding:.45rem .6rem; border:1px solid #d1d5db;
+    border-radius:7px; font-size:.875rem; }
+  .empty { color:#9ca3af; font-size:.9rem; text-align:center; padding:2rem; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/observed" class="active">Observed</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:.75rem; margin-bottom:1.25rem;">
+    <div>
+      <h1>Observed Rainfall</h1>
+      <div class="sub">CHIRPS v2.0 daily observed precipitation — SE Asia / South Asia region</div>
+    </div>
+    <div style="display:flex; gap:.6rem; flex-wrap:wrap; align-items:center;">
+      <a href="/observed/verify/dashboard" class="btn btn-outline">Verification dashboard →</a>
+      {% if user.role == "admin" %}
+      <form method="post" action="/observed/sync" class="sync-form">
+        <div>
+          <label>Lookback days</label>
+          <input type="number" name="lookback_days" value="7" min="1" max="30">
+        </div>
+        <button type="submit" class="btn">Sync CHIRPS now</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if request.query_params.get('synced') %}
+  <div class="alert-info">CHIRPS sync started in background — new records will appear shortly.</div>
+  {% endif %}
+
+  {% if chart_data %}
+  <div class="card">
+    <div class="chart-title">Daily mean precipitation — last {{ chart_data | length }} days (mm)</div>
+    <canvas id="obsChart" height="60"></canvas>
+  </div>
+  {% endif %}
+
+  <div class="filter-bar">
+    <form method="get" action="/observed" style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;">
+      <div>
+        <label>From</label>
+        <input type="date" name="date_from" value="{{ date_from }}">
+      </div>
+      <div>
+        <label>To</label>
+        <input type="date" name="date_to" value="{{ date_to }}">
+      </div>
+      <button type="submit" class="btn">Filter</button>
+      {% if date_from or date_to or source %}
+      <a href="/observed" class="btn btn-outline">Clear</a>
+      {% endif %}
+    </form>
+  </div>
+
+  <div class="card" style="padding:0; overflow:hidden;">
+    {% if rows %}
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Source</th>
+          <th>Mean (mm)</th>
+          <th>Max (mm)</th>
+          <th>Min (mm)</th>
+          <th>Wet area</th>
+          <th>Type</th>
+          <th>Fetched</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td style="font-weight:600;">{{ r.obs_date.strftime("%d %b %Y") }}</td>
+          <td style="color:#6b7280;">{{ r.source }}</td>
+          <td style="font-weight:700; font-family:monospace;">{{ "%.2f"|format(r.precip_mean) }}</td>
+          <td style="font-family:monospace;">{{ "%.2f"|format(r.precip_max) }}</td>
+          <td style="font-family:monospace;">{{ "%.2f"|format(r.precip_min) }}</td>
+          <td>
+            <span class="wet-bar" style="width:{{ (r.wet_fraction * 80) | int }}px;"></span>
+            <span style="font-size:.8rem; color:#6b7280; margin-left:.35rem;">{{ "%.0f"|format(r.wet_fraction * 100) }}%</span>
+          </td>
+          <td>
+            {% if r.is_preliminary %}
+            <span class="badge-prelim">Prelim</span>
+            {% else %}
+            <span class="badge-final">Final</span>
+            {% endif %}
+          </td>
+          <td style="font-size:.78rem; color:#9ca3af;">{{ r.fetched_at.strftime("%d %b %H:%M") }}</td>
+          <td><a href="/observed/{{ r.id }}" style="font-size:.8rem; color:#4f46e5; font-weight:600;">Map →</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No observations yet.{% if user.role == "admin" %} Use "Sync CHIRPS now" above to fetch data.{% endif %}</div>
+    {% endif %}
+  </div>
+
+  {% if pages > 1 %}
+  <div class="page-bar">
+    <a href="?page={{ page - 1 }}&source={{ source }}&date_from={{ date_from }}&date_to={{ date_to }}"
+       class="page-btn {% if page <= 1 %}disabled{% endif %}">← Prev</a>
+    {% for p in range(1, pages + 1) %}
+    {% if p == page %}
+    <span class="page-btn active">{{ p }}</span>
+    {% elif p == 1 or p == pages or (p >= page - 2 and p <= page + 2) %}
+    <a href="?page={{ p }}&source={{ source }}&date_from={{ date_from }}&date_to={{ date_to }}"
+       class="page-btn">{{ p }}</a>
+    {% elif p == 2 or p == pages - 1 %}
+    <span class="page-btn disabled">…</span>
+    {% endif %}
+    {% endfor %}
+    <a href="?page={{ page + 1 }}&source={{ source }}&date_from={{ date_from }}&date_to={{ date_to }}"
+       class="page-btn {% if page >= pages %}disabled{% endif %}">Next →</a>
+  </div>
+  {% endif %}
+</div>
+
+{% if chart_data %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+  const obsLabels = {{ chart_data | map(attribute='obs_date') | map('string') | list | tojson }};
+  const obsMeans  = {{ chart_data | map(attribute='precip_mean') | list | tojson }};
+  const obsMaxes  = {{ chart_data | map(attribute='precip_max') | list | tojson }};
+  new Chart(document.getElementById('obsChart'), {
+    type: 'bar',
+    data: {
+      labels: obsLabels.map(d => d.slice(5)),
+      datasets: [
+        { label: 'Mean mm', data: obsMeans, backgroundColor: 'rgba(59,130,246,.6)', borderColor:'#3b82f6', borderWidth:1 },
+        { label: 'Max mm',  data: obsMaxes,  type: 'line', borderColor:'#dc2626', borderDash:[4,4], pointRadius:0, tension:.3, fill:false },
+      ]
+    },
+    options: {
+      plugins: { legend: { position: 'top' } },
+      scales: { y: { beginAtZero: true, title: { display: true, text: 'mm/day' } } }
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}

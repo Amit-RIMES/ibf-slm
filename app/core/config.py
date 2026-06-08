@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     WEEKLY_DIGEST_DAY: int = 0   # 0=Monday
     WEEKLY_DIGEST_HOUR: int = 8
 
+    # CHIRPS observed rainfall ingestion
+    CHIRPS_ENABLED: bool = True
+    CHIRPS_LOOKBACK_DAYS: int = 7     # how many days back to fetch on each run
+    CHIRPS_LAT_MIN: float = 0.0
+    CHIRPS_LAT_MAX: float = 35.0
+    CHIRPS_LON_MIN: float = 60.0
+    CHIRPS_LON_MAX: float = 155.0
+
     class Config:
         env_file = ".env"
 

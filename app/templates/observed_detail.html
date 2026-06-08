@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}{{ obs.obs_date }} Observed — IBF App{% endblock %}
+{% block extra_styles %}
+<style>
+  nav { background:#fff; border-bottom:1px solid #e5e7eb; padding:.85rem 2rem;
+        display:flex; align-items:center; justify-content:space-between; }
+  nav .brand { font-weight:700; font-size:1.1rem; color:#4f46e5; }
+  nav .nav-links { display:flex; align-items:center; gap:1.5rem; font-size:.875rem; }
+  nav .nav-links a { color:#6b7280; }
+  nav .nav-links a.active { color:#4f46e5; font-weight:600; }
+  nav .nav-links a.logout { color:#dc2626; font-weight:500; }
+
+  .main { max-width:960px; margin:2rem auto; padding:0 1rem; }
+  h1 { font-size:1.4rem; font-weight:700; }
+  .meta { font-size:.85rem; color:#9ca3af; margin-top:.2rem; margin-bottom:1.5rem; }
+
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.25rem; }
+  .card { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.07); padding:1.25rem; }
+  .section-title { font-size:.75rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.06em; color:#9ca3af; margin-bottom:.85rem; }
+  .stat-row { display:flex; justify-content:space-between; padding:.45rem 0;
+    border-bottom:1px solid #f3f4f6; font-size:.875rem; }
+  .stat-row:last-child { border-bottom:none; }
+  .stat-row .label { color:#6b7280; }
+  .stat-row .value { font-weight:600; }
+
+  #map { height:420px; border-radius:8px; }
+  .legend { display:flex; align-items:center; gap:.5rem; margin-top:.6rem; font-size:.78rem; color:#6b7280; }
+  .legend-bar { flex:1; height:8px; border-radius:4px;
+    background:linear-gradient(to right, #e0f2fe, #0284c7, #1e3a5f); }
+  .badge-prelim { background:#fff7ed; color:#c2410c; font-size:.78rem; font-weight:700;
+    padding:.2rem .6rem; border-radius:999px; }
+  .badge-final  { background:#f0fdf4; color:#166534; font-size:.78rem; font-weight:700;
+    padding:.2rem .6rem; border-radius:999px; }
+</style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/observed" class="active">Observed</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:.75rem; margin-bottom:1rem;">
+    <div>
+      <h1>{{ obs.obs_date.strftime("%d %B %Y") }}</h1>
+      <div class="meta">
+        {{ obs.source }} observed rainfall &nbsp;·&nbsp;
+        {% if obs.is_preliminary %}
+        <span class="badge-prelim">Preliminary</span>
+        {% else %}
+        <span class="badge-final">Final</span>
+        {% endif %}
+        &nbsp;·&nbsp; Fetched {{ obs.fetched_at.strftime("%d %b %Y %H:%M UTC") }}
+      </div>
+    </div>
+    <a href="/observed" style="padding:.45rem 1rem; border:1px solid #d1d5db; border-radius:8px;
+       font-size:.85rem; font-weight:600; color:#6b7280; text-decoration:none;">← Back</a>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="section-title">Precipitation (mm/day)</div>
+      <div class="stat-row"><span class="label">Mean</span><span class="value">{{ "%.3f"|format(obs.precip_mean) }}</span></div>
+      <div class="stat-row"><span class="label">Maximum</span><span class="value">{{ "%.3f"|format(obs.precip_max) }}</span></div>
+      <div class="stat-row"><span class="label">Minimum (wet)</span><span class="value">{{ "%.3f"|format(obs.precip_min) }}</span></div>
+      <div class="stat-row">
+        <span class="label">Wet fraction (≥1 mm)</span>
+        <span class="value">{{ "%.1f"|format(obs.wet_fraction * 100) }}%</span>
+      </div>
+      <div class="stat-row"><span class="label">Valid pixels</span><span class="value">{{ "{:,}".format(obs.pixel_count) }}</span></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Region</div>
+      <div class="stat-row"><span class="label">Lat range</span><span class="value">{{ obs.lat_min }}° – {{ obs.lat_max }}°N</span></div>
+      <div class="stat-row"><span class="label">Lon range</span><span class="value">{{ obs.lon_min }}° – {{ obs.lon_max }}°E</span></div>
+      <div class="stat-row"><span class="label">Date</span><span class="value">{{ obs.obs_date.isoformat() }}</span></div>
+      <div class="stat-row"><span class="label">Product</span>
+        <span class="value">CHIRPS v2.0 p05 (0.05°)</span></div>
+    </div>
+  </div>
+
+  {% if obs.geojson %}
+  <div class="card">
+    <div class="section-title">Precipitation Map</div>
+    <div id="map"></div>
+    <div class="legend">
+      <span>0 mm</span>
+      <div class="legend-bar"></div>
+      <span>≥80 mm</span>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const geojson = {{ obs.geojson | safe }};
+    const map = L.map('map');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors', opacity: 0.5
+    }).addTo(map);
+
+    function precipColor(intensity) {
+      const r = Math.round(224 - intensity * 205);
+      const g = Math.round(242 - intensity * 110);
+      const b = Math.round(254 - intensity * 63);
+      return `rgb(${r},${g},${b})`;
+    }
+
+    const layer = L.geoJSON(geojson, {
+      style: f => ({
+        fillColor: precipColor(f.properties.intensity),
+        fillOpacity: 0.78,
+        weight: 0,
+        color: 'transparent',
+      }),
+      onEachFeature: (f, l) => l.bindTooltip(`${f.properties.precip} mm`, {sticky:true}),
+    }).addTo(map);
+    map.fitBounds(layer.getBounds(), {padding:[16,16]});
+  </script>
+  {% else %}
+  <div class="card" style="text-align:center;color:#9ca3af;padding:2rem;">No map data available.</div>
+  {% endif %}
+</div>
+{% endblock %}

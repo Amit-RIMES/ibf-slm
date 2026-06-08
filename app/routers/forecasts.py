@@ -741,11 +741,14 @@ async def forecast_detail(forecast_id: int, request: Request, db: AsyncSession =
     if not forecast:
         return RedirectResponse("/dashboard")
 
+    import json as _json
+    lead_time_stats = _json.loads(forecast.lead_time_stats) if forecast.lead_time_stats else None
+
     return templates.TemplateResponse(
-    request,
-    "forecast_detail.html",
-    {"user": user, "forecast": forecast},
-)
+        request,
+        "forecast_detail.html",
+        {"user": user, "forecast": forecast, "lead_time_stats": lead_time_stats},
+    )
 
 
 @router.post("/{forecast_id}/delete")

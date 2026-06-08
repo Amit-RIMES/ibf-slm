@@ -121,8 +121,7 @@
   </div>
   {% endif %}
 
-  {% if forecast.lead_time_stats %}
-  {% set lts = forecast.lead_time_stats | from_json %}
+  {% if lead_time_stats %}
   <div class="card" style="margin-bottom:1.25rem;">
     <div class="section-title">Lead-time Breakdown</div>
     <table style="font-size:.875rem;">
@@ -136,11 +135,11 @@
         </tr>
       </thead>
       <tbody>
-        {% for bucket in [('d1_5', 'Days 1–5'), ('d6_10', 'Days 6–10'), ('d11_15', 'Days 11–15')] %}
-        {% if lts.get(bucket[0]) %}
-        {% set b = lts[bucket[0]] %}
+        {% for key, label in [('d1_5', 'Days 1–5'), ('d6_10', 'Days 6–10'), ('d11_15', 'Days 11–15')] %}
+        {% if lead_time_stats.get(key) %}
+        {% set b = lead_time_stats[key] %}
         <tr>
-          <td style="font-weight:600;">{{ bucket[1] }}</td>
+          <td style="font-weight:600;">{{ label }}</td>
           <td>{{ "%.2f"|format(b.min) }}</td>
           <td style="font-weight:600;">{{ "%.2f"|format(b.mean) }}</td>
           <td>{{ "%.2f"|format(b.max) }}</td>

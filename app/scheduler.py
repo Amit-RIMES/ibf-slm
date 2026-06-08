@@ -19,6 +19,7 @@ _scheduler = AsyncIOScheduler()
 _JOB_ID = "daily_sync"
 _ESCALATION_JOB_ID = "alert_escalation"
 _DIGEST_JOB_ID = "weekly_digest"
+_CHIRPS_JOB_ID = "chirps_sync"
 
 
 async def _run_daily_sync():
@@ -211,6 +212,25 @@ async def _run_weekly_digest() -> None:
     logger.info("Weekly digest dispatched to %d admin(s)", len(admin_emails))
 
 
+async def _run_chirps_sync():
+    if not settings.CHIRPS_ENABLED:
+        return
+    from app.core.chirps import sync_recent_days
+    async with AsyncSessionLocal() as db:
+        ingested = await sync_recent_days(
+            db,
+            lookback_days=settings.CHIRPS_LOOKBACK_DAYS,
+            lat_min=settings.CHIRPS_LAT_MIN,
+            lat_max=settings.CHIRPS_LAT_MAX,
+            lon_min=settings.CHIRPS_LON_MIN,
+            lon_max=settings.CHIRPS_LON_MAX,
+        )
+    if ingested:
+        logger.info("CHIRPS sync: ingested %d new day(s): %s", len(ingested), ingested)
+    else:
+        logger.debug("CHIRPS sync: no new data")
+
+
 async def _cleanup_old_forecasts(db, retention_days: int) -> int:
     if not retention_days:
         return 0
@@ -266,6 +286,17 @@ async def apply_schedule():
             hour=settings.WEEKLY_DIGEST_HOUR,
             minute=0,
             id=_DIGEST_JOB_ID,
+            replace_existing=True,
+        )
+
+    # CHIRPS observed rainfall — daily at 02:30 UTC (data ~1-day lag)
+    if not _scheduler.get_job(_CHIRPS_JOB_ID):
+        _scheduler.add_job(
+            _run_chirps_sync,
+            trigger="cron",
+            hour=2,
+            minute=30,
+            id=_CHIRPS_JOB_ID,
             replace_existing=True,
         )
 
