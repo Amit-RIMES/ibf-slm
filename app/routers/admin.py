@@ -318,6 +318,27 @@ async def admin_revoke_key(request: Request, key_id: int, db: AsyncSession = Dep
     return RedirectResponse("/admin/api-keys", status_code=303)
 
 
+@router.post("/api-keys/{key_id}/allowed-ips")
+async def admin_set_allowed_ips(
+    request: Request,
+    key_id: int,
+    allowed_ips: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    if user.role != "admin":
+        return _FORBIDDEN
+
+    result = await db.execute(select(APIKey).where(APIKey.id == key_id))
+    key = result.scalar_one_or_none()
+    if key:
+        key.allowed_ips = allowed_ips.strip() or None
+        await db.commit()
+    return RedirectResponse("/admin/api-keys", status_code=303)
+
+
 @router.get("/webhooks", response_class=HTMLResponse)
 async def admin_webhooks(request: Request, db: AsyncSession = Depends(get_db)):
     user = await get_current_user(request, db)
