@@ -36,7 +36,7 @@ async def observed_list(
 ):
     user = await get_current_user(request, db)
     if not user:
-        return RedirectResponse("/login")
+        return RedirectResponse("/login", status_code=303)
 
     q = select(ObservedRainfall).order_by(ObservedRainfall.obs_date.desc())
     if source:
@@ -91,12 +91,12 @@ async def observed_list(
 async def observed_detail(obs_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     user = await get_current_user(request, db)
     if not user:
-        return RedirectResponse("/login")
+        return RedirectResponse("/login", status_code=303)
 
     result = await db.execute(select(ObservedRainfall).where(ObservedRainfall.id == obs_id))
     obs = result.scalar_one_or_none()
     if not obs:
-        return RedirectResponse("/observed")
+        return RedirectResponse("/observed", status_code=303)
 
     return templates.TemplateResponse(
         request, "observed_detail.html",
@@ -114,7 +114,7 @@ async def observed_verify(
 ):
     user = await get_current_user(request, db)
     if not user:
-        return RedirectResponse("/login")
+        return RedirectResponse("/login", status_code=303)
 
     cutoff = datetime.now(timezone.utc).date() - timedelta(days=days)
 
@@ -247,7 +247,7 @@ async def observed_sync(
 ):
     user = await get_current_user(request, db)
     if not user:
-        return RedirectResponse("/login")
+        return RedirectResponse("/login", status_code=303)
     if user.role != "admin":
         return _FORBIDDEN
 
