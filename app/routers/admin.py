@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import hashlib
 import secrets
 
-from app.core.audit import ACTION_LABELS, log_action
+from app.core.audit import ACTION_CATEGORIES, ACTION_LABELS, log_action
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.api_key import APIKey
@@ -125,22 +125,77 @@ async def admin_delete_user(
 AUDIT_PAGE_SIZE = 50
 
 
+def _audit_page_range(current: int, total_pages: int) -> list:
+    if total_pages <= 7:
+        return list(range(1, total_pages + 1))
+    pages: list = []
+    shown = sorted({1, total_pages, *range(max(1, current - 2), min(total_pages, current + 2) + 1)})
+    prev = 0
+    for p in shown:
+        if p - prev > 1:
+            pages.append(None)
+        pages.append(p)
+        prev = p
+    return pages
+
+
 @router.get("/audit", response_class=HTMLResponse)
-async def admin_audit(request: Request, db: AsyncSession = Depends(get_db), page: int = 1):
+async def admin_audit(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    page: int = 1,
+    user_q: str = "",
+    category: str = "",
+    date_from: str = "",
+    date_to: str = "",
+):
     user = await get_current_user(request, db)
     if not user:
         return RedirectResponse("/login")
     if user.role != "admin":
         return _FORBIDDEN
 
+    from datetime import datetime as dt, timezone as tz, timedelta
+    from sqlalchemy import and_
+
+    if category and category not in ACTION_CATEGORIES:
+        category = ""
+
+    dt_from = dt_to = None
+    if date_from:
+        try:
+            dt_from = dt.fromisoformat(date_from).replace(tzinfo=tz.utc)
+        except ValueError:
+            date_from = ""
+    if date_to:
+        try:
+            dt_to = (dt.fromisoformat(date_to) + timedelta(days=1)).replace(tzinfo=tz.utc)
+        except ValueError:
+            date_to = ""
+
+    filters = []
+    if category:
+        filters.append(AuditLog.action.like(f"{category}.%"))
+    if dt_from:
+        filters.append(AuditLog.created_at >= dt_from)
+    if dt_to:
+        filters.append(AuditLog.created_at < dt_to)
+
+    base = select(AuditLog)
+    if user_q:
+        base = base.join(User, User.id == AuditLog.user_id).where(
+            User.username.ilike(f"%{user_q}%")
+        )
+    if filters:
+        base = base.where(and_(*filters))
+
     page = max(1, page)
-    total = await db.scalar(select(func.count()).select_from(AuditLog))
+    total = await db.scalar(select(func.count()).select_from(base.subquery()))
     total_pages = max(1, -(-total // AUDIT_PAGE_SIZE))
     page = min(page, total_pages)
 
     result = await db.execute(
-        select(AuditLog)
-        .order_by(desc(AuditLog.created_at))
+        base.order_by(desc(AuditLog.created_at))
         .offset((page - 1) * AUDIT_PAGE_SIZE)
         .limit(AUDIT_PAGE_SIZE)
     )
@@ -151,7 +206,11 @@ async def admin_audit(request: Request, db: AsyncSession = Depends(get_db), page
         {
             "request": request, "user": user, "entries": entries,
             "action_labels": ACTION_LABELS,
+            "action_categories": ACTION_CATEGORIES,
             "page": page, "total": total, "total_pages": total_pages,
+            "page_range": _audit_page_range(page, total_pages),
+            "user_q": user_q, "category": category,
+            "date_from": date_from, "date_to": date_to,
         },
     )
 

@@ -3,22 +3,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.audit import AuditLog
 
 ACTION_LABELS = {
-    "forecast.import":        "Forecast imported",
-    "forecast.delete":        "Forecast deleted",
-    "trigger.create":         "Trigger created",
-    "trigger.edit":           "Trigger edited",
-    "trigger.delete":         "Trigger deleted",
-    "trigger.acknowledge":    "Trigger acknowledged",
-    "impact.create":          "Impact record created",
-    "impact.edit":            "Impact record edited",
-    "impact.delete":          "Impact record deleted",
-    "user.approve":           "User approved",
-    "user.reject":            "Registration rejected",
-    "user.role_change":       "User role changed",
-    "user.delete":            "User deleted",
-    "user.password_change":   "Password changed",
-    "user.profile_edit":      "Profile updated",
+    "forecast.import":             "Forecast imported",
+    "forecast.upload":             "Forecast uploaded",
+    "forecast.delete":             "Forecast deleted",
+    "trigger.create":              "Trigger created",
+    "trigger.edit":                "Trigger edited",
+    "trigger.delete":              "Trigger deleted",
+    "trigger.acknowledge":         "Trigger acknowledged",
+    "impact.create":               "Impact record created",
+    "impact.edit":                 "Impact record edited",
+    "impact.delete":               "Impact record deleted",
+    "user.approve":                "User approved",
+    "user.reject":                 "Registration rejected",
+    "user.role_change":            "Role changed",
+    "user.delete":                 "User deleted",
+    "user.password_change":        "Password changed",
+    "user.profile_edit":           "Profile updated",
+    "user.notifications_update":   "Notification prefs updated",
+    "webhook.create":              "Webhook created",
+    "webhook.toggle":              "Webhook toggled",
+    "webhook.delete":              "Webhook deleted",
+    "sync.run":                    "Sync run",
+    "sync.backfill":               "Source backfill run",
 }
+
+ACTION_CATEGORIES = ["forecast", "trigger", "impact", "user", "webhook", "sync"]
 
 
 async def log_action(
