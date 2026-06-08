@@ -205,6 +205,7 @@ async def forecast_list(
     q: str = "",
     date_from: str = "",
     date_to: str = "",
+    source: str = "",
     page: int = 1,
 ):
     user = await get_current_user(request, db)
@@ -228,6 +229,8 @@ async def forecast_list(
             filters.append(ForecastUpload.uploaded_at < date_type.fromisoformat(date_to) + timedelta(days=1))
         except ValueError:
             pass
+    if source:
+        filters.append(ForecastUpload.source == source)
 
     base = select(ForecastUpload)
     if filters:
@@ -246,7 +249,8 @@ async def forecast_list(
         "forecast_list.html",
         {
             "request": request, "user": user, "forecasts": forecasts,
-            "q": q, "date_from": date_from, "date_to": date_to,
+            "q": q, "date_from": date_from, "date_to": date_to, "source": source,
+            "sources": SOURCES,
             "page": page, "total": total, "total_pages": total_pages,
             "page_size": PAGE_SIZE, "page_range": _build_page_range(page, total_pages),
         },
@@ -260,6 +264,7 @@ async def forecast_export(
     q: str = "",
     date_from: str = "",
     date_to: str = "",
+    source: str = "",
 ):
     user = await get_current_user(request, db)
     if not user:
@@ -282,6 +287,8 @@ async def forecast_export(
             filters.append(ForecastUpload.uploaded_at < date_type.fromisoformat(date_to) + timedelta(days=1))
         except ValueError:
             pass
+    if source:
+        filters.append(ForecastUpload.source == source)
     if filters:
         stmt = stmt.where(and_(*filters))
     stmt = stmt.order_by(desc(ForecastUpload.uploaded_at))
@@ -292,14 +299,14 @@ async def forecast_export(
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow([
-        "id", "filename", "uploaded_at",
+        "id", "filename", "source", "uploaded_at",
         "lat_min", "lat_max", "lon_min", "lon_max",
         "time_start", "time_end", "time_steps",
         "precip_min_mm", "precip_max_mm", "precip_mean_mm",
     ])
     for fc in forecasts:
         writer.writerow([
-            fc.id, fc.filename, fc.uploaded_at.strftime("%Y-%m-%d %H:%M:%S"),
+            fc.id, fc.filename, fc.source or "", fc.uploaded_at.strftime("%Y-%m-%d %H:%M:%S"),
             fc.lat_min, fc.lat_max, fc.lon_min, fc.lon_max,
             fc.time_start, fc.time_end, fc.time_steps,
             fc.precip_min, fc.precip_max, fc.precip_mean,
@@ -354,7 +361,7 @@ async def upload_forecast(
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
-    forecast = ForecastUpload(filename=file.filename, **stats)
+    forecast = ForecastUpload(filename=file.filename, source="manual", **stats)
     db.add(forecast)
     await db.commit()
     await db.refresh(forecast)
@@ -419,7 +426,7 @@ async def do_import(source: str, date: str, db: AsyncSession) -> ForecastUpload:
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
-    forecast = ForecastUpload(filename=filename, **stats)
+    forecast = ForecastUpload(filename=filename, source=source, **stats)
     db.add(forecast)
     await db.commit()
     await db.refresh(forecast)

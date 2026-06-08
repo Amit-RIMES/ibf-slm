@@ -91,6 +91,11 @@
 
   <div class="rule-box">
     Fire when <strong>{{ VARIABLE_LABELS[trigger.variable] }} {{ OPERATOR_SYMBOLS[trigger.operator] }} {{ trigger.threshold }} mm</strong>
+    {% if trigger.scope_lat_min is not none %}
+    &nbsp;·&nbsp; <span style="font-size:.85rem; font-weight:500;">
+      Scope: {{ trigger.scope_lat_min }}°–{{ trigger.scope_lat_max }}°N, {{ trigger.scope_lon_min }}°–{{ trigger.scope_lon_max }}°E
+    </span>
+    {% endif %}
   </div>
 
   <div class="card">

@@ -38,6 +38,12 @@
   .rule-preview { background: #f5f3ff; border: 1px solid #e0d9ff; border-radius: 8px;
     padding: .85rem 1rem; font-size: .9rem; color: #4338ca; margin-bottom: 1.5rem; display: none; }
   .rule-preview.visible { display: block; }
+
+  .scope-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
+    padding: .85rem 1rem; margin-top: 1rem; }
+  .scope-box.hidden { display: none; }
+  .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: .75rem; }
+  @media (max-width: 560px) { .grid-4 { grid-template-columns: 1fr 1fr; } }
   .rule-preview strong { font-family: monospace; }
 
   .form-actions { display: flex; gap: .75rem; margin-top: .5rem; }
@@ -126,7 +132,43 @@
         Fire when <strong id="preview-text"></strong>
       </div>
 
+      <div class="section-heading">Geographic Scope</div>
+      <p style="font-size:.85rem; color:#6b7280; margin-bottom:.75rem;">
+        By default the trigger uses whole-domain forecast statistics. Enable a bounding box to restrict evaluation to a specific region.
+      </p>
+
       <div class="toggle-row">
+        <input type="checkbox" name="scope_enabled" id="scope_enabled" value="on"
+          {% if scope_enabled or (trigger and trigger.scope_lat_min is not none) %}checked{% endif %} />
+        <label for="scope_enabled">Scope to bounding box</label>
+      </div>
+
+      <div class="scope-box {% if not scope_enabled and (not trigger or trigger.scope_lat_min is none) %}hidden{% endif %}" id="scope-box">
+        <div class="grid-4">
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Min latitude (°S–N)</label>
+            <input type="number" step="any" name="scope_lat_min" placeholder="-90 to 90"
+              value="{{ trigger.scope_lat_min if trigger and trigger.scope_lat_min is not none else '' }}" />
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Max latitude (°S–N)</label>
+            <input type="number" step="any" name="scope_lat_max" placeholder="-90 to 90"
+              value="{{ trigger.scope_lat_max if trigger and trigger.scope_lat_max is not none else '' }}" />
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Min longitude (°W–E)</label>
+            <input type="number" step="any" name="scope_lon_min" placeholder="-180 to 180"
+              value="{{ trigger.scope_lon_min if trigger and trigger.scope_lon_min is not none else '' }}" />
+          </div>
+          <div class="form-group" style="margin-bottom:0;">
+            <label>Max longitude (°W–E)</label>
+            <input type="number" step="any" name="scope_lon_max" placeholder="-180 to 180"
+              value="{{ trigger.scope_lon_max if trigger and trigger.scope_lon_max is not none else '' }}" />
+          </div>
+        </div>
+      </div>
+
+      <div class="toggle-row" style="margin-top:1rem;">
         <input type="checkbox" name="is_active" id="is_active" value="on"
           {% if not trigger or trigger.is_active %}checked{% endif %} />
         <label for="is_active">Active — evaluate this trigger on new forecasts</label>
@@ -162,5 +204,11 @@
   selOp.addEventListener('change', updatePreview);
   inpThreshold.addEventListener('input', updatePreview);
   updatePreview();
+
+  const scopeChk = document.getElementById('scope_enabled');
+  const scopeBox = document.getElementById('scope-box');
+  scopeChk.addEventListener('change', () => {
+    scopeBox.classList.toggle('hidden', !scopeChk.checked);
+  });
 </script>
 {% endblock %}

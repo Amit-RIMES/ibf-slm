@@ -82,7 +82,7 @@
   <div class="page-header">
     <h1>Forecasts</h1>
     <div style="display:flex;gap:.6rem;align-items:center;">
-      <a href="/forecasts/export.csv{% if q or date_from or date_to %}?q={{ q }}&date_from={{ date_from }}&date_to={{ date_to }}{% endif %}"
+      <a href="/forecasts/export.csv?q={{ q }}&date_from={{ date_from }}&date_to={{ date_to }}&source={{ source }}"
          style="font-size:.85rem;font-weight:600;color:#6b7280;border:1px solid #d1d5db;
                 border-radius:7px;padding:.45rem .9rem;text-decoration:none;">
         ↓ Export CSV
@@ -101,8 +101,15 @@
     <input type="text" name="q" placeholder="Search filename…" value="{{ q }}">
     <input type="date" name="date_from" value="{{ date_from }}" title="Uploaded from">
     <input type="date" name="date_to"   value="{{ date_to }}"   title="Uploaded to">
+    <select name="source" style="padding:.45rem .75rem;border:1px solid #d1d5db;border-radius:7px;font-size:.875rem;outline:none;background:#fff;max-width:220px;">
+      <option value="">All sources</option>
+      <option value="manual" {% if source == "manual" %}selected{% endif %}>Manual upload</option>
+      {% for s in sources %}
+      <option value="{{ s.value }}" {% if source == s.value %}selected{% endif %}>{{ s.label }}</option>
+      {% endfor %}
+    </select>
     <button type="submit" class="btn-filter">Filter</button>
-    {% if q or date_from or date_to %}
+    {% if q or date_from or date_to or source %}
     <a href="/forecasts" class="btn-clear">✕ Clear</a>
     {% endif %}
     <span class="result-count">{{ total }} result{{ 's' if total != 1 else '' }}</span>
@@ -115,6 +122,7 @@
         <tr>
           <th style="width:2rem;"></th>
           <th>File</th>
+          <th>Source</th>
           <th>Uploaded</th>
           <th>Time range</th>
           <th>Steps</th>
@@ -129,6 +137,19 @@
           <td><input type="checkbox" class="fc-check" value="{{ fc.id }}"
                      style="width:15px;height:15px;cursor:pointer;accent-color:#4f46e5;"></td>
           <td style="font-weight:600;">{{ fc.filename }}</td>
+          <td style="font-size:.8rem;color:#6b7280;">
+            {% if fc.source == "manual" %}
+              <span title="Manual upload">Manual</span>
+            {% elif fc.source == "regional_rimes" %}
+              Regional — RIMES
+            {% elif fc.source == "regional_sea" %}
+              Regional — SEA
+            {% elif fc.source and fc.source.startswith("country_") %}
+              {{ fc.source[8:] | upper }}
+            {% else %}
+              —
+            {% endif %}
+          </td>
           <td>{{ fc.uploaded_at.strftime("%Y-%m-%d %H:%M") }}</td>
           <td style="font-size:.8rem;">{{ fc.time_start[:10] }} – {{ fc.time_end[:10] }}</td>
           <td>{{ fc.time_steps }}</td>
@@ -157,7 +178,7 @@
   </div>
 
   {% if total_pages > 1 %}
-  {% set base_url = "/forecasts?q=" ~ q ~ "&date_from=" ~ date_from ~ "&date_to=" ~ date_to %}
+  {% set base_url = "/forecasts?q=" ~ q ~ "&date_from=" ~ date_from ~ "&date_to=" ~ date_to ~ "&source=" ~ source %}
   <div class="pagination">
     {% if page > 1 %}
       <a class="page-btn" href="{{ base_url }}&page={{ page - 1 }}">← Prev</a>

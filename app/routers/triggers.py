@@ -30,12 +30,33 @@ VARIABLE_LABELS = {
 }
 
 
+def _scoped_value(geojson_str: str, variable: str, trigger: "Trigger") -> float:
+    """Compute a precip stat restricted to the trigger's bounding box."""
+    import json as _json
+    fc = _json.loads(geojson_str)
+    vals = []
+    for feat in fc.get("features", []):
+        coords = feat["geometry"]["coordinates"][0]
+        clon = (coords[0][0] + coords[2][0]) / 2
+        clat = (coords[0][1] + coords[2][1]) / 2
+        if (trigger.scope_lat_min <= clat <= trigger.scope_lat_max and
+                trigger.scope_lon_min <= clon <= trigger.scope_lon_max):
+            vals.append(feat["properties"]["precip"])
+    if not vals:
+        return 0.0
+    if variable == "precip_mean":
+        return round(sum(vals) / len(vals), 3)
+    if variable == "precip_max":
+        return round(max(vals), 3)
+    return round(min(vals), 3)  # precip_min
+
+
 async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
     """Check all active triggers against a newly ingested forecast. Returns count fired."""
     result = await db.execute(select(Trigger).where(Trigger.is_active == True))  # noqa: E712
     triggers = result.scalars().all()
 
-    value_map = {
+    global_map = {
         "precip_mean": forecast.precip_mean,
         "precip_max": forecast.precip_max,
         "precip_min": forecast.precip_min,
@@ -49,7 +70,10 @@ async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
 
     fired_rows: list[tuple[Trigger, TriggerActivation, ForecastUpload]] = []
     for trigger in triggers:
-        value = value_map.get(trigger.variable, 0.0)
+        if trigger.scope_lat_min is not None:
+            value = _scoped_value(forecast.geojson, trigger.variable, trigger)
+        else:
+            value = global_map.get(trigger.variable, 0.0)
         if ops[trigger.operator](value, trigger.threshold):
             activation = TriggerActivation(
                 trigger_id=trigger.id,
@@ -113,23 +137,46 @@ def _trigger_form_ctx(request, user, trigger_obj, **kwargs):
     }
 
 
-def _validate_trigger(name, hazard_type, variable, operator, threshold_str, is_active):
-    """Returns (threshold_float, error_str). error_str is '' on success."""
+def _validate_trigger(name, hazard_type, variable, operator, threshold_str, is_active,
+                       scope_enabled=False, scope_lat_min_str="", scope_lat_max_str="",
+                       scope_lon_min_str="", scope_lon_max_str=""):
+    """Returns (threshold_float, scope_dict_or_None, error_str). error_str is '' on success."""
     if not name.strip():
-        return None, "Trigger name cannot be empty."
+        return None, None, "Trigger name cannot be empty."
     if hazard_type not in HAZARD_TYPES:
-        return None, "Please select a valid hazard type."
+        return None, None, "Please select a valid hazard type."
     if variable not in VARIABLES:
-        return None, "Please select a valid forecast variable."
+        return None, None, "Please select a valid forecast variable."
     if operator not in OPERATORS:
-        return None, "Please select a valid operator."
+        return None, None, "Please select a valid operator."
     try:
         threshold = float(threshold_str)
     except (ValueError, TypeError):
-        return None, "Threshold must be a number (e.g. 25 or 12.5)."
+        return None, None, "Threshold must be a number (e.g. 25 or 12.5)."
     if threshold < 0:
-        return None, "Threshold must be zero or greater."
-    return threshold, ""
+        return None, None, "Threshold must be zero or greater."
+
+    scope = None
+    if scope_enabled:
+        try:
+            slat_min = float(scope_lat_min_str)
+            slat_max = float(scope_lat_max_str)
+            slon_min = float(scope_lon_min_str)
+            slon_max = float(scope_lon_max_str)
+        except (ValueError, TypeError):
+            return None, None, "All four bounding box coordinates are required when scope is enabled."
+        if not (-90 <= slat_min <= 90 and -90 <= slat_max <= 90):
+            return None, None, "Latitude must be between -90 and 90."
+        if not (-180 <= slon_min <= 180 and -180 <= slon_max <= 180):
+            return None, None, "Longitude must be between -180 and 180."
+        if slat_min >= slat_max:
+            return None, None, "Min latitude must be less than max latitude."
+        if slon_min >= slon_max:
+            return None, None, "Min longitude must be less than max longitude."
+        scope = {"scope_lat_min": slat_min, "scope_lat_max": slat_max,
+                 "scope_lon_min": slon_min, "scope_lon_max": slon_max}
+
+    return threshold, scope, ""
 
 
 @router.post("/new")
@@ -141,25 +188,37 @@ async def trigger_create(
     operator: str = Form(...),
     threshold: str = Form(...),
     is_active: Optional[str] = Form(None),
+    scope_enabled: Optional[str] = Form(None),
+    scope_lat_min: str = Form(""),
+    scope_lat_max: str = Form(""),
+    scope_lon_min: str = Form(""),
+    scope_lon_max: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     user = await get_current_user(request, db)
     if not user:
         return RedirectResponse("/login")
 
-    threshold_val, error = _validate_trigger(name, hazard_type, variable, operator, threshold, is_active)
+    threshold_val, scope, error = _validate_trigger(
+        name, hazard_type, variable, operator, threshold, is_active,
+        scope_enabled == "on", scope_lat_min, scope_lat_max, scope_lon_min, scope_lon_max,
+    )
     if error:
         stub = SimpleNamespace(
             id=None, name=name, hazard_type=hazard_type, variable=variable,
             operator=operator, threshold=threshold, is_active=(is_active == "on"),
+            scope_lat_min=scope_lat_min, scope_lat_max=scope_lat_max,
+            scope_lon_min=scope_lon_min, scope_lon_max=scope_lon_max,
         )
         return templates.TemplateResponse(
-            "trigger_form.html", _trigger_form_ctx(request, user, stub, error=error)
+            "trigger_form.html", _trigger_form_ctx(request, user, stub,
+                error=error, scope_enabled=(scope_enabled == "on"))
         )
 
     trigger = Trigger(
         name=name, hazard_type=hazard_type, variable=variable,
         operator=operator, threshold=threshold_val, is_active=is_active == "on",
+        **(scope or {}),
     )
     db.add(trigger)
     await db.commit()
@@ -220,6 +279,11 @@ async def trigger_update(
     operator: str = Form(...),
     threshold: str = Form(...),
     is_active: Optional[str] = Form(None),
+    scope_enabled: Optional[str] = Form(None),
+    scope_lat_min: str = Form(""),
+    scope_lat_max: str = Form(""),
+    scope_lon_min: str = Form(""),
+    scope_lon_max: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     user = await get_current_user(request, db)
@@ -231,14 +295,20 @@ async def trigger_update(
     if not trigger:
         return RedirectResponse("/triggers")
 
-    threshold_val, error = _validate_trigger(name, hazard_type, variable, operator, threshold, is_active)
+    threshold_val, scope, error = _validate_trigger(
+        name, hazard_type, variable, operator, threshold, is_active,
+        scope_enabled == "on", scope_lat_min, scope_lat_max, scope_lon_min, scope_lon_max,
+    )
     if error:
         stub = SimpleNamespace(
             id=trigger_id, name=name, hazard_type=hazard_type, variable=variable,
             operator=operator, threshold=threshold, is_active=(is_active == "on"),
+            scope_lat_min=scope_lat_min, scope_lat_max=scope_lat_max,
+            scope_lon_min=scope_lon_min, scope_lon_max=scope_lon_max,
         )
         return templates.TemplateResponse(
-            "trigger_form.html", _trigger_form_ctx(request, user, stub, error=error)
+            "trigger_form.html", _trigger_form_ctx(request, user, stub,
+                error=error, scope_enabled=(scope_enabled == "on"))
         )
 
     trigger.name = name
@@ -247,6 +317,16 @@ async def trigger_update(
     trigger.operator = operator
     trigger.threshold = threshold_val
     trigger.is_active = is_active == "on"
+    if scope:
+        trigger.scope_lat_min = scope["scope_lat_min"]
+        trigger.scope_lat_max = scope["scope_lat_max"]
+        trigger.scope_lon_min = scope["scope_lon_min"]
+        trigger.scope_lon_max = scope["scope_lon_max"]
+    else:
+        trigger.scope_lat_min = None
+        trigger.scope_lat_max = None
+        trigger.scope_lon_min = None
+        trigger.scope_lon_max = None
     await db.commit()
     await log_action(db, user.id, "trigger.edit", f"Edited trigger '{name}'")
     return RedirectResponse(f"/triggers/{trigger_id}", status_code=303)

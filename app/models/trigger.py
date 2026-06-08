@@ -24,6 +24,12 @@ class Trigger(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
+    # Optional geographic scope (bounding box); None means whole-domain stats
+    scope_lat_min: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    scope_lat_max: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    scope_lon_min: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    scope_lon_max: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
     activations: Mapped[list["TriggerActivation"]] = relationship(
         "TriggerActivation", back_populates="trigger", lazy="selectin",
         cascade="all, delete-orphan"
