@@ -5,9 +5,11 @@ from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import delete, select
 
+from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.forecast import ForecastUpload
 from app.models.sync import SyncConfig, SyncLog
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -60,9 +62,30 @@ async def _run_daily_sync():
         cfg.last_run_status = overall
         await db.commit()
 
+        if overall == "error":
+            await _check_and_notify_sync_failures(db, cfg.id)
+
         deleted = await _cleanup_old_forecasts(db, cfg.retention_days)
         if deleted:
             logger.info("Retention cleanup: deleted %d old forecast(s)", deleted)
+
+
+async def _check_and_notify_sync_failures(db, config_id: int) -> None:
+    from app.core.email import send_sync_failure_email
+    threshold = settings.SMTP_FAILURE_ALERT_AFTER
+    recent = await db.execute(
+        select(SyncLog.status)
+        .order_by(SyncLog.id.desc())
+        .limit(threshold)
+    )
+    statuses = [r[0] for r in recent.all()]
+    if len(statuses) == threshold and all(s == "error" for s in statuses):
+        admins = await db.execute(
+            select(User.email).where(User.role == "admin", User.is_active == True)  # noqa: E712
+        )
+        admin_emails = [r[0] for r in admins.all()]
+        import asyncio
+        asyncio.create_task(send_sync_failure_email(admin_emails, threshold, settings.APP_BASE_URL))
 
 
 async def _cleanup_old_forecasts(db, retention_days: int) -> int:

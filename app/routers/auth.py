@@ -22,6 +22,16 @@ router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
 
+def _password_error(password: str) -> Optional[str]:
+    if len(password) < 8:
+        return "Password must be at least 8 characters."
+    if not any(c.isdigit() for c in password):
+        return "Password must contain at least one digit."
+    if not any(c.isalpha() for c in password):
+        return "Password must contain at least one letter."
+    return None
+
+
 @router.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request):
     return templates.TemplateResponse("register.html", {"request": request})
@@ -41,6 +51,12 @@ async def register(
             "register.html",
             {"request": request, "error": "Email already registered."},
             status_code=400,
+        )
+
+    pw_err = _password_error(password)
+    if pw_err:
+        return templates.TemplateResponse(
+            "register.html", {"request": request, "error": pw_err}, status_code=400
         )
 
     user = User(email=email, username=username, hashed_password=hash_password(password), is_active=False)
@@ -262,8 +278,9 @@ async def reset_password(
             "reset_password.html", {"request": request, "token": token, "error": msg}
         )
 
-    if len(new_password) < 6:
-        return err("Password must be at least 6 characters.")
+    pw_err = _password_error(new_password)
+    if pw_err:
+        return err(pw_err)
     if new_password != confirm_password:
         return err("Passwords do not match.")
 
@@ -370,8 +387,9 @@ async def change_password(
 
     if not verify_password(current_password, user.hashed_password):
         return err("Current password is incorrect.")
-    if len(new_password) < 6:
-        return err("New password must be at least 6 characters.")
+    pw_err = _password_error(new_password)
+    if pw_err:
+        return err(pw_err)
     if new_password != confirm_password:
         return err("New passwords do not match.")
 

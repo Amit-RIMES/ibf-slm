@@ -187,10 +187,31 @@
   {% block extra_styles %}{% endblock %}
 </head>
 <body>
+  <meta name="csrf-token" content="{{ request.state.csrf_token if request.state.csrf_token is defined else '' }}">
   {% block body %}{% endblock %}
   <button class="dark-toggle" id="dark-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
   <script>
   (function () {
+    // Auto-inject CSRF hidden field into all state-changing forms
+    function injectCsrf() {
+      var token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+      if (!token) return;
+      document.querySelectorAll('form').forEach(function (form) {
+        if (['post','put','patch','delete'].includes(form.method.toLowerCase())) {
+          if (!form.querySelector('[name="csrf_token"]')) {
+            var inp = document.createElement('input');
+            inp.type = 'hidden'; inp.name = 'csrf_token'; inp.value = token;
+            form.appendChild(inp);
+          }
+        }
+      });
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', injectCsrf);
+    } else {
+      injectCsrf();
+    }
+
     // Update toggle icon to match current theme
     var btn = document.getElementById('dark-toggle');
     if (btn) btn.textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';

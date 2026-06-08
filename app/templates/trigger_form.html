@@ -42,6 +42,17 @@
   .scope-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
     padding: .85rem 1rem; margin-top: 1rem; }
   .scope-box.hidden { display: none; }
+  .cond2-box { background: #f5f3ff; border: 1px solid #ddd6fe; border-radius: 8px;
+    padding: .85rem 1rem; margin-top: .75rem; }
+  .cond2-box.hidden { display: none; }
+  .logic-row { display: flex; align-items: center; gap: 1rem; margin-bottom: .85rem; }
+  .logic-radio { display: flex; align-items: center; gap: .35rem; cursor: pointer; font-size: .9rem; font-weight: 500; }
+  .polygon-box { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px;
+    padding: .85rem 1rem; margin-top: .75rem; }
+  .polygon-box.hidden { display: none; }
+  .polygon-box textarea { width: 100%; font-family: monospace; font-size: .78rem;
+    padding: .5rem .75rem; border: 1px solid #d1d5db; border-radius: 6px;
+    outline: none; resize: vertical; min-height: 80px; }
   .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: .75rem; }
   @media (max-width: 560px) { .grid-4 { grid-template-columns: 1fr 1fr; } }
   .rule-preview strong { font-family: monospace; }
@@ -132,6 +143,57 @@
         Fire when <strong id="preview-text"></strong>
       </div>
 
+      <div class="section-heading">Second Condition (optional)</div>
+      <p style="font-size:.85rem; color:#6b7280; margin-bottom:.75rem;">
+        Combine with a second threshold rule using AND (both must fire) or OR (either fires).
+      </p>
+
+      <div class="toggle-row">
+        <input type="checkbox" name="cond2_enabled" id="cond2_enabled" value="on"
+          {% if cond2_enabled or (trigger and trigger.condition_2_variable) %}checked{% endif %} />
+        <label for="cond2_enabled">Add second condition</label>
+      </div>
+
+      <div class="cond2-box {% if not cond2_enabled and (not trigger or not trigger.condition_2_variable) %}hidden{% endif %}" id="cond2-box">
+        <div class="logic-row">
+          <span style="font-size:.85rem;font-weight:600;color:#6b7280;">Combine with:</span>
+          {% for lop in logic_ops %}
+          <label class="logic-radio">
+            <input type="radio" name="logic_op" value="{{ lop }}"
+              {% if trigger and trigger.logic_op == lop %}checked
+              {% elif not trigger and lop == 'and' %}checked{% endif %} />
+            {{ lop | upper }}
+          </label>
+          {% endfor %}
+        </div>
+        <div class="grid-3">
+          <div class="form-group">
+            <label>Variable</label>
+            <select name="cond2_variable" id="sel-var2">
+              <option value="">Select…</option>
+              {% for v in variables %}
+              <option value="{{ v }}" {% if trigger and trigger.condition_2_variable == v %}selected{% endif %}>{{ variable_labels[v] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Operator</label>
+            <select name="cond2_operator" id="sel-op2">
+              <option value="">Select…</option>
+              {% for op in operators %}
+              <option value="{{ op }}" {% if trigger and trigger.condition_2_operator == op %}selected{% endif %}>{{ operator_labels[op] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Threshold (mm)</label>
+            <input type="number" step="any" name="cond2_threshold" id="inp-threshold2"
+              placeholder="e.g. 30"
+              value="{{ trigger.condition_2_threshold if trigger and trigger.condition_2_threshold is not none else '' }}" />
+          </div>
+        </div>
+      </div>
+
       <div class="section-heading">Geographic Scope</div>
       <p style="font-size:.85rem; color:#6b7280; margin-bottom:.75rem;">
         By default the trigger uses whole-domain forecast statistics. Enable a bounding box to restrict evaluation to a specific region.
@@ -166,6 +228,19 @@
               value="{{ trigger.scope_lon_max if trigger and trigger.scope_lon_max is not none else '' }}" />
           </div>
         </div>
+      </div>
+
+      <div class="toggle-row" style="margin-top:1rem;">
+        <input type="checkbox" name="polygon_enabled" id="polygon_enabled" value="on"
+          {% if trigger and trigger.scope_polygon %}checked{% endif %} />
+        <label for="polygon_enabled">Use GeoJSON polygon instead of bounding box</label>
+      </div>
+      <div class="polygon-box {% if not trigger or not trigger.scope_polygon %}hidden{% endif %}" id="polygon-box">
+        <p style="font-size:.82rem;color:#92400e;margin-bottom:.5rem;">
+          Paste a JSON array of <code>[lon, lat]</code> pairs forming a closed ring.
+          Example: <code>[[95,10],[105,10],[105,20],[95,20],[95,10]]</code>
+        </p>
+        <textarea name="scope_polygon" placeholder='[[lon,lat],[lon,lat],...]'>{{ trigger.scope_polygon if trigger and trigger.scope_polygon else '' }}</textarea>
       </div>
 
       <div class="toggle-row" style="margin-top:1rem;">
@@ -209,6 +284,29 @@
   const scopeBox = document.getElementById('scope-box');
   scopeChk.addEventListener('change', () => {
     scopeBox.classList.toggle('hidden', !scopeChk.checked);
+  });
+
+  const cond2Chk = document.getElementById('cond2_enabled');
+  const cond2Box = document.getElementById('cond2-box');
+  cond2Chk.addEventListener('change', () => {
+    cond2Box.classList.toggle('hidden', !cond2Chk.checked);
+  });
+
+  const polygonChk = document.getElementById('polygon_enabled');
+  const polygonBox = document.getElementById('polygon-box');
+  polygonChk.addEventListener('change', () => {
+    polygonBox.classList.toggle('hidden', !polygonChk.checked);
+    // If enabling polygon, disable bbox (and vice-versa) to avoid confusion
+    if (polygonChk.checked) {
+      scopeChk.checked = false;
+      scopeBox.classList.add('hidden');
+    }
+  });
+  scopeChk.addEventListener('change', () => {
+    if (scopeChk.checked) {
+      polygonChk.checked = false;
+      polygonBox.classList.add('hidden');
+    }
   });
 </script>
 {% endblock %}

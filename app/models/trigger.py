@@ -8,6 +8,7 @@ VARIABLES = ["precip_mean", "precip_max", "precip_min"]
 OPERATORS = ["gt", "gte", "lt", "lte"]
 OPERATOR_SYMBOLS = {"gt": ">", "gte": "≥", "lt": "<", "lte": "≤"}
 OPERATOR_LABELS = {"gt": "greater than (>)", "gte": "at least (≥)", "lt": "less than (<)", "lte": "at most (≤)"}
+LOGIC_OPS = ["and", "or"]
 
 
 class Trigger(Base):
@@ -24,11 +25,18 @@ class Trigger(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
-    # Optional geographic scope (bounding box); None means whole-domain stats
+    # Optional second condition (AND/OR compound rule)
+    condition_2_variable: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    condition_2_operator: Mapped[Optional[str]] = mapped_column(String(8), nullable=True)
+    condition_2_threshold: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    logic_op: Mapped[str] = mapped_column(String(8), nullable=False, default="and", server_default="and")
+
+    # Optional geographic scope: bounding box OR polygon (polygon takes precedence)
     scope_lat_min: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     scope_lat_max: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     scope_lon_min: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     scope_lon_max: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    scope_polygon: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # GeoJSON ring [[lon,lat],...]
 
     activations: Mapped[list["TriggerActivation"]] = relationship(
         "TriggerActivation", back_populates="trigger", lazy="selectin",

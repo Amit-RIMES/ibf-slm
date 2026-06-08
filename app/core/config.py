@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     APP_BASE_URL: str = "http://localhost:8000"
     RESET_TOKEN_EXPIRE_MINUTES: int = 60
 
+    LOG_FILE: str = "ibf_app.log"
+    LOG_LEVEL: str = "INFO"
+    SMTP_FAILURE_ALERT_AFTER: int = 3
+
     class Config:
         env_file = ".env"
 

@@ -245,6 +245,42 @@ async def send_acknowledgement_emails(
             logger.error("Failed to send acknowledgement email to %s: %s", email, exc)
 
 
+async def send_sync_failure_email(admin_emails: list[str], n_consecutive: int, base_url: str) -> None:
+    subject = f"[IBF] Daily sync has failed {n_consecutive} consecutive times"
+    html = f"""
+    <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:2rem;">
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;
+                  padding:1rem 1.25rem;margin-bottom:1.5rem;">
+        <span style="font-size:1.1rem">⚠️</span>
+        <strong style="color:#991b1b;margin-left:.4rem;">
+          Daily sync failed {n_consecutive} consecutive time{'s' if n_consecutive != 1 else ''}
+        </strong>
+      </div>
+      <p style="color:#4b5563;">
+        The automatic daily forecast import has not succeeded for the last
+        <strong>{n_consecutive}</strong> run{'s' if n_consecutive != 1 else ''}.
+        Check the sync log and the RIMES portal for details.
+      </p>
+      <p style="margin-top:1.25rem;">
+        <a href="{base_url}/admin/health"
+           style="display:inline-block;padding:.65rem 1.25rem;background:#dc2626;
+                  color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">
+          View system health →
+        </a>
+      </p>
+      <p style="color:#9ca3af;font-size:.8rem;margin-top:1rem;">IBF App — {base_url}</p>
+    </div>
+    """
+    if not settings.SMTP_HOST:
+        logger.warning("SMTP not configured. Sync failure alert skipped (%d consecutive).", n_consecutive)
+        return
+    for email in admin_emails:
+        try:
+            await asyncio.to_thread(_send_sync, email, subject, html)
+        except Exception as exc:
+            logger.error("Failed to send sync failure alert to %s: %s", email, exc)
+
+
 async def send_trigger_activation_email(
     admin_emails: list[str],
     fired: list[tuple["Trigger", "TriggerActivation", "ForecastUpload"]],

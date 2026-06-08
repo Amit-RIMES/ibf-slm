@@ -1,6 +1,8 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date as date_type, datetime, timedelta, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import and_, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,9 +11,83 @@ from app.core.database import get_db
 from app.models.api_key import APIKey
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
-from app.models.trigger import Trigger, TriggerActivation
+from app.models.trigger import OPERATORS, VARIABLES, Trigger, TriggerActivation
 
 router = APIRouter(prefix="/api/v1")
+
+
+# ── Request schemas ───────────────────────────────────────────────────────────
+
+class ImpactCreate(BaseModel):
+    event_name: str
+    event_date: str
+    hazard_type: str
+    country: str
+    region: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    affected_population: Optional[int] = None
+    casualties: Optional[int] = None
+    displaced: Optional[int] = None
+    damage_usd: Optional[float] = None
+    description: Optional[str] = None
+    forecast_id: Optional[int] = None
+    trigger_activation_id: Optional[int] = None
+
+
+class ImpactUpdate(BaseModel):
+    event_name: Optional[str] = None
+    event_date: Optional[str] = None
+    hazard_type: Optional[str] = None
+    country: Optional[str] = None
+    region: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    affected_population: Optional[int] = None
+    casualties: Optional[int] = None
+    displaced: Optional[int] = None
+    damage_usd: Optional[float] = None
+    description: Optional[str] = None
+    forecast_id: Optional[int] = None
+    trigger_activation_id: Optional[int] = None
+
+
+class TriggerCreate(BaseModel):
+    name: str
+    hazard_type: str
+    variable: str
+    operator: str
+    threshold: float
+    is_active: bool = True
+    scope_lat_min: Optional[float] = None
+    scope_lat_max: Optional[float] = None
+    scope_lon_min: Optional[float] = None
+    scope_lon_max: Optional[float] = None
+    condition_2_variable: Optional[str] = None
+    condition_2_operator: Optional[str] = None
+    condition_2_threshold: Optional[float] = None
+    logic_op: Optional[str] = "and"
+
+
+class TriggerUpdate(BaseModel):
+    name: Optional[str] = None
+    hazard_type: Optional[str] = None
+    variable: Optional[str] = None
+    operator: Optional[str] = None
+    threshold: Optional[float] = None
+    is_active: Optional[bool] = None
+    scope_lat_min: Optional[float] = None
+    scope_lat_max: Optional[float] = None
+    scope_lon_min: Optional[float] = None
+    scope_lon_max: Optional[float] = None
+    condition_2_variable: Optional[str] = None
+    condition_2_operator: Optional[str] = None
+    condition_2_threshold: Optional[float] = None
+    logic_op: Optional[str] = None
+
+
+class ActivationAcknowledge(BaseModel):
+    notes: Optional[str] = None
 
 
 # ── Serialisers ───────────────────────────────────────────────────────────────
@@ -308,7 +384,6 @@ async def api_impacts(
     db: AsyncSession = Depends(get_db),
     _key: APIKey = Depends(require_api_key),
 ):
-    from datetime import date as date_type
     filters = []
     if q:
         filters.append(ImpactRecord.event_name.ilike(f"%{q}%"))
@@ -327,7 +402,7 @@ async def api_impacts(
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid date_to: '{date_to}'")
 
-    stmt = select(ImpactRecord)
+    stmt = select(ImpactRecord)  # type: ignore[assignment]
     if filters:
         stmt = stmt.where(and_(*filters))
 
@@ -350,3 +425,175 @@ async def api_impact(
     if not imp:
         raise HTTPException(status_code=404, detail="Impact record not found")
     return _impact_dict(imp)
+
+
+@router.post("/impacts", summary="Create an impact record", status_code=201)
+async def api_create_impact(
+    body: ImpactCreate,
+    db: AsyncSession = Depends(get_db),
+    _key: APIKey = Depends(require_api_key),
+):
+    try:
+        ev_date = date_type.fromisoformat(body.event_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid event_date: '{body.event_date}'")
+
+    if body.forecast_id:
+        exists = await db.scalar(select(ForecastUpload).where(ForecastUpload.id == body.forecast_id))
+        if not exists:
+            raise HTTPException(status_code=400, detail=f"forecast_id {body.forecast_id} not found")
+    if body.trigger_activation_id:
+        exists = await db.scalar(select(TriggerActivation).where(TriggerActivation.id == body.trigger_activation_id))
+        if not exists:
+            raise HTTPException(status_code=400, detail=f"trigger_activation_id {body.trigger_activation_id} not found")
+
+    imp = ImpactRecord(
+        event_name=body.event_name, event_date=ev_date, hazard_type=body.hazard_type,
+        country=body.country, region=body.region, lat=body.lat, lon=body.lon,
+        affected_population=body.affected_population, casualties=body.casualties,
+        displaced=body.displaced, damage_usd=body.damage_usd,
+        description=body.description, forecast_id=body.forecast_id,
+        trigger_activation_id=body.trigger_activation_id,
+    )
+    db.add(imp)
+    await db.commit()
+    await db.refresh(imp)
+    return _impact_dict(imp)
+
+
+@router.patch("/impacts/{impact_id}", summary="Update an impact record")
+async def api_update_impact(
+    impact_id: int,
+    body: ImpactUpdate,
+    db: AsyncSession = Depends(get_db),
+    _key: APIKey = Depends(require_api_key),
+):
+    result = await db.execute(select(ImpactRecord).where(ImpactRecord.id == impact_id))
+    imp = result.scalar_one_or_none()
+    if not imp:
+        raise HTTPException(status_code=404, detail="Impact record not found")
+
+    for field, value in body.model_dump(exclude_unset=True).items():
+        if field == "event_date" and value is not None:
+            try:
+                value = date_type.fromisoformat(value)
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid event_date: '{value}'")
+        setattr(imp, field, value)
+
+    await db.commit()
+    await db.refresh(imp)
+    return _impact_dict(imp)
+
+
+@router.delete("/impacts/{impact_id}", summary="Delete an impact record", status_code=204)
+async def api_delete_impact(
+    impact_id: int,
+    db: AsyncSession = Depends(get_db),
+    _key: APIKey = Depends(require_api_key),
+):
+    result = await db.execute(select(ImpactRecord).where(ImpactRecord.id == impact_id))
+    imp = result.scalar_one_or_none()
+    if not imp:
+        raise HTTPException(status_code=404, detail="Impact record not found")
+    await db.delete(imp)
+    await db.commit()
+
+
+# ── Trigger write endpoints ───────────────────────────────────────────────────
+
+@router.post("/triggers", summary="Create a trigger", status_code=201)
+async def api_create_trigger(
+    body: TriggerCreate,
+    db: AsyncSession = Depends(get_db),
+    _key: APIKey = Depends(require_api_key),
+):
+    if body.variable not in VARIABLES:
+        raise HTTPException(status_code=400, detail=f"variable must be one of {VARIABLES}")
+    if body.operator not in OPERATORS:
+        raise HTTPException(status_code=400, detail=f"operator must be one of {OPERATORS}")
+    if body.condition_2_variable and body.condition_2_variable not in VARIABLES:
+        raise HTTPException(status_code=400, detail=f"condition_2_variable must be one of {VARIABLES}")
+    if body.condition_2_operator and body.condition_2_operator not in OPERATORS:
+        raise HTTPException(status_code=400, detail=f"condition_2_operator must be one of {OPERATORS}")
+
+    trigger = Trigger(
+        name=body.name, hazard_type=body.hazard_type, variable=body.variable,
+        operator=body.operator, threshold=body.threshold, is_active=body.is_active,
+        scope_lat_min=body.scope_lat_min, scope_lat_max=body.scope_lat_max,
+        scope_lon_min=body.scope_lon_min, scope_lon_max=body.scope_lon_max,
+        condition_2_variable=body.condition_2_variable,
+        condition_2_operator=body.condition_2_operator,
+        condition_2_threshold=body.condition_2_threshold,
+        logic_op=body.logic_op or "and",
+    )
+    db.add(trigger)
+    await db.commit()
+    await db.refresh(trigger)
+    return _trigger_dict(trigger)
+
+
+@router.patch("/triggers/{trigger_id}", summary="Update a trigger")
+async def api_update_trigger(
+    trigger_id: int,
+    body: TriggerUpdate,
+    db: AsyncSession = Depends(get_db),
+    _key: APIKey = Depends(require_api_key),
+):
+    result = await db.execute(select(Trigger).where(Trigger.id == trigger_id))
+    trigger = result.scalar_one_or_none()
+    if not trigger:
+        raise HTTPException(status_code=404, detail="Trigger not found")
+
+    updates = body.model_dump(exclude_unset=True)
+    if "variable" in updates and updates["variable"] not in VARIABLES:
+        raise HTTPException(status_code=400, detail=f"variable must be one of {VARIABLES}")
+    if "operator" in updates and updates["operator"] not in OPERATORS:
+        raise HTTPException(status_code=400, detail=f"operator must be one of {OPERATORS}")
+
+    for field, value in updates.items():
+        setattr(trigger, field, value)
+
+    await db.commit()
+    await db.refresh(trigger)
+    return _trigger_dict(trigger)
+
+
+@router.delete("/triggers/{trigger_id}", summary="Deactivate a trigger", status_code=200)
+async def api_delete_trigger(
+    trigger_id: int,
+    db: AsyncSession = Depends(get_db),
+    _key: APIKey = Depends(require_api_key),
+):
+    result = await db.execute(select(Trigger).where(Trigger.id == trigger_id))
+    trigger = result.scalar_one_or_none()
+    if not trigger:
+        raise HTTPException(status_code=404, detail="Trigger not found")
+    trigger.is_active = False
+    await db.commit()
+    return {"id": trigger_id, "is_active": False}
+
+
+# ── Activation write endpoints ────────────────────────────────────────────────
+
+@router.post("/activations/{activation_id}/acknowledge", summary="Acknowledge an activation")
+async def api_acknowledge_activation(
+    activation_id: int,
+    body: ActivationAcknowledge,
+    db: AsyncSession = Depends(get_db),
+    _key: APIKey = Depends(require_api_key),
+):
+    result = await db.execute(
+        select(TriggerActivation).where(TriggerActivation.id == activation_id)
+    )
+    activation = result.scalar_one_or_none()
+    if not activation:
+        raise HTTPException(status_code=404, detail="Activation not found")
+    if activation.status == "acknowledged":
+        raise HTTPException(status_code=400, detail="Activation is already acknowledged")
+
+    activation.status = "acknowledged"
+    activation.acknowledged_at = datetime.now(timezone.utc)
+    activation.notes = body.notes
+    await db.commit()
+    return _activation_dict(activation)
