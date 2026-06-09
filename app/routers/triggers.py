@@ -16,6 +16,7 @@ from app.core.audit import log_action
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.ensemble import get_exceedance
 from app.models.activation_comment import ActivationComment
 from app.core.email import send_acknowledgement_emails, send_subscriber_alert_emails, send_trigger_activation_email
 from app.core.webhook import send_webhook_notifications
@@ -83,8 +84,6 @@ def _scoped_value(geojson_str: str, variable: str, trigger: "Trigger") -> float:
 
 async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
     """Check all active triggers against a newly ingested forecast. Returns count fired."""
-    from app.core.ensemble import get_exceedance
-
     result = await db.execute(select(Trigger).where(Trigger.is_active == True))  # noqa: E712
     triggers = result.scalars().all()
 
@@ -692,6 +691,59 @@ async def trigger_backtest(
         covering = frozenset(i for i, fd in enumerate(fc_data) if ws <= fd["date"] <= we)
         imp_windows.append(covering)
 
+    # Probabilistic sweep (only for triggers with probability_threshold configured)
+    has_ensemble = trigger.probability_threshold is not None
+    roc_json = "null"
+    brier_score = None
+    reliability_json = "null"
+
+    if has_ensemble and fc_data:
+        for fd in fc_data:
+            fd["prob"] = get_exceedance(fd["fc"].exceedance_json, trigger.threshold)
+
+        ens_indices = [i for i, fd in enumerate(fc_data) if fd["prob"] is not None]
+
+        if ens_indices:
+            bs_total = sum(
+                (fc_data[i]["prob"] - (1.0 if fc_data[i]["has_impact"] else 0.0)) ** 2
+                for i in ens_indices
+            )
+            brier_score = round(bs_total / len(ens_indices), 4)
+
+            prob_steps = [round(k * 0.05, 2) for k in range(1, 20)]  # 0.05 … 0.95
+            if all(abs(pt - trigger.probability_threshold) > 0.02 for pt in prob_steps):
+                prob_steps.append(round(trigger.probability_threshold, 4))
+                prob_steps.sort()
+
+            roc_points = []
+            for pt in reversed(prob_steps):  # high→low so ROC goes (0,0)→(1,1)
+                fire_set = frozenset(
+                    i for i, fd in enumerate(fc_data)
+                    if fd.get("prob") is not None and fd["prob"] >= pt
+                )
+                n_fires = len(fire_set)
+                n_hits = sum(1 for i in fire_set if fc_data[i]["has_impact"])
+                n_fa = n_fires - n_hits
+                n_missed = sum(1 for iw in imp_windows if not (iw & fire_set))
+                pod = round(n_hits / (n_hits + n_missed), 4) if (n_hits + n_missed) > 0 else None
+                far = round(n_fa / n_fires, 4) if n_fires > 0 else None
+                roc_points.append({
+                    "pt": pt, "pod": pod, "far": far,
+                    "fires": n_fires, "hits": n_hits, "fa": n_fa, "missed": n_missed,
+                    "is_current": abs(pt - trigger.probability_threshold) < 1e-6,
+                })
+            roc_json = json.dumps(roc_points)
+
+            bins: list[list[int]] = [[] for _ in range(10)]
+            for i in ens_indices:
+                bin_idx = min(int(fc_data[i]["prob"] * 10), 9)
+                bins[bin_idx].append(1 if fc_data[i]["has_impact"] else 0)
+            reliability = [
+                {"bin": round((j + 0.5) / 10, 2), "obs_freq": round(sum(b) / len(b), 4), "n": len(b)}
+                for j, b in enumerate(bins) if b
+            ]
+            reliability_json = json.dumps(reliability)
+
     def compute_stats(threshold):
         fire_set = {i for i, fd in enumerate(fc_data) if fires_at(fd["value"], threshold)}
         n_fires = len(fire_set)
@@ -762,6 +814,10 @@ async def trigger_backtest(
             "timeline": timeline,
             "OPERATOR_SYMBOLS": OPERATOR_SYMBOLS,
             "VARIABLE_LABELS": VARIABLE_LABELS,
+            "has_ensemble": has_ensemble,
+            "roc_json": roc_json,
+            "brier_score": brier_score,
+            "reliability_json": reliability_json,
         },
 )
 

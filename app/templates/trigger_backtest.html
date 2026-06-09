@@ -186,6 +186,13 @@
       <div class="stat-value">{{ current.missed }}</div>
       <div class="stat-sub">impacts with no fire in window</div>
     </div>
+    {% if has_ensemble and brier_score is not none %}
+    <div class="stat-card {% if brier_score < 0.1 %}stat-green{% elif brier_score < 0.2 %}stat-amber{% else %}stat-red{% endif %}">
+      <div class="stat-label">Brier Score</div>
+      <div class="stat-value">{{ brier_score }}</div>
+      <div class="stat-sub">0 = perfect, 1 = worst</div>
+    </div>
+    {% endif %}
   </div>
 
   <!-- Calibration chart -->
@@ -204,6 +211,46 @@
       </div>
     </div>
   </div>
+
+  {% if has_ensemble and roc_json != 'null' %}
+  <!-- ROC curve -->
+  <div class="chart-card">
+    <div class="chart-title">ROC curve — probability threshold sweep</div>
+    <div style="font-size:.8rem;color:#6b7280;margin-bottom:1rem;">
+      Each point is a probability threshold (0.05–0.95). The <strong style="color:#f59e0b;">amber dot</strong> is the current setting
+      ({{ trigger.probability_threshold }}). Upper-left corner = best performance.
+    </div>
+    <div class="chart-wrap" style="height:320px;">
+      <canvas id="rocChart"></canvas>
+    </div>
+    <div class="legend-row">
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#4f46e5;"></div>ROC operating points
+      </div>
+      <div class="legend-item">
+        <div class="legend-dot" style="background:#f59e0b;width:14px;height:14px;"></div>Current threshold ({{ trigger.probability_threshold }})
+      </div>
+      <div class="legend-item">
+        <div style="width:20px;height:2px;border-top:2px dashed #d1d5db;margin-top:5px;"></div>Random classifier
+      </div>
+    </div>
+  </div>
+
+  <!-- Reliability diagram -->
+  {% if reliability_json != 'null' %}
+  <div class="chart-card">
+    <div class="chart-title">Reliability diagram</div>
+    <div style="font-size:.8rem;color:#6b7280;margin-bottom:1rem;">
+      Forecast probability bins vs observed event frequency.
+      Points on the diagonal indicate perfect calibration.
+      Bubble size reflects sample count in each bin.
+    </div>
+    <div class="chart-wrap" style="height:280px;">
+      <canvas id="relChart"></canvas>
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
 
   <!-- Fires timeline -->
   <div class="chart-card">
@@ -360,7 +407,7 @@
       },
       scales: {
         x: {
-          title: { display: true, text: `${{{ VARIABLE_LABELS[trigger.variable] | tojson }}} threshold (mm)`,
+          title: { display: true, text: {{ (VARIABLE_LABELS[trigger.variable] ~ ' threshold (mm)') | tojson }},
             font: { size: 11 }, color: '#6b7280' },
           ticks: { maxTicksLimit: 10, font: { size: 11 } },
           grid: { color: '#f3f4f6' },
@@ -369,6 +416,159 @@
           min: 0, max: 100,
           title: { display: true, text: 'Score (%)', font: { size: 11 }, color: '#6b7280' },
           ticks: { font: { size: 11 }, callback: v => v + '%' },
+          grid: { color: '#f3f4f6' },
+        },
+      },
+    },
+  });
+})();
+
+// Probabilistic charts
+(function () {
+  const roc = {{ roc_json | safe }};
+  if (!roc || !roc.length) return;
+
+  // Filter to points with valid far/pod
+  const valid = roc.filter(d => d.far !== null && d.pod !== null);
+  if (!valid.length) return;
+
+  const rocCtx = document.getElementById('rocChart');
+  if (!rocCtx) return;
+
+  new Chart(rocCtx.getContext('2d'), {
+    type: 'scatter',
+    data: {
+      datasets: [
+        {
+          label: 'Random classifier',
+          data: [{x: 0, y: 0}, {x: 1, y: 1}],
+          type: 'line',
+          borderColor: '#d1d5db',
+          borderDash: [5, 4],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          order: 2,
+        },
+        {
+          label: 'ROC',
+          data: valid.map(d => ({x: d.far, y: d.pod})),
+          backgroundColor: valid.map(d => d.is_current ? '#f59e0b' : 'rgba(79,70,229,0.85)'),
+          borderColor: '#4f46e5',
+          borderWidth: 1,
+          pointRadius: valid.map(d => d.is_current ? 10 : 6),
+          pointHoverRadius: 9,
+          showLine: true,
+          tension: 0.1,
+          order: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          filter: item => item.datasetIndex === 1,
+          callbacks: {
+            label: ctx => {
+              const d = valid[ctx.dataIndex];
+              return [
+                `P-threshold: ${d.pt}`,
+                `POD: ${(d.pod * 100).toFixed(1)}%`,
+                `FAR: ${(d.far * 100).toFixed(1)}%`,
+                `Fires: ${d.fires}  Hits: ${d.hits}  FA: ${d.fa}`,
+              ];
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          type: 'linear', min: 0, max: 1,
+          title: { display: true, text: 'False Alarm Ratio (FAR)', font: { size: 11 }, color: '#6b7280' },
+          ticks: { font: { size: 11 }, callback: v => (v * 100).toFixed(0) + '%' },
+          grid: { color: '#f3f4f6' },
+        },
+        y: {
+          type: 'linear', min: 0, max: 1,
+          title: { display: true, text: 'Probability of Detection (POD)', font: { size: 11 }, color: '#6b7280' },
+          ticks: { font: { size: 11 }, callback: v => (v * 100).toFixed(0) + '%' },
+          grid: { color: '#f3f4f6' },
+        },
+      },
+    },
+  });
+})();
+
+// Reliability diagram
+(function () {
+  const rel = {{ reliability_json | safe }};
+  if (!rel || !rel.length) return;
+
+  const relCtx = document.getElementById('relChart');
+  if (!relCtx) return;
+
+  const maxN = Math.max(...rel.map(d => d.n));
+
+  new Chart(relCtx.getContext('2d'), {
+    type: 'scatter',
+    data: {
+      datasets: [
+        {
+          label: 'Perfect calibration',
+          data: [{x: 0, y: 0}, {x: 1, y: 1}],
+          type: 'line',
+          borderColor: '#d1d5db',
+          borderDash: [5, 4],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          order: 2,
+        },
+        {
+          label: 'Observed frequency',
+          data: rel.map(d => ({x: d.bin, y: d.obs_freq})),
+          backgroundColor: 'rgba(79,70,229,0.7)',
+          borderColor: '#4f46e5',
+          borderWidth: 1,
+          pointRadius: rel.map(d => Math.max(6, Math.round(d.n / maxN * 18))),
+          pointHoverRadius: 10,
+          showLine: true,
+          tension: 0.1,
+          order: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          filter: item => item.datasetIndex === 1,
+          callbacks: {
+            label: ctx => {
+              const d = rel[ctx.dataIndex];
+              return [
+                `Forecast prob: ${(d.bin * 100).toFixed(0)}% bin`,
+                `Observed freq: ${(d.obs_freq * 100).toFixed(1)}%`,
+                `n = ${d.n}`,
+              ];
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          type: 'linear', min: 0, max: 1,
+          title: { display: true, text: 'Forecast probability', font: { size: 11 }, color: '#6b7280' },
+          ticks: { font: { size: 11 }, callback: v => (v * 100).toFixed(0) + '%' },
+          grid: { color: '#f3f4f6' },
+        },
+        y: {
+          type: 'linear', min: 0, max: 1,
+          title: { display: true, text: 'Observed event frequency', font: { size: 11 }, color: '#6b7280' },
+          ticks: { font: { size: 11 }, callback: v => (v * 100).toFixed(0) + '%' },
           grid: { color: '#f3f4f6' },
         },
       },

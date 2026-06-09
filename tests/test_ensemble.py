@@ -567,3 +567,158 @@ def test_process_netcdf_deterministic_has_no_ensemble_fields(tmp_path):
 
     assert "ensemble_size" not in meta or meta.get("ensemble_size") is None
     assert meta["precip_mean"] == pytest.approx(25.0, abs=0.1)
+
+
+# ── Probabilistic backtest ────────────────────────────────────────────────────
+
+import json as _json
+from datetime import date
+
+
+async def _make_ens_forecast(db, threshold: float, members: list, upload_date=None):
+    """ForecastUpload with full ensemble fields and exceedance pre-computed."""
+    from app.core.ensemble import exceedance_from_members, percentiles_from_members
+    from app.models.forecast import ForecastUpload
+
+    stats = percentiles_from_members(members)
+    exceedance = exceedance_from_members(members, [threshold])
+
+    fc = ForecastUpload(
+        filename="bt_ens.nc",
+        source="test",
+        uploaded_at=datetime(2026, 1, 10 if upload_date is None else upload_date, tzinfo=timezone.utc),
+        lat_min=0.0, lat_max=20.0, lon_min=80.0, lon_max=100.0,
+        time_start="2026-01-01", time_end="2026-01-10", time_steps=10,
+        precip_min=stats["precip_min"],
+        precip_max=stats["precip_max"],
+        precip_mean=stats["precip_mean"],
+        ensemble_size=stats["ensemble_size"],
+        precip_p10=stats["precip_p10"],
+        precip_p25=stats["precip_p25"],
+        precip_p50=stats["precip_p50"],
+        precip_p75=stats["precip_p75"],
+        precip_p90=stats["precip_p90"],
+        exceedance_json=_json.dumps(exceedance),
+        geojson=_json.dumps({"type": "FeatureCollection", "features": []}),
+    )
+    db.add(fc)
+    await db.commit()
+    await db.refresh(fc)
+    return fc
+
+
+async def test_backtest_deterministic_trigger_no_roc(
+    client: AsyncClient, admin_user, db: AsyncSession
+):
+    """Deterministic trigger backtest renders without the ROC curve section."""
+    from app.models.trigger import Trigger
+
+    t = Trigger(
+        name="DetBacktest", hazard_type="flood",
+        variable="precip_mean", operator="gt", threshold=30.0,
+        is_active=True,
+    )
+    db.add(t)
+    await db.commit()
+    await db.refresh(t)
+
+    await _login(client)
+    resp = await client.get(f"/triggers/{t.id}/backtest", follow_redirects=False)
+    assert resp.status_code == 200
+    body = resp.text
+    assert "Backtest" in body
+    assert "ROC curve" not in body
+    assert "Brier Score" not in body
+
+
+async def test_backtest_probabilistic_shows_roc_section(
+    client: AsyncClient, admin_user, db: AsyncSession
+):
+    """Probabilistic trigger backtest shows ROC curve section when ensemble data exists."""
+    from app.models.trigger import Trigger
+
+    t = Trigger(
+        name="ProbBacktest", hazard_type="flood",
+        variable="precip_mean", operator="gt", threshold=30.0,
+        probability_threshold=0.6, is_active=True,
+    )
+    db.add(t)
+    await db.commit()
+    await db.refresh(t)
+
+    # 10 members: 7 exceed 30 → exceedance ≈ 0.7, above prob_threshold 0.6
+    await _make_ens_forecast(db, 30.0, [10.0, 20.0, 35.0, 40.0, 45.0, 50.0, 55.0, 60.0, 65.0, 70.0])
+
+    await _login(client)
+    resp = await client.get(f"/triggers/{t.id}/backtest", follow_redirects=False)
+    assert resp.status_code == 200
+    body = resp.text
+    assert "ROC curve" in body
+    assert "rocChart" in body
+
+
+async def test_backtest_probabilistic_brier_score_shown(
+    client: AsyncClient, admin_user, db: AsyncSession
+):
+    """Probabilistic backtest shows Brier Score card when ensemble forecasts are available."""
+    from app.models.impact import ImpactRecord
+    from app.models.trigger import Trigger
+
+    t = Trigger(
+        name="BrierTest", hazard_type="flood",
+        variable="precip_mean", operator="gt", threshold=25.0,
+        probability_threshold=0.5, is_active=True,
+    )
+    db.add(t)
+    await db.commit()
+    await db.refresh(t)
+
+    fc = await _make_ens_forecast(
+        db, 25.0, [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 15.0, 55.0]
+    )
+    # Impact event close to the forecast date → marks it as a hit
+    impact = ImpactRecord(
+        hazard_type="flood",
+        event_name="Test flood",
+        event_date=date(2026, 1, 12),
+        description="test flood",
+        affected_population=100,
+        country="BGD",
+        lat=10.0, lon=90.0,
+    )
+    db.add(impact)
+    await db.commit()
+
+    await _login(client)
+    resp = await client.get(f"/triggers/{t.id}/backtest", follow_redirects=False)
+    assert resp.status_code == 200
+    body = resp.text
+    assert "Brier Score" in body
+    # roc_json embedded in page should be a valid JSON array
+    assert '"pt":' in body
+
+
+async def test_backtest_probabilistic_roc_current_threshold_marked(
+    client: AsyncClient, admin_user, db: AsyncSession
+):
+    """The current probability_threshold is flagged as is_current in embedded roc_json."""
+    from app.models.trigger import Trigger
+
+    t = Trigger(
+        name="RocMark", hazard_type="flood",
+        variable="precip_mean", operator="gt", threshold=20.0,
+        probability_threshold=0.55, is_active=True,
+    )
+    db.add(t)
+    await db.commit()
+    await db.refresh(t)
+
+    await _make_ens_forecast(db, 20.0, list(range(5, 105, 10)))  # 10 members
+
+    await _login(client)
+    resp = await client.get(f"/triggers/{t.id}/backtest", follow_redirects=False)
+    assert resp.status_code == 200
+    body = resp.text
+    # 0.55 not in the 0.05-step sweep → should have been appended
+    assert '"pt": 0.55' in body or '"pt":0.55' in body
+    assert '"is_current": true' in body or '"is_current":true' in body
