@@ -43,3 +43,13 @@ class ForecastUpload(Base):
 
     # Seasonal context: % deviation from same-month rolling mean (positive = above average)
     seasonal_anomaly_pct: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    # Ensemble / probabilistic fields (null for deterministic forecasts)
+    ensemble_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    precip_p10: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    precip_p25: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    precip_p50: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    precip_p75: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    precip_p90: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # JSON dict mapping threshold (str) → exceedance probability, e.g. {"50.0": 0.72}
+    exceedance_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

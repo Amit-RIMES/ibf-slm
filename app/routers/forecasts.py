@@ -130,6 +130,18 @@ def _build_geojson(lats: np.ndarray, lons: np.ndarray, values: np.ndarray) -> st
     return json.dumps({"type": "FeatureCollection", "features": features})
 
 
+def _find_ensemble_dim(ds, da) -> str | None:
+    """Return the name of the ensemble/member dimension if present."""
+    for candidate in ("member", "ensemble", "realization", "number", "ens"):
+        if candidate in da.dims:
+            return candidate
+        # also check dataset coords
+        for dim in ds.dims:
+            if dim.lower() == candidate:
+                return dim
+    return None
+
+
 def _process_netcdf(path: str) -> dict:
     try:
         ds = xr.open_dataset(path, engine="h5netcdf")
@@ -145,6 +157,17 @@ def _process_netcdf(path: str) -> dict:
         raise ValueError("Could not find latitude/longitude coordinates in the NetCDF file.")
 
     da = ds[var_name]
+
+    # ── Ensemble dimension ────────────────────────────────────────────────────
+    ens_dim = _find_ensemble_dim(ds, da)
+    ensemble_stats: dict = {}
+    if ens_dim:
+        from app.core.ensemble import percentiles_from_members
+        flat_ens = da.values.flatten().astype(float)
+        flat_ens = flat_ens[~np.isnan(flat_ens)].tolist()
+        ensemble_stats = percentiles_from_members(flat_ens)
+        # Collapse ensemble dim by taking ensemble mean before further processing
+        da = da.mean(dim=ens_dim)
 
     def _bucket_stats(arr):
         a = arr.flatten().astype(float)
@@ -204,7 +227,7 @@ def _process_netcdf(path: str) -> dict:
 
     ds.close()
 
-    return {
+    result = {
         "lat_min": float(lats.min()),
         "lat_max": float(lats.max()),
         "lon_min": float(lons.min()),
@@ -217,7 +240,10 @@ def _process_netcdf(path: str) -> dict:
         "precip_mean": round(float(flat.mean()), 3) if len(flat) else 0.0,
         "geojson": geojson,
         "lead_time_stats": lead_time_stats,
+        # ensemble fields (empty dict for deterministic files)
+        **ensemble_stats,
     }
+    return result
 
 
 PAGE_SIZE = 20
@@ -743,11 +769,16 @@ async def forecast_detail(forecast_id: int, request: Request, db: AsyncSession =
 
     import json as _json
     lead_time_stats = _json.loads(forecast.lead_time_stats) if forecast.lead_time_stats else None
+    exceedance = _json.loads(forecast.exceedance_json) if forecast.exceedance_json else None
 
     return templates.TemplateResponse(
         request,
         "forecast_detail.html",
-        {"user": user, "forecast": forecast, "lead_time_stats": lead_time_stats},
+        {
+            "user": user, "forecast": forecast,
+            "lead_time_stats": lead_time_stats,
+            "exceedance": exceedance,
+        },
     )
 
 

@@ -115,6 +115,12 @@ def _forecast_dict(fc: ForecastUpload) -> dict:
         "precip_mean": fc.precip_mean,
         "is_anomaly": fc.is_anomaly,
         "anomaly_score": fc.anomaly_score,
+        "ensemble_size": fc.ensemble_size,
+        "precip_p10": fc.precip_p10,
+        "precip_p25": fc.precip_p25,
+        "precip_p50": fc.precip_p50,
+        "precip_p75": fc.precip_p75,
+        "precip_p90": fc.precip_p90,
     }
 
 
@@ -412,6 +418,13 @@ async def api_upload_forecast(
         precip_min=meta["precip_min"], precip_max=meta["precip_max"],
         precip_mean=meta["precip_mean"],
         geojson=meta["geojson"],
+        # Ensemble fields (present only for ensemble NetCDFs)
+        ensemble_size=meta.get("ensemble_size"),
+        precip_p10=meta.get("precip_p10"),
+        precip_p25=meta.get("precip_p25"),
+        precip_p50=meta.get("precip_p50"),
+        precip_p75=meta.get("precip_p75"),
+        precip_p90=meta.get("precip_p90"),
     )
     db.add(fc)
     await db.flush()
@@ -420,6 +433,19 @@ async def api_upload_forecast(
     anomaly_score, is_anomaly = await compute_anomaly(fc, db)
     fc.anomaly_score = anomaly_score
     fc.is_anomaly = is_anomaly
+
+    # Precompute exceedance probabilities for all active trigger thresholds
+    if fc.ensemble_size:
+        from app.core.ensemble import compute_exceedance_json
+        active_thresholds_r = await db.execute(
+            select(Trigger.threshold).where(Trigger.is_active == True)  # noqa: E712
+        )
+        thresholds = list({float(row[0]) for row in active_thresholds_r.all()})
+        fc.exceedance_json = compute_exceedance_json(
+            thresholds,
+            p10=fc.precip_p10, p25=fc.precip_p25, p50=fc.precip_p50,
+            p75=fc.precip_p75, p90=fc.precip_p90,
+        )
 
     await db.commit()
     await db.refresh(fc)
@@ -441,6 +467,87 @@ async def api_forecast(
     fc = result.scalar_one_or_none()
     if not fc:
         raise HTTPException(status_code=404, detail="Forecast not found")
+    return _forecast_dict(fc)
+
+
+@router.post(
+    "/forecasts/{forecast_id}/ensemble-stats",
+    summary="Attach ensemble statistics to an existing forecast",
+    status_code=200,
+)
+async def api_ensemble_stats(
+    forecast_id: int,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    _key: APIKey = Depends(require_api_key),
+):
+    """Attach ensemble statistics to a forecast that was already uploaded.
+
+    Body (JSON): one of two forms —
+
+    **Member values** (exact exceedance):
+    ```json
+    {"member_values": [23.4, 31.2, 18.9, 45.1, ...]}
+    ```
+
+    **Pre-computed percentiles**:
+    ```json
+    {
+      "ensemble_size": 51,
+      "precip_p10": 12.1, "precip_p25": 18.4,
+      "precip_p50": 26.7, "precip_p75": 35.2, "precip_p90": 46.8
+    }
+    ```
+    """
+    from app.core.ensemble import compute_exceedance_json, percentiles_from_members
+
+    result = await db.execute(select(ForecastUpload).where(ForecastUpload.id == forecast_id))
+    fc = result.scalar_one_or_none()
+    if not fc:
+        raise HTTPException(status_code=404, detail="Forecast not found")
+
+    members = body.get("member_values")
+    if members:
+        if not isinstance(members, list) or len(members) < 2:
+            raise HTTPException(status_code=422, detail="member_values must be a list of at least 2 numbers.")
+        try:
+            members = [float(v) for v in members]
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="member_values must contain numbers.")
+        stats = percentiles_from_members(members)
+        fc.ensemble_size = stats["ensemble_size"]
+        fc.precip_p10 = stats["precip_p10"]
+        fc.precip_p25 = stats["precip_p25"]
+        fc.precip_p50 = stats["precip_p50"]
+        fc.precip_p75 = stats["precip_p75"]
+        fc.precip_p90 = stats["precip_p90"]
+    else:
+        required = ("ensemble_size", "precip_p10", "precip_p25", "precip_p50", "precip_p75", "precip_p90")
+        missing = [k for k in required if body.get(k) is None]
+        if missing:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Provide either member_values or all percentile fields. Missing: {missing}",
+            )
+        fc.ensemble_size = int(body["ensemble_size"])
+        fc.precip_p10 = float(body["precip_p10"])
+        fc.precip_p25 = float(body["precip_p25"])
+        fc.precip_p50 = float(body["precip_p50"])
+        fc.precip_p75 = float(body["precip_p75"])
+        fc.precip_p90 = float(body["precip_p90"])
+
+    # Recompute exceedance for all active trigger thresholds
+    active_thresholds_r = await db.execute(
+        select(Trigger.threshold).where(Trigger.is_active == True)  # noqa: E712
+    )
+    thresholds = list({float(row[0]) for row in active_thresholds_r.all()})
+    fc.exceedance_json = compute_exceedance_json(
+        thresholds, members=members,
+        p10=fc.precip_p10, p25=fc.precip_p25, p50=fc.precip_p50,
+        p75=fc.precip_p75, p90=fc.precip_p90,
+    )
+    await db.commit()
+    await db.refresh(fc)
     return _forecast_dict(fc)
 
 

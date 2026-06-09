@@ -126,12 +126,18 @@
   </div>
 
   <div class="rule-box">
+    {% if trigger.probability_threshold is not none %}
+    <span style="background:#fef9c3;color:#854d0e;padding:.15rem .5rem;border-radius:4px;font-size:.75rem;font-weight:700;margin-right:.5rem;">PROBABILISTIC</span>
+    Fire when P(<strong>{{ VARIABLE_LABELS[trigger.variable] }} {{ OPERATOR_SYMBOLS[trigger.operator] }} {{ trigger.threshold }} mm</strong>)
+    &nbsp;≥&nbsp; <strong>{{ (trigger.probability_threshold * 100) | round(0) | int }}%</strong>
+    {% else %}
     Fire when <strong>{{ VARIABLE_LABELS[trigger.variable] }} {{ OPERATOR_SYMBOLS[trigger.operator] }} {{ trigger.threshold }} mm</strong>
     {% if trigger.condition_2_variable %}
     &nbsp;<span style="font-size:.85rem;font-weight:700;color:#6d28d9">{{ trigger.logic_op | upper }}</span>&nbsp;
     <strong>{{ VARIABLE_LABELS.get(trigger.condition_2_variable, trigger.condition_2_variable) }}
       {{ OPERATOR_SYMBOLS.get(trigger.condition_2_operator, trigger.condition_2_operator) }}
       {{ trigger.condition_2_threshold }} mm</strong>
+    {% endif %}
     {% endif %}
     {% if trigger.scope_lat_min is not none %}
     &nbsp;·&nbsp; <span style="font-size:.85rem; font-weight:500;">
@@ -206,7 +212,15 @@
             <a href="/forecasts/{{ a.forecast_id }}" style="font-weight:500;">{{ a.forecast.filename }}</a>
             {% else %}—{% endif %}
           </td>
-          <td style="font-weight:600; font-family:monospace;">{{ a.value }} mm</td>
+          <td style="font-weight:600; font-family:monospace;">
+            {{ a.value }} mm
+            {% if a.probability is not none %}
+            <span style="display:inline-block;margin-left:.35rem;background:#fef9c3;color:#854d0e;
+              padding:.1rem .4rem;border-radius:4px;font-size:.72rem;font-weight:700;">
+              P={{ (a.probability * 100) | round(1) }}%
+            </span>
+            {% endif %}
+          </td>
           <td style="font-size:.82rem; color:#6b7280;">{{ a.triggered_at.strftime("%Y-%m-%d %H:%M UTC") }}</td>
           <td>
             {% if a.status == "active" %}

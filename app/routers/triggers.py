@@ -83,6 +83,8 @@ def _scoped_value(geojson_str: str, variable: str, trigger: "Trigger") -> float:
 
 async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
     """Check all active triggers against a newly ingested forecast. Returns count fired."""
+    from app.core.ensemble import get_exceedance
+
     result = await db.execute(select(Trigger).where(Trigger.is_active == True))  # noqa: E712
     triggers = result.scalars().all()
 
@@ -106,17 +108,30 @@ async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
         else:
             value = global_map.get(trigger.variable, 0.0)
 
-        fires1 = ops[trigger.operator](value, trigger.threshold)
-
-        if trigger.condition_2_variable and trigger.condition_2_operator and trigger.condition_2_threshold is not None:
-            if is_scoped:
-                value2 = _scoped_value(forecast.geojson, trigger.condition_2_variable, trigger)
+        # ── Probabilistic evaluation ─────────────────────────────────────────
+        activation_probability: float | None = None
+        if trigger.probability_threshold is not None and forecast.ensemble_size:
+            prob = get_exceedance(forecast.exceedance_json, trigger.threshold)
+            if prob is None:
+                # Ensemble data present but no pre-computed exceedance for this threshold;
+                # fall back to deterministic using ensemble mean.
+                fires = ops[trigger.operator](value, trigger.threshold)
             else:
-                value2 = global_map.get(trigger.condition_2_variable, 0.0)
-            fires2 = ops[trigger.condition_2_operator](value2, trigger.condition_2_threshold)
-            fires = (fires1 and fires2) if trigger.logic_op == "and" else (fires1 or fires2)
+                fires = prob >= trigger.probability_threshold
+                activation_probability = prob
         else:
-            fires = fires1
+            # ── Deterministic evaluation ─────────────────────────────────────
+            fires1 = ops[trigger.operator](value, trigger.threshold)
+
+            if trigger.condition_2_variable and trigger.condition_2_operator and trigger.condition_2_threshold is not None:
+                if is_scoped:
+                    value2 = _scoped_value(forecast.geojson, trigger.condition_2_variable, trigger)
+                else:
+                    value2 = global_map.get(trigger.condition_2_variable, 0.0)
+                fires2 = ops[trigger.condition_2_operator](value2, trigger.condition_2_threshold)
+                fires = (fires1 and fires2) if trigger.logic_op == "and" else (fires1 or fires2)
+            else:
+                fires = fires1
 
         if fires:
             # Check cooldown BEFORE db.add to avoid autoflush finding the new activation
@@ -137,6 +152,7 @@ async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
                 trigger_id=trigger.id,
                 forecast_id=forecast.id,
                 value=value,
+                probability=activation_probability,
                 status="active",
             )
             db.add(activation)
@@ -433,6 +449,7 @@ def _validate_trigger(
     scope_lon_min_str="", scope_lon_max_str="",
     cond2_enabled=False, cond2_variable="", cond2_operator="", cond2_threshold_str="",
     logic_op="and", scope_polygon_str="",
+    prob_enabled=False, probability_threshold_str="",
 ):
     """Returns (threshold_float, extras_dict, error_str). error_str is '' on success."""
     if not name.strip():
@@ -451,6 +468,18 @@ def _validate_trigger(
         return None, None, "Threshold must be zero or greater."
 
     extras: dict = {}
+
+    # Probability threshold (probabilistic mode)
+    if prob_enabled and probability_threshold_str:
+        try:
+            pt = float(probability_threshold_str)
+        except (ValueError, TypeError):
+            return None, None, "Probability threshold must be a number between 0 and 1 (e.g. 0.7)."
+        if not (0.0 < pt <= 1.0):
+            return None, None, "Probability threshold must be between 0 (exclusive) and 1."
+        extras["probability_threshold"] = pt
+    else:
+        extras["probability_threshold"] = None
 
     # Second condition
     if cond2_enabled and cond2_variable and cond2_operator:
@@ -537,6 +566,8 @@ async def trigger_create(
     cond2_threshold: str = Form(""),
     logic_op: str = Form("and"),
     scope_polygon: str = Form(""),
+    prob_enabled: Optional[str] = Form(None),
+    probability_threshold: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     user = await get_current_user(request, db)
@@ -547,6 +578,7 @@ async def trigger_create(
         name, hazard_type, variable, operator, threshold, is_active,
         scope_enabled == "on", scope_lat_min, scope_lat_max, scope_lon_min, scope_lon_max,
         cond2_enabled == "on", cond2_variable, cond2_operator, cond2_threshold, logic_op, scope_polygon,
+        prob_enabled == "on", probability_threshold,
     )
     if error:
         stub = SimpleNamespace(
@@ -556,11 +588,13 @@ async def trigger_create(
             scope_lon_min=scope_lon_min, scope_lon_max=scope_lon_max,
             condition_2_variable=cond2_variable, condition_2_operator=cond2_operator,
             condition_2_threshold=cond2_threshold, logic_op=logic_op, scope_polygon=scope_polygon,
+            probability_threshold=probability_threshold,
         )
         return templates.TemplateResponse(
             "trigger_form.html", _trigger_form_ctx(request, user, stub,
                 error=error, scope_enabled=(scope_enabled == "on"),
-                cond2_enabled=(cond2_enabled == "on"))
+                cond2_enabled=(cond2_enabled == "on"),
+                prob_enabled=(prob_enabled == "on"))
         )
 
     trigger = Trigger(
@@ -824,6 +858,8 @@ async def trigger_update(
     cond2_threshold: str = Form(""),
     logic_op: str = Form("and"),
     scope_polygon: str = Form(""),
+    prob_enabled: Optional[str] = Form(None),
+    probability_threshold: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     user = await get_current_user(request, db)
@@ -839,6 +875,7 @@ async def trigger_update(
         name, hazard_type, variable, operator, threshold, is_active,
         scope_enabled == "on", scope_lat_min, scope_lat_max, scope_lon_min, scope_lon_max,
         cond2_enabled == "on", cond2_variable, cond2_operator, cond2_threshold, logic_op, scope_polygon,
+        prob_enabled == "on", probability_threshold,
     )
     if error:
         stub = SimpleNamespace(
@@ -848,11 +885,13 @@ async def trigger_update(
             scope_lon_min=scope_lon_min, scope_lon_max=scope_lon_max,
             condition_2_variable=cond2_variable, condition_2_operator=cond2_operator,
             condition_2_threshold=cond2_threshold, logic_op=logic_op, scope_polygon=scope_polygon,
+            probability_threshold=probability_threshold,
         )
         return templates.TemplateResponse(
             "trigger_form.html", _trigger_form_ctx(request, user, stub,
                 error=error, scope_enabled=(scope_enabled == "on"),
-                cond2_enabled=(cond2_enabled == "on"))
+                cond2_enabled=(cond2_enabled == "on"),
+                prob_enabled=(prob_enabled == "on"))
         )
 
     trigger.name = name

@@ -34,6 +34,10 @@ class Trigger(Base):
     # Response plan / SOP attached to this trigger
     response_plan: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
+    # Probabilistic mode: fire when P(variable > threshold) >= probability_threshold.
+    # If null, the trigger uses deterministic evaluation.
+    probability_threshold: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
     # Optional geographic scope: bounding box OR polygon (polygon takes precedence)
     scope_lat_min: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     scope_lat_max: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
@@ -73,6 +77,8 @@ class TriggerActivation(Base):
         Integer, ForeignKey("forecast_uploads.id", ondelete="CASCADE"), nullable=False, index=True
     )
     value: Mapped[float] = mapped_column(Float, nullable=False)
+    # For probabilistic triggers: the actual exceedance probability at activation time
+    probability: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     triggered_at: Mapped[datetime] = mapped_column(
