@@ -335,3 +335,235 @@ async def test_api_ensemble_stats_not_found(client: AsyncClient, api_key):
         headers={"X-API-Key": api_key},
     )
     assert resp.status_code == 404
+
+
+# ── Trigger form POST: probabilistic mode ─────────────────────────────────────
+
+def _csrf(client):
+    from app.core.csrf import _token_for
+    return _token_for(client.cookies.get("access_token", ""))
+
+
+async def test_create_probabilistic_trigger_via_form(
+    client: AsyncClient, admin_user, db: AsyncSession
+):
+    """POST /triggers/new with prob_enabled creates a trigger with probability_threshold."""
+    await _login(client)
+    resp = await client.post(
+        "/triggers/new",
+        data={
+            "name": "ProbFlood",
+            "hazard_type": "flood",
+            "variable": "precip_mean",
+            "operator": "gt",
+            "threshold": "40",
+            "is_active": "on",
+            "prob_enabled": "on",
+            "probability_threshold": "0.7",
+        },
+        headers={"X-CSRF-Token": _csrf(client)},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+    from sqlalchemy import select
+    from app.models.trigger import Trigger
+    t = (await db.execute(select(Trigger).where(Trigger.name == "ProbFlood"))).scalar_one()
+    assert t.probability_threshold == pytest.approx(0.7)
+    assert t.threshold == pytest.approx(40.0)
+
+
+async def test_create_probabilistic_trigger_invalid_prob(
+    client: AsyncClient, admin_user, db: AsyncSession
+):
+    """Probability threshold outside (0,1] returns the form with an error."""
+    await _login(client)
+    resp = await client.post(
+        "/triggers/new",
+        data={
+            "name": "BadProb",
+            "hazard_type": "flood",
+            "variable": "precip_mean",
+            "operator": "gt",
+            "threshold": "30",
+            "prob_enabled": "on",
+            "probability_threshold": "1.5",  # invalid
+        },
+        headers={"X-CSRF-Token": _csrf(client)},
+        follow_redirects=False,
+    )
+    # Returns the form page with a validation error (not a redirect)
+    assert resp.status_code == 200
+    assert "Probability threshold" in resp.text
+
+
+async def test_edit_trigger_adds_probability_threshold(
+    client: AsyncClient, admin_user, db: AsyncSession
+):
+    """Editing an existing deterministic trigger can make it probabilistic."""
+    from app.models.trigger import Trigger
+    t = Trigger(
+        name="EditMe", hazard_type="flood",
+        variable="precip_mean", operator="gt", threshold=30.0,
+        is_active=True,
+    )
+    db.add(t)
+    await db.commit()
+    await db.refresh(t)
+
+    await _login(client)
+    resp = await client.post(
+        f"/triggers/{t.id}/edit",
+        data={
+            "name": "EditMe",
+            "hazard_type": "flood",
+            "variable": "precip_mean",
+            "operator": "gt",
+            "threshold": "30",
+            "is_active": "on",
+            "prob_enabled": "on",
+            "probability_threshold": "0.65",
+        },
+        headers={"X-CSRF-Token": _csrf(client)},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+    t_id = t.id
+    db.expire_all()
+    from sqlalchemy import select
+    from app.models.trigger import Trigger as T
+    updated = (await db.execute(select(T).where(T.id == t_id))).scalar_one()
+    assert updated.probability_threshold == pytest.approx(0.65)
+
+
+async def test_edit_trigger_removes_probability_threshold(
+    client: AsyncClient, admin_user, db: AsyncSession
+):
+    """Unchecking prob_enabled clears probability_threshold back to None."""
+    from app.models.trigger import Trigger
+    t = Trigger(
+        name="RemoveProb", hazard_type="flood",
+        variable="precip_mean", operator="gt", threshold=30.0,
+        probability_threshold=0.7, is_active=True,
+    )
+    db.add(t)
+    await db.commit()
+    await db.refresh(t)
+
+    await _login(client)
+    resp = await client.post(
+        f"/triggers/{t.id}/edit",
+        data={
+            "name": "RemoveProb",
+            "hazard_type": "flood",
+            "variable": "precip_mean",
+            "operator": "gt",
+            "threshold": "30",
+            "is_active": "on",
+            # prob_enabled absent → unchecked
+        },
+        headers={"X-CSRF-Token": _csrf(client)},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+    t_id = t.id
+    db.expire_all()
+    from sqlalchemy import select
+    from app.models.trigger import Trigger as T
+    updated = (await db.execute(select(T).where(T.id == t_id))).scalar_one()
+    assert updated.probability_threshold is None
+
+
+# ── _process_netcdf: ensemble dimension ───────────────────────────────────────
+
+def _make_ensemble_netcdf(tmp_path, n_members: int = 10) -> str:
+    """Write a small ensemble NetCDF file with a 'member' dimension."""
+    import numpy as np
+    import xarray as xr
+
+    lats = np.array([10.0, 15.0, 20.0])
+    lons = np.array([90.0, 95.0, 100.0])
+    times = np.array(["2026-01-01", "2026-01-02", "2026-01-03"], dtype="datetime64")
+    rng = np.random.default_rng(42)
+    # shape: (member, time, lat, lon)
+    data = rng.uniform(5.0, 80.0, size=(n_members, len(times), len(lats), len(lons))).astype("float32")
+
+    ds = xr.Dataset(
+        {"precipitation": (["member", "time", "lat", "lon"], data)},
+        coords={
+            "member": np.arange(n_members),
+            "time": times,
+            "lat": lats,
+            "lon": lons,
+        },
+    )
+    path = str(tmp_path / "ensemble.nc")
+    ds.to_netcdf(path)
+    return path
+
+
+def test_process_netcdf_detects_ensemble_dimension(tmp_path):
+    """_process_netcdf returns ensemble stats when a member dimension is present."""
+    from app.routers.forecasts import _process_netcdf
+
+    path = _make_ensemble_netcdf(tmp_path, n_members=10)
+    meta = _process_netcdf(path)
+
+    assert meta["ensemble_size"] == 10
+    assert meta["precip_p10"] is not None
+    assert meta["precip_p50"] is not None
+    assert meta["precip_p90"] is not None
+    # p10 < p50 < p90
+    assert meta["precip_p10"] < meta["precip_p50"] < meta["precip_p90"]
+
+
+def test_process_netcdf_ensemble_mean_used_for_map(tmp_path):
+    """The ensemble mean (not individual members) is used for the GeoJSON map."""
+    import numpy as np
+    import xarray as xr
+
+    lats = np.array([10.0, 20.0])
+    lons = np.array([90.0, 100.0])
+    times = np.array(["2026-01-01"], dtype="datetime64")
+    # Two members with known values
+    data = np.array([[[[10.0, 20.0], [30.0, 40.0]]], [[[50.0, 60.0], [70.0, 80.0]]]],
+                    dtype="float32")
+    ds = xr.Dataset(
+        {"precipitation": (["member", "time", "lat", "lon"], data)},
+        coords={"member": [0, 1], "time": times, "lat": lats, "lon": lons},
+    )
+    path = str(tmp_path / "two_member.nc")
+    ds.to_netcdf(path)
+
+    from app.routers.forecasts import _process_netcdf
+    meta = _process_netcdf(path)
+
+    # Overall mean of [10,20,30,40,50,60,70,80] = 45
+    assert meta["precip_mean"] == pytest.approx(45.0, abs=0.5)
+    assert meta["ensemble_size"] == 2
+
+
+def test_process_netcdf_deterministic_has_no_ensemble_fields(tmp_path):
+    """A standard (no member dim) NetCDF returns no ensemble_size key."""
+    import numpy as np
+    import xarray as xr
+
+    lats = np.array([10.0, 20.0])
+    lons = np.array([90.0, 100.0])
+    times = np.array(["2026-01-01", "2026-01-02"], dtype="datetime64")
+    data = np.ones((len(times), len(lats), len(lons)), dtype="float32") * 25.0
+
+    ds = xr.Dataset(
+        {"precipitation": (["time", "lat", "lon"], data)},
+        coords={"time": times, "lat": lats, "lon": lons},
+    )
+    path = str(tmp_path / "deterministic.nc")
+    ds.to_netcdf(path)
+
+    from app.routers.forecasts import _process_netcdf
+    meta = _process_netcdf(path)
+
+    assert "ensemble_size" not in meta or meta.get("ensemble_size") is None
+    assert meta["precip_mean"] == pytest.approx(25.0, abs=0.1)

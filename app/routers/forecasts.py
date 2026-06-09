@@ -163,9 +163,14 @@ def _process_netcdf(path: str) -> dict:
     ensemble_stats: dict = {}
     if ens_dim:
         from app.core.ensemble import percentiles_from_members
-        flat_ens = da.values.flatten().astype(float)
-        flat_ens = flat_ens[~np.isnan(flat_ens)].tolist()
-        ensemble_stats = percentiles_from_members(flat_ens)
+        n_members = int(da.sizes[ens_dim])
+        # Compute domain-mean per member so percentiles represent the spread
+        # across members, not the spread across individual grid cells.
+        other_dims = [d for d in da.dims if d != ens_dim]
+        per_member = da.mean(dim=other_dims).values.flatten().astype(float)
+        per_member = per_member[~np.isnan(per_member)].tolist()
+        ensemble_stats = percentiles_from_members(per_member)
+        ensemble_stats["ensemble_size"] = n_members
         # Collapse ensemble dim by taking ensemble mean before further processing
         da = da.mean(dim=ens_dim)
 
