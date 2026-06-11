@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     WEEKLY_DIGEST_DAY: int = 0   # 0=Monday
     WEEKLY_DIGEST_HOUR: int = 8
 
+    # Ollama chat assistant
+    OLLAMA_HOST: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "llama3.2"
+
     # CHIRPS observed rainfall ingestion
     CHIRPS_ENABLED: bool = True
     CHIRPS_LOOKBACK_DAYS: int = 7     # how many days back to fetch on each run

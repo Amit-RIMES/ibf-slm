@@ -191,6 +191,127 @@
   {% block body %}{% endblock %}
   <button class="dark-toggle" id="dark-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
 
+  <!-- Floating AI assistant button + side panel -->
+  <button id="ai-fab" title="Ask AI Assistant"
+          style="display:none;position:fixed;bottom:4.2rem;right:1.25rem;z-index:9998;
+                 width:2.4rem;height:2.4rem;border-radius:50%;border:1px solid #e5e7eb;
+                 background:#4f46e5;color:#fff;cursor:pointer;font-size:1rem;
+                 box-shadow:0 2px 8px rgba(0,0,0,.18);
+                 display:flex;align-items:center;justify-content:center;"
+          aria-label="Open AI Assistant">🤖</button>
+
+  <div id="ai-panel"
+       style="display:none;position:fixed;bottom:7.5rem;right:1.25rem;z-index:9997;
+              width:340px;max-height:480px;background:#fff;border:1px solid #e5e7eb;
+              border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.14);
+              display:none;flex-direction:column;overflow:hidden;">
+    <div style="padding:.75rem 1rem;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <span style="font-weight:700;font-size:.9rem;">AI Assistant</span>
+      <div style="display:flex;gap:.5rem;align-items:center;">
+        <a href="/chat" style="font-size:.75rem;color:#4f46e5;text-decoration:none;font-weight:600;">Open full ↗</a>
+        <button id="ai-close" style="background:none;border:none;cursor:pointer;font-size:1rem;color:#9ca3af;line-height:1;padding:0;">✕</button>
+      </div>
+    </div>
+    <div id="ai-msgs" style="flex:1;overflow-y:auto;padding:.75rem;display:flex;flex-direction:column;gap:.5rem;min-height:120px;max-height:300px;"></div>
+    <div style="padding:.5rem .75rem;border-top:1px solid #f3f4f6;display:flex;gap:.4rem;flex-shrink:0;">
+      <input id="ai-input" type="text" maxlength="500"
+             placeholder="Ask about your data…"
+             style="flex:1;padding:.45rem .7rem;border:1px solid #d1d5db;border-radius:8px;font-size:.82rem;outline:none;font-family:inherit;" />
+      <button id="ai-send"
+              style="padding:.45rem .75rem;background:#4f46e5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:.82rem;font-weight:600;">↑</button>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    var fab = document.getElementById('ai-fab');
+    var panel = document.getElementById('ai-panel');
+    var closeBtn = document.getElementById('ai-close');
+    var msgs = document.getElementById('ai-msgs');
+    var input = document.getElementById('ai-input');
+    var sendBtn = document.getElementById('ai-send');
+    var history = [];
+    var open = false;
+
+    // Don't show fab on the /chat page itself
+    if (window.location.pathname !== '/chat') {
+      fab.style.display = 'flex';
+    }
+
+    fab.addEventListener('click', function () {
+      open = !open;
+      panel.style.display = open ? 'flex' : 'none';
+      if (open) { input.focus(); }
+    });
+    closeBtn.addEventListener('click', function () {
+      open = false; panel.style.display = 'none';
+    });
+
+    function bubble(role, text) {
+      var d = document.createElement('div');
+      d.style.cssText = 'display:flex;gap:.4rem;align-items:flex-start;' + (role === 'user' ? 'flex-direction:row-reverse;' : '');
+      var av = document.createElement('div');
+      av.textContent = role === 'user' ? 'You' : 'AI';
+      av.style.cssText = 'font-size:.6rem;font-weight:700;padding:.2rem .35rem;border-radius:4px;flex-shrink:0;margin-top:.15rem;background:' + (role === 'user' ? '#4f46e5;color:#fff' : '#e0e7ff;color:#4f46e5');
+      var b = document.createElement('div');
+      b.style.cssText = 'font-size:.8rem;line-height:1.45;padding:.45rem .6rem;border-radius:8px;max-width:85%;white-space:pre-wrap;word-break:break-word;' + (role === 'user' ? 'background:#4f46e5;color:#fff;border-bottom-right-radius:2px;' : 'background:#f3f4f6;color:#1a1a2e;border-bottom-left-radius:2px;');
+      b.textContent = text;
+      d.appendChild(av); d.appendChild(b);
+      msgs.appendChild(d);
+      msgs.scrollTop = msgs.scrollHeight;
+      return b;
+    }
+
+    async function send() {
+      var text = input.value.trim();
+      if (!text || sendBtn.disabled) return;
+      sendBtn.disabled = true;
+      input.value = '';
+      bubble('user', text);
+      var aiBubble = bubble('assistant', '…');
+      var full = '';
+      try {
+        var res = await fetch('/api/v1/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, history: history })
+        });
+        var reader = res.body.getReader();
+        var dec = new TextDecoder();
+        var buf = '';
+        var started = false;
+        while (true) {
+          var r = await reader.read();
+          if (r.done) break;
+          buf += dec.decode(r.value, { stream: true });
+          var parts = buf.split('\n\n');
+          buf = parts.pop();
+          for (var p of parts) {
+            if (!p.startsWith('data: ')) continue;
+            try {
+              var obj = JSON.parse(p.slice(6));
+              if (obj.error) { aiBubble.textContent = obj.error; aiBubble.style.color = '#dc2626'; return; }
+              if (!started) { aiBubble.textContent = ''; started = true; }
+              full += obj.chunk;
+              aiBubble.textContent = full;
+              msgs.scrollTop = msgs.scrollHeight;
+            } catch (_) {}
+          }
+        }
+      } catch (e) { aiBubble.textContent = 'Connection error.'; aiBubble.style.color = '#dc2626'; }
+      if (full) {
+        history.push({ role: 'user', content: text });
+        history.push({ role: 'assistant', content: full });
+      }
+      sendBtn.disabled = false;
+      input.focus();
+    }
+
+    sendBtn.addEventListener('click', send);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); send(); } });
+  })();
+  </script>
+
   <!-- SSE notification badge (injects a counter on any unacknowledged activations broadcast) -->
   <div id="sse-badge"
        style="display:none;position:fixed;top:.9rem;right:4.5rem;z-index:9999;
