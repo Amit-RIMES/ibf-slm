@@ -247,16 +247,24 @@ async def _run_gap_check():
 
         cfg_r = await db.execute(select(SyncConfig).where(SyncConfig.id == 1))
         cfg = cfg_r.scalar_one_or_none()
+        if cfg is None:
+            cfg = SyncConfig(id=1, enabled=False, sources="[]")
+            db.add(cfg)
+            await db.flush()
+
+        def _since(ts):
+            if ts is None:
+                return None
+            aware = ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+            return now - aware
 
         should_alert_chirps = gaps["chirps_alert"] and (
-            cfg is None
-            or cfg.last_chirps_gap_alert_at is None
-            or (now - cfg.last_chirps_gap_alert_at) >= cooldown
+            cfg.last_chirps_gap_alert_at is None
+            or _since(cfg.last_chirps_gap_alert_at) >= cooldown
         )
         should_alert_forecast = gaps["forecast_alert"] and (
-            cfg is None
-            or cfg.last_forecast_gap_alert_at is None
-            or (now - cfg.last_forecast_gap_alert_at) >= cooldown
+            cfg.last_forecast_gap_alert_at is None
+            or _since(cfg.last_forecast_gap_alert_at) >= cooldown
         )
 
         if not should_alert_chirps and not should_alert_forecast:

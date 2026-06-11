@@ -25,9 +25,11 @@ async def check_data_gaps(db: AsyncSession) -> dict:
         select(ForecastUpload.uploaded_at).order_by(ForecastUpload.uploaded_at.desc()).limit(1)
     )
     last_fc_at = fc_r.scalar_one_or_none()
-    forecast_gap_days = (
-        int((now - last_fc_at).total_seconds() / 86400) if last_fc_at else None
-    )
+    if last_fc_at is not None:
+        fc_aware = last_fc_at if last_fc_at.tzinfo else last_fc_at.replace(tzinfo=timezone.utc)
+        forecast_gap_days = int((now - fc_aware).total_seconds() / 86400)
+    else:
+        forecast_gap_days = None
     forecast_alert = (
         forecast_gap_days is not None and forecast_gap_days >= settings.DATA_GAP_FORECAST_DAYS
     )
