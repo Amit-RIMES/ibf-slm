@@ -590,7 +590,7 @@ async def trigger_create(
             probability_threshold=probability_threshold,
         )
         return templates.TemplateResponse(
-            "trigger_form.html", _trigger_form_ctx(request, user, stub,
+            request, "trigger_form.html", _trigger_form_ctx(request, user, stub,
                 error=error, scope_enabled=(scope_enabled == "on"),
                 cond2_enabled=(cond2_enabled == "on"),
                 prob_enabled=(prob_enabled == "on"))
@@ -889,7 +889,7 @@ async def trigger_edit_page(trigger_id: int, request: Request, db: AsyncSession 
         return RedirectResponse("/triggers")
 
     return templates.TemplateResponse(
-        "trigger_form.html", _trigger_form_ctx(request, user, trigger)
+        request, "trigger_form.html", _trigger_form_ctx(request, user, trigger)
     )
 
 
@@ -944,7 +944,7 @@ async def trigger_update(
             probability_threshold=probability_threshold,
         )
         return templates.TemplateResponse(
-            "trigger_form.html", _trigger_form_ctx(request, user, stub,
+            request, "trigger_form.html", _trigger_form_ctx(request, user, stub,
                 error=error, scope_enabled=(scope_enabled == "on"),
                 cond2_enabled=(cond2_enabled == "on"),
                 prob_enabled=(prob_enabled == "on"))
