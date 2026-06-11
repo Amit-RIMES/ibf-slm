@@ -24,6 +24,20 @@
 </style>
 {% endblock %}
 {% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/forecasts/drift" class="active">Drift</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/sync">Auto-Sync</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
 <div class="main">
   <h1>Forecast Drift</h1>
   <p style="color:#6b7280;font-size:.9rem;margin-top:-.75rem;margin-bottom:1.25rem;">
