@@ -56,6 +56,26 @@
   .empty-state { text-align: center; padding: 3rem; color: #9ca3af; }
   .empty-state .icon { font-size: 2.5rem; margin-bottom: .75rem; }
   .empty-state p { font-size: .9rem; }
+
+  /* Heatmap toolbar */
+  .map-toolbar {
+    display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+    margin-bottom: .75rem;
+  }
+  .win-btn {
+    padding: .3rem .75rem; border: 1px solid #d1d5db; border-radius: 999px;
+    font-size: .78rem; font-weight: 600; cursor: pointer;
+    background: #f9fafb; color: #6b7280; text-decoration: none;
+  }
+  .win-btn.active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+  .win-btn:hover:not(.active) { background: #f3f4f6; }
+  .toggle-heat {
+    padding: .3rem .9rem; border: 1px solid #d1d5db; border-radius: 999px;
+    font-size: .78rem; font-weight: 600; cursor: pointer;
+    background: #f9fafb; color: #6b7280; margin-left: auto;
+  }
+  .toggle-heat.on { background: #dc2626; color: #fff; border-color: #dc2626; }
+  .heat-meta { font-size: .78rem; color: #9ca3af; }
 </style>
 {% endblock %}
 
@@ -95,6 +115,28 @@
       {% endif %}
     </div>
     </div>
+  </div>
+
+  <!-- Heatmap window selector + toggle -->
+  <div class="map-toolbar">
+    <span style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;">
+      Activation history:
+    </span>
+    {% for d, lbl in [(30,'30d'),(90,'90d'),(365,'1y'),(0,'All')] %}
+    <a href="/alerts?heatmap_days={{ d }}"
+       class="win-btn {% if heatmap_days == d %}active{% endif %}">
+      {{ lbl }}
+    </a>
+    {% endfor %}
+    <span class="heat-meta">
+      {{ heatmap_total }} activation{{ 's' if heatmap_total != 1 }}
+      {% if heatmap_days > 0 %}in past {{ heatmap_days }} days{% endif %}
+    </span>
+    {% if heatmap_total > 0 %}
+    <button class="toggle-heat" id="heatToggle" onclick="toggleHeat(this)">
+      Show heatmap
+    </button>
+    {% endif %}
   </div>
 
   <div style="position:relative;">
@@ -147,8 +189,12 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script>
-const alerts = {{ alerts_json | safe }};
+const alerts    = {{ alerts_json | safe }};
+const heatPts   = {{ heatmap_json | safe }};
+let   heatLayer = null;
+let   heatOn    = false;
 
 const HAZARD_COLORS = {
   flood:     '#3b82f6',
@@ -231,6 +277,28 @@ function focusAlert(index) {
   const bounds = [[a.lat_min, a.lon_min], [a.lat_max, a.lon_max]];
   map.fitBounds(bounds, { padding: [60, 60], maxZoom: 8 });
   layers[index].openPopup();
+}
+
+function toggleHeat(btn) {
+  if (!heatPts.length) return;
+  if (!heatLayer) {
+    heatLayer = L.heatLayer(heatPts, {
+      radius: 35,
+      blur: 25,
+      maxZoom: 8,
+      gradient: { 0.2: '#fde68a', 0.5: '#f97316', 0.8: '#dc2626', 1.0: '#7f1d1d' },
+    });
+  }
+  if (heatOn) {
+    map.removeLayer(heatLayer);
+    btn.textContent = 'Show heatmap';
+    btn.classList.remove('on');
+  } else {
+    heatLayer.addTo(map);
+    btn.textContent = 'Hide heatmap';
+    btn.classList.add('on');
+  }
+  heatOn = !heatOn;
 }
 </script>
 {% endblock %}
