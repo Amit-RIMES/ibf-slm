@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import delete, func, select
 
+from app.core.background import enqueue
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.forecast import ForecastUpload
@@ -89,8 +90,7 @@ async def _check_and_notify_sync_failures(db, config_id: int) -> None:
             select(User.email).where(User.role == "admin", User.is_active == True)  # noqa: E712
         )
         admin_emails = [r[0] for r in admins.all()]
-        import asyncio
-        asyncio.create_task(send_sync_failure_email(admin_emails, threshold, settings.APP_BASE_URL))
+        enqueue(send_sync_failure_email(admin_emails, threshold, settings.APP_BASE_URL))
 
 
 async def _run_alert_escalation() -> None:
@@ -127,8 +127,7 @@ async def _run_alert_escalation() -> None:
             if not trigger:
                 continue
             hours_unacked = int((datetime.now(timezone.utc) - activation.triggered_at).total_seconds() / 3600)
-            import asyncio
-            asyncio.create_task(
+            enqueue(
                 send_escalation_email(admin_emails, activation, trigger, hours_unacked, settings.APP_BASE_URL)
             )
             activation.last_escalated_at = datetime.now(timezone.utc)
@@ -207,8 +206,7 @@ async def _run_weekly_digest() -> None:
             "week_label": week_label,
         }
 
-    import asyncio
-    asyncio.create_task(send_weekly_digest_email(admin_emails, stats, settings.APP_BASE_URL))
+    enqueue(send_weekly_digest_email(admin_emails, stats, settings.APP_BASE_URL))
     logger.info("Weekly digest dispatched to %d admin(s)", len(admin_emails))
 
 

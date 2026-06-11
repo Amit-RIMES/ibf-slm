@@ -13,6 +13,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_action
+from app.core.background import enqueue
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -166,7 +167,6 @@ async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
 
     if fired_rows:
         await db.commit()
-        import asyncio
         # Push SSE events
         from app.routers.api import broadcast_activation
         for t, act, _ in fired_rows:
@@ -176,13 +176,13 @@ async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
             select(User.email).where(User.role == "admin")
         )
         admin_emails = [row[0] for row in admins_result.all()]
-        asyncio.create_task(send_trigger_activation_email(admin_emails, fired_rows))
+        enqueue(send_trigger_activation_email(admin_emails, fired_rows))
         # Fire webhooks
         webhooks_result = await db.execute(
             select(Webhook).where(Webhook.is_active == True)  # noqa: E712
         )
         webhooks = webhooks_result.scalars().all()
-        asyncio.create_task(send_webhook_notifications(fired_rows, webhooks))
+        enqueue(send_webhook_notifications(fired_rows, webhooks))
 
         # Email non-admin subscribers for the triggers they opted into
         fired_trigger_ids = [t.id for t, _, _ in fired_rows]
@@ -199,7 +199,7 @@ async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
         for email, tid in subs_result.all():
             email_to_tids.setdefault(email, set()).add(tid)
         if email_to_tids:
-            asyncio.create_task(send_subscriber_alert_emails(fired_rows, email_to_tids))
+            enqueue(send_subscriber_alert_emails(fired_rows, email_to_tids))
 
     return len(fired_rows)
 
@@ -1109,7 +1109,6 @@ async def acknowledge_activation(
                          f"Acknowledged '{activation.trigger.name}' (value: {activation.value} mm)")
 
         # Notify subscribers
-        import asyncio as _asyncio
         subs_result = await db.execute(
             select(User.email)
             .join(TriggerSubscription, TriggerSubscription.user_id == User.id)
@@ -1121,7 +1120,7 @@ async def acknowledge_activation(
         )
         sub_emails = [row[0] for row in subs_result.all()]
         if sub_emails:
-            _asyncio.create_task(
+            enqueue(
                 send_acknowledgement_emails(sub_emails, activation, activation.trigger, notes or "")
             )
 

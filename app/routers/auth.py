@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_action
+from app.core.background import enqueue
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.email import send_new_registration_email, send_password_reset_email
@@ -77,10 +78,9 @@ async def register(
     db.add(user)
     await db.commit()
 
-    import asyncio
     admins = await db.execute(select(User.email).where(User.role == "admin", User.is_active == True))  # noqa: E712
     admin_emails = [r[0] for r in admins.all()]
-    asyncio.create_task(send_new_registration_email(admin_emails, username, email, settings.APP_BASE_URL))
+    enqueue(send_new_registration_email(admin_emails, username, email, settings.APP_BASE_URL))
 
     return RedirectResponse("/login?pending=1", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -258,10 +258,7 @@ async def forgot_password(
         db.add(PasswordResetToken(token=token_str, user_id=user.id, expires_at=expires))
         await db.commit()
         reset_url = f"{settings.APP_BASE_URL}/reset-password/{token_str}"
-        try:
-            await send_password_reset_email(user.email, reset_url)
-        except Exception:
-            pass  # already logged in email utility
+        enqueue(send_password_reset_email(user.email, reset_url))
 
     # Always show the same message to avoid email enumeration
     return templates.TemplateResponse(

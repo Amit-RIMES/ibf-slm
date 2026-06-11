@@ -253,7 +253,7 @@ async def observed_sync(
 
     from app.core.chirps import sync_recent_days
     from app.core.database import AsyncSessionLocal
-    import asyncio
+    from app.core.background import enqueue
 
     _lbd = lookback_days
 
@@ -268,5 +268,5 @@ async def observed_sync(
                 lon_max=settings.CHIRPS_LON_MAX,
             )
 
-    asyncio.create_task(_do_sync())
+    enqueue(_do_sync())
     return RedirectResponse("/observed?synced=1", status_code=303)

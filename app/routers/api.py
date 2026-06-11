@@ -451,8 +451,8 @@ async def api_upload_forecast(
     await db.refresh(fc)
 
     # Evaluate triggers
-    import asyncio
-    asyncio.create_task(evaluate_triggers(fc, db))
+    from app.core.background import enqueue
+    enqueue(evaluate_triggers(fc, db))
 
     return _forecast_dict(fc)
 
