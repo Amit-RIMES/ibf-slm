@@ -1,5 +1,5 @@
-fastapi==0.111.0
-starlette>=0.37.2,<0.38.0
+fastapi==0.136.3
+starlette>=1.2.1
 uvicorn[standard]==0.29.0
 sqlalchemy>=2.0.36
 asyncpg==0.29.0
