@@ -1,4 +1,6 @@
+import calendar
 import json
+from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -220,6 +222,41 @@ async def observed_verify(
             "csi": csi,
         })
 
+    # ── Monthly skill trend (full history, independent of window filter) ──────
+    all_obs_r = await db.execute(
+        select(ObservedRainfall).order_by(ObservedRainfall.obs_date)
+    )
+    all_obs_by_date: dict[date, float] = {
+        o.obs_date: o.precip_mean for o in all_obs_r.scalars().all()
+    }
+    all_fc_r = await db.execute(
+        select(ForecastUpload).order_by(ForecastUpload.uploaded_at)
+    )
+    monthly_buckets: dict[str, list[tuple[float, float]]] = defaultdict(list)
+    for fc in all_fc_r.scalars().all():
+        fc_date = fc.uploaded_at.date() + timedelta(days=1)
+        obs_val = all_obs_by_date.get(fc_date)
+        if obs_val is not None:
+            ym = f"{fc_date.year}-{fc_date.month:02d}"
+            monthly_buckets[ym].append((fc.precip_mean, obs_val))
+
+    skill_trend = []
+    for ym in sorted(monthly_buckets):
+        pts = monthly_buckets[ym]
+        n = len(pts)
+        biases_m = [f - o for f, o in pts]
+        mae_m = round(sum(abs(b) for b in biases_m) / n, 3)
+        rmse_m = round((sum(b**2 for b in biases_m) / n) ** 0.5, 3)
+        bias_m = round(sum(biases_m) / n, 3)
+        yr, mo = int(ym[:4]), int(ym[5:])
+        skill_trend.append({
+            "label": f"{calendar.month_abbr[mo]} {yr}",
+            "mae": mae_m,
+            "rmse": rmse_m,
+            "bias": bias_m,
+            "n": n,
+        })
+
     return templates.TemplateResponse(
         request, "observed_verify.html",
         {
@@ -233,6 +270,8 @@ async def observed_verify(
             "corr": corr,
             "contingency": contingency,
             "obs_count": len(observations),
+            "skill_trend": json.dumps(skill_trend),
+            "skill_trend_len": len(skill_trend),
         },
     )
 

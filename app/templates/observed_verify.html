@@ -27,6 +27,9 @@
   .section-title { font-size:.75rem; font-weight:700; text-transform:uppercase;
     letter-spacing:.06em; color:#9ca3af; margin-bottom:1rem; }
   .chart-title { font-size:.88rem; font-weight:700; color:#374151; margin-bottom:.85rem; }
+  .skill-btn { padding:.28rem .7rem; border:1px solid #d1d5db; border-radius:999px;
+    font-size:.75rem; font-weight:600; cursor:pointer; background:#f9fafb; color:#6b7280; }
+  .skill-btn.active { background:#4f46e5; color:#fff; border-color:#4f46e5; }
 
   table { width:100%; border-collapse:collapse; font-size:.875rem; }
   th { text-align:left; padding:.55rem .75rem; font-size:.72rem; font-weight:700;
@@ -139,6 +142,30 @@
     {% endif %}
   </div>
 
+  <!-- Skill trend chart (full history) -->
+  {% if skill_trend_len > 1 %}
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.75rem;">
+      <div>
+        <div class="chart-title" style="margin-bottom:.15rem;">Forecast Skill Trend</div>
+        <div style="font-size:.78rem;color:#9ca3af;">Monthly MAE, RMSE and bias — full history</div>
+      </div>
+      <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;">
+        <span style="font-size:.75rem;color:#9ca3af;margin-right:.25rem;">Show last</span>
+        <button class="skill-btn active" onclick="sliceTrend(6,this)">6 mo</button>
+        <button class="skill-btn" onclick="sliceTrend(12,this)">12 mo</button>
+        <button class="skill-btn" onclick="sliceTrend(24,this)">24 mo</button>
+        <button class="skill-btn" onclick="sliceTrend(null,this)">All</button>
+        <span style="width:1px;height:18px;background:#e5e7eb;display:inline-block;margin:0 .25rem;"></span>
+        <button class="skill-btn active" id="toggleMAE"   onclick="toggleSeries('mae',this)">MAE</button>
+        <button class="skill-btn active" id="toggleRMSE"  onclick="toggleSeries('rmse',this)">RMSE</button>
+        <button class="skill-btn active" id="toggleBias"  onclick="toggleSeries('bias',this)">Bias</button>
+      </div>
+    </div>
+    <canvas id="skillChart" height="75"></canvas>
+  </div>
+  {% endif %}
+
   <!-- Time series chart -->
   {% if pairs %}
   <div class="card">
@@ -229,8 +256,60 @@
   {% endif %}
 </div>
 
-{% if pairs %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+{% if skill_trend_len > 1 %}
+<script>
+  const SKILL = {{ skill_trend }};
+
+  const skillChart = new Chart(document.getElementById('skillChart'), {
+    type: 'line',
+    data: buildSkillData(SKILL),
+    options: {
+      spanGaps: true,
+      plugins: { legend: { position: 'top', labels: { font: { size: 11 } } } },
+      scales: {
+        y: {
+          beginAtZero: false,
+          title: { display: true, text: 'mm', font: { size: 10 } },
+        },
+      },
+    },
+  });
+
+  function buildSkillData(pts) {
+    return {
+      labels: pts.map(p => p.label),
+      datasets: [
+        { label: 'MAE',  data: pts.map(p => p.mae),  borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,.08)', tension: .3, fill: false, pointRadius: 3 },
+        { label: 'RMSE', data: pts.map(p => p.rmse), borderColor: '#4f46e5', backgroundColor: 'rgba(79,70,229,.08)',   tension: .3, fill: false, pointRadius: 3 },
+        { label: 'Bias', data: pts.map(p => p.bias), borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,.07)',  tension: .3, fill: true,  pointRadius: 3,
+          borderDash: [4, 3] },
+      ],
+    };
+  }
+
+  // Slice to last N months — only deactivate sibling slice buttons (no id)
+  const sliceBtns = document.querySelectorAll('.skill-btn:not([id])');
+  function sliceTrend(n, btn) {
+    sliceBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const pts = n ? SKILL.slice(-n) : SKILL;
+    skillChart.data = buildSkillData(pts);
+    skillChart.update();
+  }
+
+  // Toggle individual series
+  const seriesIdx = { mae: 0, rmse: 1, bias: 2 };
+  function toggleSeries(key, btn) {
+    btn.classList.toggle('active');
+    const meta = skillChart.getDatasetMeta(seriesIdx[key]);
+    meta.hidden = !btn.classList.contains('active');
+    skillChart.update();
+  }
+</script>
+{% endif %}
+
+{% if pairs %}
 <script>
   const pairs = {{ pairs | tojson }};
   const sortedPairs = [...pairs].sort((a,b) => a.date.localeCompare(b.date));
