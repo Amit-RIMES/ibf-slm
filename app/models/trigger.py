@@ -4,7 +4,9 @@ from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Te
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
-VARIABLES = ["precip_mean", "precip_max", "precip_min"]
+FORECAST_VARIABLES = ["precip_mean", "precip_max", "precip_min"]
+SPI_VARIABLES = ["spi_1", "spi_3", "spi_6"]
+VARIABLES = FORECAST_VARIABLES + SPI_VARIABLES
 OPERATORS = ["gt", "gte", "lt", "lte"]
 OPERATOR_SYMBOLS = {"gt": ">", "gte": "≥", "lt": "<", "lte": "≤"}
 OPERATOR_LABELS = {"gt": "greater than (>)", "gte": "at least (≥)", "lt": "less than (<)", "lte": "at most (≤)"}
@@ -73,8 +75,8 @@ class TriggerActivation(Base):
     trigger_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("triggers.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    forecast_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("forecast_uploads.id", ondelete="CASCADE"), nullable=False, index=True
+    forecast_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("forecast_uploads.id", ondelete="CASCADE"), nullable=True, index=True
     )
     value: Mapped[float] = mapped_column(Float, nullable=False)
     # For probabilistic triggers: the actual exceedance probability at activation time

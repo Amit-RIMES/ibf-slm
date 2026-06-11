@@ -49,6 +49,8 @@
 
   .alert-info { background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px;
     padding:.6rem 1rem; font-size:.875rem; color:#1d4ed8; margin-bottom:1rem; }
+  .alert-error { background:#fef2f2; border:1px solid #fecaca; border-radius:8px;
+    padding:.6rem 1rem; font-size:.875rem; color:#b91c1c; margin-bottom:1rem; }
   .sync-form { display:flex; gap:.6rem; align-items:flex-end; }
   .sync-form label { font-size:.75rem; font-weight:700; text-transform:uppercase;
     letter-spacing:.05em; color:#9ca3af; display:block; margin-bottom:.3rem; }
@@ -97,6 +99,44 @@
 
   {% if request.query_params.get('synced') %}
   <div class="alert-info">CHIRPS sync started in background — new records will appear shortly.</div>
+  {% endif %}
+  {% if request.query_params.get('backfill_started') %}
+  <div class="alert-info">
+    Historical backfill started for {{ request.query_params.get('backfill_started') }} days —
+    this runs in the background and may take several minutes. SPI will be recomputed automatically when done.
+  </div>
+  {% endif %}
+  {% if request.query_params.get('backfill_error') == 'invalid_dates' %}
+  <div class="alert-error">Invalid date format. Please use YYYY-MM-DD.</div>
+  {% elif request.query_params.get('backfill_error') == 'date_order' %}
+  <div class="alert-error">Start date must be before or equal to end date.</div>
+  {% endif %}
+
+  {% if user.role == "admin" %}
+  <div class="card" style="padding:1.1rem 1.25rem;margin-bottom:1.25rem;">
+    <div class="chart-title" style="margin-bottom:.75rem;">Historical Backfill</div>
+    <p style="font-size:.83rem;color:#6b7280;margin-bottom:.85rem;">
+      Download CHIRPS data for a date range to build a longer historical record for SPI.
+      CHIRPS is available from 1981-01-01. Existing dates are skipped automatically.
+    </p>
+    <form method="post" action="/observed/backfill" style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+      <div>
+        <label style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;display:block;margin-bottom:.3rem;">Start date</label>
+        <input type="date" name="start_date" required value="2015-01-01"
+          style="padding:.45rem .75rem;border:1px solid #d1d5db;border-radius:7px;font-size:.875rem;">
+      </div>
+      <div>
+        <label style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;display:block;margin-bottom:.3rem;">End date</label>
+        <input type="date" name="end_date" required value="2022-12-31"
+          style="padding:.45rem .75rem;border:1px solid #d1d5db;border-radius:7px;font-size:.875rem;">
+      </div>
+      <button type="submit" class="btn"
+        onclick="return confirm('This will download CHIRPS data for the selected range. It runs in the background and may take several minutes per year. Continue?')">
+        Start backfill
+      </button>
+    </form>
+  </div>
   {% endif %}
 
   {% if chart_data %}

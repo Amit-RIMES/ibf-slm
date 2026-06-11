@@ -58,13 +58,13 @@ async def send_webhook_notifications(fired_rows, webhooks) -> None:
                 "forecast_id": activation.forecast_id,
             },
             "forecast": {
-                "id": forecast.id,
-                "filename": forecast.filename,
-                "source": forecast.source,
-                "time_start": forecast.time_start,
-                "time_end": forecast.time_end,
-                "precip_mean": forecast.precip_mean,
-                "precip_max": forecast.precip_max,
+                "id": forecast.id if forecast else None,
+                "filename": forecast.filename if forecast else None,
+                "source": forecast.source if forecast else None,
+                "time_start": forecast.time_start if forecast else None,
+                "time_end": forecast.time_end if forecast else None,
+                "precip_mean": forecast.precip_mean if forecast else None,
+                "precip_max": forecast.precip_max if forecast else None,
             },
         }
         body = json.dumps(payload, default=str)

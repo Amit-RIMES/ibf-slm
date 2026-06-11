@@ -64,19 +64,26 @@ def _build_trigger_html(
     base_url: str,
 ) -> str:
     op_sym = {"gt": ">", "gte": "≥", "lt": "<", "lte": "≤"}
-    var_label = {"precip_mean": "Mean precip", "precip_max": "Max precip", "precip_min": "Min precip"}
+    var_label = {
+        "precip_mean": "Mean precip", "precip_max": "Max precip", "precip_min": "Min precip",
+        "spi_1": "SPI-1", "spi_3": "SPI-3", "spi_6": "SPI-6",
+    }
     forecast = fired[0][2]
+    source_label = forecast.filename if forecast else "SPI drought index"
     n = len(fired)
     rows = ""
     for trigger, activation, fc in fired:
         url = f"{base_url}/triggers/{trigger.id}"
+        is_spi = trigger.variable.startswith("spi_")
+        val_str = f"{activation.value:.3f}" + ("" if is_spi else " mm")
+        thr_str = f"{op_sym[trigger.operator]} {trigger.threshold}" + ("" if is_spi else " mm")
         rows += f"""
         <tr>
           <td style="padding:.6rem .8rem;border-bottom:1px solid #f3f4f6;font-weight:600">{trigger.name}</td>
           <td style="padding:.6rem .8rem;border-bottom:1px solid #f3f4f6;text-transform:capitalize">{trigger.hazard_type}</td>
           <td style="padding:.6rem .8rem;border-bottom:1px solid #f3f4f6">{var_label.get(trigger.variable, trigger.variable)}</td>
-          <td style="padding:.6rem .8rem;border-bottom:1px solid #f3f4f6;color:#dc2626;font-weight:700">{activation.value:.3f} mm</td>
-          <td style="padding:.6rem .8rem;border-bottom:1px solid #f3f4f6;color:#6b7280">{op_sym[trigger.operator]} {trigger.threshold} mm</td>
+          <td style="padding:.6rem .8rem;border-bottom:1px solid #f3f4f6;color:#dc2626;font-weight:700">{val_str}</td>
+          <td style="padding:.6rem .8rem;border-bottom:1px solid #f3f4f6;color:#6b7280">{thr_str}</td>
           <td style="padding:.6rem .8rem;border-bottom:1px solid #f3f4f6">
             <a href="{url}" style="color:#4f46e5;font-weight:600">View →</a>
           </td>
@@ -88,7 +95,7 @@ def _build_trigger_html(
                   padding:1rem 1.25rem;margin-bottom:1.5rem;">
         <span style="font-size:1.1rem">⚠️</span>
         <strong style="color:#991b1b;margin-left:.4rem;">
-          {n} trigger activation{'s' if n != 1 else ''} — {forecast.filename}
+          {n} trigger activation{'s' if n != 1 else ''} — {source_label}
         </strong>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:.9rem;">
@@ -428,7 +435,8 @@ async def send_trigger_activation_email(
         return
 
     n = len(fired)
-    forecast_name = fired[0][2].filename
+    first_fc = fired[0][2]
+    forecast_name = first_fc.filename if first_fc else "SPI drought index"
     subject = f"[IBF Alert] {n} trigger activation{'s' if n != 1 else ''} — {forecast_name}"
     html = _build_trigger_html(fired, settings.APP_BASE_URL)
 

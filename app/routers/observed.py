@@ -254,7 +254,6 @@ async def observed_sync(
     from app.core.background import enqueue
     from app.core.chirps import sync_recent_days
     from app.core.database import AsyncSessionLocal
-    from app.core.spi import recompute_spi
 
     _lbd = lookback_days
 
@@ -269,8 +268,59 @@ async def observed_sync(
                 lon_max=settings.CHIRPS_LON_MAX,
             )
         if ingested:
+            from app.core.spi import recompute_and_evaluate
             async with AsyncSessionLocal() as spi_db:
-                await recompute_spi(spi_db)
+                await recompute_and_evaluate(spi_db)
 
     enqueue(_do_sync())
     return RedirectResponse("/observed?synced=1", status_code=303)
+
+
+# ── Historical backfill (admin) ───────────────────────────────────────────────
+
+@router.post("/backfill", response_class=HTMLResponse)
+async def observed_backfill(
+    request: Request,
+    start_date: str = Form(...),
+    end_date: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if user.role != "admin":
+        return _FORBIDDEN
+
+    try:
+        from datetime import date as _date
+        sd = _date.fromisoformat(start_date)
+        ed = _date.fromisoformat(end_date)
+    except ValueError:
+        return RedirectResponse("/observed?backfill_error=invalid_dates", status_code=303)
+
+    if sd > ed:
+        return RedirectResponse("/observed?backfill_error=date_order", status_code=303)
+
+    from app.core.background import enqueue
+    from app.core.chirps import backfill_range
+    from app.core.database import AsyncSessionLocal
+    from app.core.spi import recompute_and_evaluate
+
+    _sd, _ed = sd, ed
+
+    async def _do_backfill():
+        async with AsyncSessionLocal() as bf_db:
+            ingested, skipped, errors = await backfill_range(
+                bf_db, _sd, _ed,
+                lat_min=settings.CHIRPS_LAT_MIN,
+                lat_max=settings.CHIRPS_LAT_MAX,
+                lon_min=settings.CHIRPS_LON_MIN,
+                lon_max=settings.CHIRPS_LON_MAX,
+            )
+        if ingested:
+            async with AsyncSessionLocal() as spi_db:
+                await recompute_and_evaluate(spi_db)
+
+    enqueue(_do_backfill())
+    total_days = (ed - sd).days + 1
+    return RedirectResponse(f"/observed?backfill_started={total_days}", status_code=303)

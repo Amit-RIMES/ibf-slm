@@ -174,9 +174,10 @@ async def drought_recompute(request: Request, db: AsyncSession = Depends(get_db)
     from app.core.spi import recompute_spi
 
     async def _do():
+        from app.core.spi import recompute_and_evaluate
         async with AsyncSessionLocal() as sdb:
-            n = await recompute_spi(sdb)
-            logger.info("Admin triggered SPI recompute: %d records", n)
+            n_spi, n_act = await recompute_and_evaluate(sdb)
+            logger.info("Admin triggered SPI recompute: %d records, %d activation(s)", n_spi, n_act)
 
     enqueue(_do())
     return RedirectResponse("/drought?recomputed=1", status_code=303)

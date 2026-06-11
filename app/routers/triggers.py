@@ -24,7 +24,8 @@ from app.core.webhook import send_webhook_notifications
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
 from app.models.trigger import (
-    LOGIC_OPS, OPERATOR_LABELS, OPERATOR_SYMBOLS, OPERATORS, VARIABLES,
+    FORECAST_VARIABLES, LOGIC_OPS, OPERATOR_LABELS, OPERATOR_SYMBOLS,
+    OPERATORS, SPI_VARIABLES, VARIABLES,
     Trigger, TriggerActivation, TriggerSubscription,
 )
 from app.models.user import User
@@ -39,6 +40,9 @@ VARIABLE_LABELS = {
     "precip_mean": "Mean precipitation (mm)",
     "precip_max": "Max precipitation (mm)",
     "precip_min": "Min precipitation (mm)",
+    "spi_1": "SPI-1 (1-month drought index)",
+    "spi_3": "SPI-3 (3-month drought index)",
+    "spi_6": "SPI-6 (6-month drought index)",
 }
 
 
@@ -84,8 +88,13 @@ def _scoped_value(geojson_str: str, variable: str, trigger: "Trigger") -> float:
 
 
 async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
-    """Check all active triggers against a newly ingested forecast. Returns count fired."""
-    result = await db.execute(select(Trigger).where(Trigger.is_active == True))  # noqa: E712
+    """Check all active forecast-variable triggers against a newly ingested forecast. Returns count fired."""
+    result = await db.execute(
+        select(Trigger).where(
+            Trigger.is_active == True,  # noqa: E712
+            Trigger.variable.in_(FORECAST_VARIABLES),
+        )
+    )
     triggers = result.scalars().all()
 
     global_map = {
@@ -423,19 +432,20 @@ async def trigger_new_page(request: Request, db: AsyncSession = Depends(get_db))
         return RedirectResponse("/login")
 
     return templates.TemplateResponse(
-    request,
-    "trigger_form.html",
-    {"user": user, "trigger": None,
+        request, "trigger_form.html",
+        {"user": user, "trigger": None,
          "hazard_types": HAZARD_TYPES, "variables": VARIABLES,
+         "forecast_variables": FORECAST_VARIABLES, "spi_variables": SPI_VARIABLES,
          "operators": OPERATORS, "operator_labels": OPERATOR_LABELS,
          "variable_labels": VARIABLE_LABELS, "logic_ops": LOGIC_OPS},
-)
+    )
 
 
 def _trigger_form_ctx(request, user, trigger_obj, **kwargs):
     return {
         "request": request, "user": user, "trigger": trigger_obj,
         "hazard_types": HAZARD_TYPES, "variables": VARIABLES,
+        "forecast_variables": FORECAST_VARIABLES, "spi_variables": SPI_VARIABLES,
         "operators": OPERATORS, "operator_labels": OPERATOR_LABELS,
         "variable_labels": VARIABLE_LABELS, "logic_ops": LOGIC_OPS,
         **kwargs,
@@ -462,8 +472,11 @@ def _validate_trigger(
     try:
         threshold = float(threshold_str)
     except (ValueError, TypeError):
-        return None, None, "Threshold must be a number (e.g. 25 or 12.5)."
-    if threshold < 0:
+        return None, None, "Threshold must be a number (e.g. 25 or -1.5)."
+    if variable in SPI_VARIABLES:
+        if not (-5.0 <= threshold <= 5.0):
+            return None, None, "SPI threshold must be between -5 and 5 (typical range: -2 to 2)."
+    elif threshold < 0:
         return None, None, "Threshold must be zero or greater."
 
     extras: dict = {}
@@ -1032,7 +1045,8 @@ async def activation_sitrep(
     # Pre-format rule and deviation
     op_sym = OPERATOR_SYMBOLS.get(trigger.operator, trigger.operator) if trigger else "?"
     var_label = VARIABLE_LABELS.get(trigger.variable, trigger.variable) if trigger else "?"
-    rule_str = f"{var_label} {op_sym} {trigger.threshold} mm" if trigger else "—"
+    _unit = "" if (trigger and trigger.variable in SPI_VARIABLES) else " mm"
+    rule_str = f"{var_label} {op_sym} {trigger.threshold}{_unit}" if trigger else "—"
     if trigger and trigger.threshold:
         dev_mm = round(activation.value - trigger.threshold, 2)
         dev_pct = round(dev_mm / trigger.threshold * 100, 1)

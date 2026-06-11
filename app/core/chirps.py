@@ -237,3 +237,78 @@ async def sync_recent_days(
         logger.info("CHIRPS ingested %s (mean=%.2f mm)", obs_date, data["precip_mean"])
 
     return ingested
+
+
+async def backfill_range(
+    db,
+    start_date: date,
+    end_date: date,
+    lat_min: float = 0.0,
+    lat_max: float = 35.0,
+    lon_min: float = 60.0,
+    lon_max: float = 155.0,
+    delay_seconds: float = 0.5,
+) -> tuple[int, int, int]:
+    """
+    Download CHIRPS data for every date in [start_date, end_date].
+    Skips dates already in the DB and never fetches today or future dates.
+    A short delay between requests avoids hammering the UCSB server.
+
+    Returns (ingested, skipped, errors).
+    """
+    import asyncio
+    from sqlalchemy import select
+    from app.models.observed_rainfall import ObservedRainfall
+
+    today = datetime.now(timezone.utc).date()
+    end_date = min(end_date, today - timedelta(days=1))
+    if start_date > end_date:
+        return 0, 0, 0
+
+    # Pre-fetch the set of existing dates to skip DB hits per day
+    existing_result = await db.execute(
+        select(ObservedRainfall.obs_date).where(
+            ObservedRainfall.obs_date >= start_date,
+            ObservedRainfall.obs_date <= end_date,
+            ObservedRainfall.source == "CHIRPS",
+        )
+    )
+    existing_dates: set[date] = {r[0] for r in existing_result.all()}
+
+    total_days = (end_date - start_date).days + 1
+    ingested = skipped = errors = 0
+    current = start_date
+
+    while current <= end_date:
+        if current in existing_dates:
+            skipped += 1
+            current += timedelta(days=1)
+            continue
+
+        try:
+            data = await fetch_chirps_day(current, lat_min, lat_max, lon_min, lon_max)
+            if data is None:
+                errors += 1
+            else:
+                db.add(ObservedRainfall(**data))
+                await db.commit()
+                ingested += 1
+                done = ingested + errors
+                logger.info(
+                    "CHIRPS backfill: %s (%.2f mm) [%d/%d processed, %d skipped]",
+                    current, data["precip_mean"], done, total_days - skipped, skipped,
+                )
+        except Exception as exc:
+            logger.error("CHIRPS backfill error for %s: %s", current, exc)
+            errors += 1
+
+        if delay_seconds > 0:
+            await asyncio.sleep(delay_seconds)
+
+        current += timedelta(days=1)
+
+    logger.info(
+        "CHIRPS backfill complete: %d ingested, %d skipped, %d errors",
+        ingested, skipped, errors,
+    )
+    return ingested, skipped, errors

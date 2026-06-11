@@ -119,6 +119,138 @@ def compute_spi(
     return results
 
 
+async def evaluate_spi_triggers(db) -> int:
+    """
+    Check all active SPI-variable triggers against the latest SPI values.
+    Creates TriggerActivation records (forecast_id=None) and fires notifications.
+    Returns the count of new activations created (excluding cooldown-suppressed ones).
+    """
+    from datetime import timedelta
+
+    from sqlalchemy import select
+
+    from app.core.background import enqueue
+    from app.core.config import settings
+    from app.models.trigger import SPI_VARIABLES, Trigger, TriggerActivation
+    from app.models.user import User
+
+    # Latest non-null SPI value per timescale
+    spi_map: dict[str, float] = {}
+    for ts, key in [(1, "spi_1"), (3, "spi_3"), (6, "spi_6")]:
+        from app.models.spi import SPIRecord
+        result = await db.execute(
+            select(SPIRecord.spi_value)
+            .where(SPIRecord.timescale == ts, SPIRecord.spi_value.is_not(None))
+            .order_by(SPIRecord.year.desc(), SPIRecord.month.desc())
+            .limit(1)
+        )
+        val = result.scalar_one_or_none()
+        if val is not None:
+            spi_map[key] = val
+
+    if not spi_map:
+        return 0
+
+    triggers_result = await db.execute(
+        select(Trigger).where(
+            Trigger.is_active == True,  # noqa: E712
+            Trigger.variable.in_(SPI_VARIABLES),
+        )
+    )
+    triggers = triggers_result.scalars().all()
+
+    ops = {
+        "gt":  lambda v, t: v > t,
+        "gte": lambda v, t: v >= t,
+        "lt":  lambda v, t: v < t,
+        "lte": lambda v, t: v <= t,
+    }
+    cooldown_cutoff = datetime.now(timezone.utc) - timedelta(hours=settings.TRIGGER_COOLDOWN_HOURS)
+
+    fired_rows = []
+    for trigger in triggers:
+        value = spi_map.get(trigger.variable)
+        if value is None:
+            continue
+
+        fires = ops[trigger.operator](value, trigger.threshold)
+        if trigger.condition_2_variable and trigger.condition_2_operator and trigger.condition_2_threshold is not None:
+            value2 = spi_map.get(trigger.condition_2_variable, value)
+            fires2 = ops[trigger.condition_2_operator](value2, trigger.condition_2_threshold)
+            fires = (fires and fires2) if trigger.logic_op == "and" else (fires or fires2)
+
+        if not fires:
+            continue
+
+        recent = await db.execute(
+            select(TriggerActivation.id)
+            .where(
+                TriggerActivation.trigger_id == trigger.id,
+                TriggerActivation.triggered_at >= cooldown_cutoff,
+            )
+            .limit(1)
+        )
+        in_cooldown = recent.scalar_one_or_none() is not None
+
+        activation = TriggerActivation(
+            trigger_id=trigger.id,
+            forecast_id=None,
+            value=value,
+            status="active",
+        )
+        db.add(activation)
+
+        if not in_cooldown:
+            fired_rows.append((trigger, activation))
+
+    if fired_rows:
+        await db.commit()
+
+        from app.core.email import send_trigger_activation_email, send_subscriber_alert_emails
+        from app.core.webhook import send_webhook_notifications
+        from app.routers.api import broadcast_activation
+
+        for t, act in fired_rows:
+            broadcast_activation(act.id, t.name, t.hazard_type)
+
+        admins_result = await db.execute(
+            select(User.email).where(User.role == "admin")
+        )
+        admin_emails = [r[0] for r in admins_result.all()]
+        # Pass as (trigger, activation, None) tuples — notification functions are null-safe
+        rows_with_none = [(t, act, None) for t, act in fired_rows]
+        enqueue(send_trigger_activation_email(admin_emails, rows_with_none))
+
+        from app.models.webhook import Webhook
+        webhooks_result = await db.execute(select(Webhook).where(Webhook.is_active == True))  # noqa: E712
+        webhooks = webhooks_result.scalars().all()
+        enqueue(send_webhook_notifications(rows_with_none, webhooks))
+
+        from app.models.trigger import TriggerSubscription
+        fired_ids = [t.id for t, _ in fired_rows]
+        subs_result = await db.execute(
+            select(User.email, TriggerSubscription.trigger_id)
+            .join(TriggerSubscription, TriggerSubscription.user_id == User.id)
+            .where(
+                TriggerSubscription.trigger_id.in_(fired_ids),
+                User.is_active == True,  # noqa: E712
+                User.role != "admin",
+            )
+        )
+        from collections import defaultdict
+        email_to_tids: dict[str, set[int]] = defaultdict(set)
+        for email, tid in subs_result.all():
+            email_to_tids[email].add(tid)
+        if email_to_tids:
+            enqueue(send_subscriber_alert_emails(rows_with_none, dict(email_to_tids)))
+
+        logger.info("SPI triggers: %d activation(s) fired", len(fired_rows))
+    elif triggers:
+        logger.debug("SPI triggers: %d checked, none fired", len(triggers))
+
+    return len(fired_rows)
+
+
 async def recompute_spi(db) -> int:
     """
     Recompute all SPI records in the DB from ObservedRainfall data.
@@ -189,3 +321,10 @@ async def recompute_spi(db) -> int:
     await db.commit()
     logger.info("SPI recomputed: %d records written across %d source(s)", total, len(sources))
     return total
+
+
+async def recompute_and_evaluate(db) -> tuple[int, int]:
+    """Recompute SPI then immediately evaluate SPI triggers. Returns (spi_rows, activations)."""
+    n_spi = await recompute_spi(db)
+    n_act = await evaluate_spi_triggers(db)
+    return n_spi, n_act

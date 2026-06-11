@@ -111,18 +111,25 @@
       </div>
 
       <div class="section-heading">Threshold Rule</div>
-      <p style="font-size:.85rem; color:#6b7280; margin-bottom:1rem;">
-        Trigger fires when the selected forecast statistic crosses the threshold.
+      <p style="font-size:.85rem; color:#6b7280; margin-bottom:1rem;" id="rule-desc">
+        Trigger fires when the selected statistic crosses the threshold.
       </p>
 
       <div class="grid-3">
         <div class="form-group">
-          <label>Forecast variable</label>
+          <label>Variable</label>
           <select name="variable" id="sel-var" required>
             <option value="" disabled {% if not trigger %}selected{% endif %}>Select…</option>
-            {% for v in variables %}
-            <option value="{{ v }}" {% if trigger and trigger.variable == v %}selected{% endif %}>{{ variable_labels[v] }}</option>
-            {% endfor %}
+            <optgroup label="Forecast (precipitation)">
+              {% for v in forecast_variables %}
+              <option value="{{ v }}" {% if trigger and trigger.variable == v %}selected{% endif %}>{{ variable_labels[v] }}</option>
+              {% endfor %}
+            </optgroup>
+            <optgroup label="Drought Index (SPI)">
+              {% for v in spi_variables %}
+              <option value="{{ v }}" {% if trigger and trigger.variable == v %}selected{% endif %}>{{ variable_labels[v] }}</option>
+              {% endfor %}
+            </optgroup>
           </select>
         </div>
         <div class="form-group">
@@ -135,7 +142,7 @@
           </select>
         </div>
         <div class="form-group">
-          <label>Threshold (mm)</label>
+          <label id="lbl-threshold">Threshold (mm)</label>
           <input type="number" step="any" name="threshold" id="inp-threshold" placeholder="e.g. 50" required
             value="{{ trigger.threshold if trigger else '' }}" />
         </div>
@@ -197,7 +204,10 @@
             <label>Variable</label>
             <select name="cond2_variable" id="sel-var2">
               <option value="">Select…</option>
-              {% for v in variables %}
+              {% for v in forecast_variables %}
+              <option value="{{ v }}" {% if trigger and trigger.condition_2_variable == v %}selected{% endif %}>{{ variable_labels[v] }}</option>
+              {% endfor %}
+              {% for v in spi_variables %}
               <option value="{{ v }}" {% if trigger and trigger.condition_2_variable == v %}selected{% endif %}>{{ variable_labels[v] }}</option>
               {% endfor %}
             </select>
@@ -295,26 +305,52 @@
 
 <script>
   const varLabels = {{ variable_labels | tojson }};
+  const spiVars = new Set({{ spi_variables | tojson }});
   const opSymbols = {"gt": ">", "gte": "≥", "lt": "<", "lte": "≤"};
   const selVar = document.getElementById('sel-var');
   const selOp = document.getElementById('sel-op');
   const inpThreshold = document.getElementById('inp-threshold');
+  const lblThreshold = document.getElementById('lbl-threshold');
+  const ruleDesc = document.getElementById('rule-desc');
   const preview = document.getElementById('rule-preview');
   const previewText = document.getElementById('preview-text');
+  const probBox = document.getElementById('prob-box');
+  const probChk = document.getElementById('prob_enabled');
+
+  function isSpi() { return spiVars.has(selVar.value); }
+
+  function onVarChange() {
+    if (isSpi()) {
+      lblThreshold.textContent = 'SPI threshold';
+      inpThreshold.placeholder = 'e.g. -1.5';
+      inpThreshold.removeAttribute('min');
+      ruleDesc.textContent = 'Trigger fires when the drought index crosses the SPI threshold. Typical: SPI < -1.0 (moderate drought), < -1.5 (severe), < -2.0 (extreme).';
+      probBox.classList.add('hidden');
+      if (probChk) probChk.checked = false;
+    } else {
+      lblThreshold.textContent = 'Threshold (mm)';
+      inpThreshold.placeholder = 'e.g. 50';
+      inpThreshold.min = '0';
+      ruleDesc.textContent = 'Trigger fires when the selected forecast statistic crosses the threshold.';
+      probBox.classList.remove('hidden');
+    }
+    updatePreview();
+  }
 
   function updatePreview() {
     const v = selVar.value, op = selOp.value, t = inpThreshold.value;
     if (v && op && t) {
-      previewText.textContent = `${varLabels[v]} ${opSymbols[op]} ${t} mm`;
+      const unit = isSpi() ? '' : ' mm';
+      previewText.textContent = `${varLabels[v]} ${opSymbols[op]} ${t}${unit}`;
       preview.classList.add('visible');
     } else {
       preview.classList.remove('visible');
     }
   }
-  selVar.addEventListener('change', updatePreview);
+  selVar.addEventListener('change', onVarChange);
   selOp.addEventListener('change', updatePreview);
   inpThreshold.addEventListener('input', updatePreview);
-  updatePreview();
+  onVarChange();
 
   const scopeChk = document.getElementById('scope_enabled');
   const scopeBox = document.getElementById('scope-box');

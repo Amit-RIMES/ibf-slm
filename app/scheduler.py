@@ -214,7 +214,6 @@ async def _run_chirps_sync():
     if not settings.CHIRPS_ENABLED:
         return
     from app.core.chirps import sync_recent_days
-    from app.core.spi import recompute_spi
     async with AsyncSessionLocal() as db:
         ingested = await sync_recent_days(
             db,
@@ -226,8 +225,9 @@ async def _run_chirps_sync():
         )
     if ingested:
         logger.info("CHIRPS sync: ingested %d new day(s): %s", len(ingested), ingested)
+        from app.core.spi import recompute_and_evaluate
         async with AsyncSessionLocal() as db:
-            await recompute_spi(db)
+            await recompute_and_evaluate(db)
     else:
         logger.debug("CHIRPS sync: no new data")
 
