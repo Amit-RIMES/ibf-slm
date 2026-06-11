@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core.csrf import _token_for, validate_csrf
 from app.core.database import Base, engine
 from app.models import forecast, impact, trigger, sync, reset_token, audit, api_key, webhook, activation_comment, observed_rainfall, spi  # noqa: F401
-from app.routers import admin, alerts, api, auth, chat, dashboard, drought, forecasts, impacts, observed, triggers, totp
+from app.routers import admin, alerts, api, auth, chat, dashboard, drought, forecasts, impacts, observed, reports, triggers, totp
 from app.routers import sync as sync_router
 from app.scheduler import apply_schedule, start_scheduler, stop_scheduler
 
@@ -115,6 +115,7 @@ app.include_router(sync_router.router)
 app.include_router(totp.router)
 app.include_router(chat.router)
 app.include_router(drought.router)
+app.include_router(reports.router)
 
 
 @app.get("/")
