@@ -1,13 +1,15 @@
+import calendar
 import csv
 import io
 import json
+from collections import defaultdict
 from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_action
@@ -127,6 +129,114 @@ async def impact_list(
             "map_points": map_points, "map_count": len(map_impacts),
         },
 )
+
+
+@router.get("/analytics", response_class=HTMLResponse)
+async def impact_analytics(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
+    all_r = await db.execute(select(ImpactRecord).order_by(ImpactRecord.event_date))
+    records = all_r.scalars().all()
+
+    if not records:
+        return templates.TemplateResponse(
+            request, "impact_analytics.html",
+            {"user": user, "has_data": False},
+        )
+
+    # ── Summary totals ────────────────────────────────────────────────────────
+    total_events = len(records)
+    total_affected = sum(r.affected_population or 0 for r in records)
+    total_casualties = sum(r.casualties or 0 for r in records)
+    total_displaced = sum(r.displaced or 0 for r in records)
+    total_damage = sum(r.damage_usd or 0 for r in records)
+
+    # ── By hazard type ────────────────────────────────────────────────────────
+    hazard_counts: dict[str, int] = defaultdict(int)
+    hazard_affected: dict[str, int] = defaultdict(int)
+    for r in records:
+        hazard_counts[r.hazard_type] += 1
+        hazard_affected[r.hazard_type] += r.affected_population or 0
+    hazard_labels = sorted(hazard_counts, key=hazard_counts.get, reverse=True)
+    hazard_chart = {
+        "labels": hazard_labels,
+        "counts": [hazard_counts[h] for h in hazard_labels],
+        "affected": [hazard_affected[h] for h in hazard_labels],
+    }
+
+    # ── By country (top 15) ───────────────────────────────────────────────────
+    country_counts: dict[str, int] = defaultdict(int)
+    country_affected: dict[str, int] = defaultdict(int)
+    for r in records:
+        country_counts[r.country] += 1
+        country_affected[r.country] += r.affected_population or 0
+    top_countries = sorted(country_counts, key=country_counts.get, reverse=True)[:15]
+    country_chart = {
+        "labels": top_countries,
+        "counts": [country_counts[c] for c in top_countries],
+        "affected": [country_affected[c] for c in top_countries],
+    }
+
+    # ── Monthly trend (by year-month) ─────────────────────────────────────────
+    monthly_counts: dict[str, int] = defaultdict(int)
+    monthly_affected: dict[str, int] = defaultdict(int)
+    for r in records:
+        key = f"{r.event_date.year}-{r.event_date.month:02d}"
+        monthly_counts[key] += 1
+        monthly_affected[key] += r.affected_population or 0
+    sorted_months = sorted(monthly_counts)
+    monthly_chart = {
+        "labels": [
+            f"{calendar.month_abbr[int(m.split('-')[1])]} {m.split('-')[0]}"
+            for m in sorted_months
+        ],
+        "counts": [monthly_counts[m] for m in sorted_months],
+        "affected": [monthly_affected[m] for m in sorted_months],
+    }
+
+    # ── Yearly totals ─────────────────────────────────────────────────────────
+    yearly_counts: dict[int, int] = defaultdict(int)
+    yearly_affected: dict[int, int] = defaultdict(int)
+    yearly_casualties: dict[int, int] = defaultdict(int)
+    for r in records:
+        yr = r.event_date.year
+        yearly_counts[yr] += 1
+        yearly_affected[yr] += r.affected_population or 0
+        yearly_casualties[yr] += r.casualties or 0
+    sorted_years = sorted(yearly_counts)
+    yearly_chart = {
+        "labels": [str(y) for y in sorted_years],
+        "counts": [yearly_counts[y] for y in sorted_years],
+        "affected": [yearly_affected[y] for y in sorted_years],
+        "casualties": [yearly_casualties[y] for y in sorted_years],
+    }
+
+    # ── Top events by affected population ────────────────────────────────────
+    top_events = sorted(
+        [r for r in records if r.affected_population],
+        key=lambda r: r.affected_population,
+        reverse=True,
+    )[:10]
+
+    return templates.TemplateResponse(
+        request, "impact_analytics.html",
+        {
+            "user": user,
+            "has_data": True,
+            "total_events": total_events,
+            "total_affected": total_affected,
+            "total_casualties": total_casualties,
+            "total_displaced": total_displaced,
+            "total_damage": total_damage,
+            "hazard_chart": json.dumps(hazard_chart),
+            "country_chart": json.dumps(country_chart),
+            "monthly_chart": json.dumps(monthly_chart),
+            "yearly_chart": json.dumps(yearly_chart),
+            "top_events": top_events,
+        },
+    )
 
 
 @router.get("/export.csv")

@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+{% block title %}Impact Analytics — IBF App{% endblock %}
+{% block extra_styles %}
+<style>
+  nav { background:#fff; border-bottom:1px solid #e5e7eb; padding:.85rem 2rem;
+        display:flex; align-items:center; justify-content:space-between; }
+  nav .brand { font-weight:700; font-size:1.1rem; color:#4f46e5; }
+  nav .nav-links { display:flex; align-items:center; gap:1.5rem; font-size:.875rem; }
+  nav .nav-links a { color:#6b7280; text-decoration:none; }
+  nav .nav-links a.active { color:#4f46e5; font-weight:600; }
+  nav .nav-links a.logout { color:#dc2626; font-weight:500; }
+
+  .main { max-width:1100px; margin:2rem auto; padding:0 1rem; }
+  h1 { font-size:1.4rem; font-weight:700; margin-bottom:.2rem; }
+  .sub { color:#6b7280; font-size:.875rem; margin-bottom:1.5rem; }
+
+  .card { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.08);
+    padding:1.5rem; margin-bottom:1.25rem; }
+
+  /* Summary row */
+  .stat-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:1rem; margin-bottom:1.5rem; }
+  .stat-box { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.08);
+    padding:1.1rem 1.25rem; }
+  .stat-box .sv { font-size:1.7rem; font-weight:800; color:#1f2937; line-height:1; }
+  .stat-box .sl { font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; color:#9ca3af; margin-top:.3rem; }
+
+  /* Chart grid */
+  .chart-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:1.25rem; }
+  .chart-title { font-size:.88rem; font-weight:700; color:#374151; margin-bottom:.5rem; }
+  .chart-sub   { font-size:.78rem; color:#9ca3af; margin-bottom:.85rem; }
+  .chart-toggle { display:flex; gap:.4rem; margin-bottom:.75rem; }
+  .ct-btn { padding:.28rem .75rem; border:1px solid #d1d5db; border-radius:999px;
+    font-size:.75rem; font-weight:600; cursor:pointer; background:#f9fafb; color:#6b7280; }
+  .ct-btn.active { background:#4f46e5; color:#fff; border-color:#4f46e5; }
+
+  /* Top events table */
+  table { width:100%; border-collapse:collapse; font-size:.82rem; }
+  thead th { background:#f9fafb; font-weight:700; font-size:.7rem; text-transform:uppercase;
+    letter-spacing:.05em; color:#9ca3af; padding:.55rem .75rem; text-align:left;
+    border-bottom:1px solid #e5e7eb; }
+  tbody td { padding:.55rem .75rem; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody tr:hover { background:#fafafa; }
+  .badge { display:inline-block; padding:.2rem .6rem; border-radius:999px;
+    font-size:.68rem; font-weight:700; text-transform:uppercase; }
+  .badge-flood   { background:#eff6ff; color:#1d4ed8; }
+  .badge-drought { background:#fef9c3; color:#854d0e; }
+  .badge-storm   { background:#f5f3ff; color:#5b21b6; }
+  .badge-other   { background:#f3f4f6; color:#6b7280; }
+
+  .empty { color:#9ca3af; font-size:.9rem; text-align:center; padding:3rem; }
+
+  @media (max-width:900px) {
+    .stat-grid { grid-template-columns:repeat(3,1fr); }
+    .chart-grid-2 { grid-template-columns:1fr; }
+  }
+  @media (max-width:600px) {
+    .stat-grid { grid-template-columns:repeat(2,1fr); }
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/forecasts/drift">Drift</a>
+    <a href="/observed">Observed</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/drought">Drought</a>
+    <a href="/impacts" class="active">Impacts</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:.75rem;margin-bottom:1.5rem;">
+    <div>
+      <h1>Impact Analytics</h1>
+      <div class="sub">Aggregate statistics across all recorded impact events</div>
+    </div>
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;">
+      <a href="/impacts" class="btn btn-outline" style="padding:.45rem 1rem;font-size:.875rem;">← Impact list</a>
+      <a href="/impacts/new" class="btn" style="padding:.45rem 1rem;font-size:.875rem;background:#4f46e5;color:#fff;border-radius:8px;font-weight:600;">+ New record</a>
+    </div>
+  </div>
+
+  {% if not has_data %}
+  <div class="card">
+    <p class="empty">No impact records yet. <a href="/impacts/new">Add the first one.</a></p>
+  </div>
+  {% else %}
+
+  <!-- ── Summary stats ───────────────────────────────────────── -->
+  <div class="stat-grid">
+    <div class="stat-box">
+      <div class="sv">{{ total_events }}</div>
+      <div class="sl">Total events</div>
+    </div>
+    <div class="stat-box">
+      <div class="sv">{{ "{:,}".format(total_affected) }}</div>
+      <div class="sl">People affected</div>
+    </div>
+    <div class="stat-box">
+      <div class="sv">{{ "{:,}".format(total_casualties) }}</div>
+      <div class="sl">Casualties</div>
+    </div>
+    <div class="stat-box">
+      <div class="sv">{{ "{:,}".format(total_displaced) }}</div>
+      <div class="sl">Displaced</div>
+    </div>
+    <div class="stat-box">
+      <div class="sv">{% if total_damage %}${{ "{:,.0f}".format(total_damage) }}{% else %}—{% endif %}</div>
+      <div class="sl">Damage (USD)</div>
+    </div>
+  </div>
+
+  <!-- ── Yearly trend ────────────────────────────────────────── -->
+  <div class="card">
+    <div class="chart-title">Annual Trend</div>
+    <div class="chart-sub">Events and affected population by year</div>
+    <div class="chart-toggle">
+      <button class="ct-btn active" onclick="switchYearly('counts',this)">Event count</button>
+      <button class="ct-btn" onclick="switchYearly('affected',this)">People affected</button>
+      <button class="ct-btn" onclick="switchYearly('casualties',this)">Casualties</button>
+    </div>
+    <canvas id="yearlyChart" height="70"></canvas>
+  </div>
+
+  <!-- ── Hazard + Country ────────────────────────────────────── -->
+  <div class="chart-grid-2">
+    <div class="card">
+      <div class="chart-title">By Hazard Type</div>
+      <div class="chart-sub">Number of events per hazard category</div>
+      <div class="chart-toggle">
+        <button class="ct-btn active" onclick="switchHazard('counts',this)">Event count</button>
+        <button class="ct-btn" onclick="switchHazard('affected',this)">People affected</button>
+      </div>
+      <canvas id="hazardChart" height="140"></canvas>
+    </div>
+    <div class="card">
+      <div class="chart-title">By Country <span style="font-size:.75rem;color:#9ca3af;font-weight:400;">(top 15)</span></div>
+      <div class="chart-sub">Number of events per country</div>
+      <div class="chart-toggle">
+        <button class="ct-btn active" onclick="switchCountry('counts',this)">Event count</button>
+        <button class="ct-btn" onclick="switchCountry('affected',this)">People affected</button>
+      </div>
+      <canvas id="countryChart" height="220"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Monthly trend ──────────────────────────────────────── -->
+  <div class="card">
+    <div class="chart-title">Monthly Timeline</div>
+    <div class="chart-sub">Event count and affected population over time</div>
+    <canvas id="monthlyChart" height="65"></canvas>
+  </div>
+
+  <!-- ── Top events ─────────────────────────────────────────── -->
+  {% if top_events %}
+  <div class="card">
+    <div class="chart-title" style="margin-bottom:.75rem;">Top 10 Events by Affected Population</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Event</th>
+          <th>Date</th>
+          <th>Country</th>
+          <th>Hazard</th>
+          <th style="text-align:right;">Affected</th>
+          <th style="text-align:right;">Casualties</th>
+          <th style="text-align:right;">Damage (USD)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ev in top_events %}
+        <tr>
+          <td><a href="/impacts/{{ ev.id }}" style="font-weight:600;color:#4f46e5;">{{ ev.event_name }}</a></td>
+          <td style="white-space:nowrap;color:#6b7280;">{{ ev.event_date.strftime('%d %b %Y') }}</td>
+          <td>{{ ev.country }}</td>
+          <td>
+            <span class="badge {% if ev.hazard_type == 'flood' %}badge-flood{% elif ev.hazard_type == 'drought' %}badge-drought{% elif ev.hazard_type == 'storm' %}badge-storm{% else %}badge-other{% endif %}">
+              {{ ev.hazard_type }}
+            </span>
+          </td>
+          <td style="text-align:right;font-weight:600;">{{ "{:,}".format(ev.affected_population) }}</td>
+          <td style="text-align:right;">{{ ev.casualties if ev.casualties else "—" }}</td>
+          <td style="text-align:right;">{% if ev.damage_usd %}${{ "{:,.0f}".format(ev.damage_usd) }}{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% endif %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+{% if has_data %}
+const hazardData  = {{ hazard_chart }};
+const countryData = {{ country_chart }};
+const monthlyData = {{ monthly_chart }};
+const yearlyData  = {{ yearly_chart }};
+
+const HAZARD_COLORS = {
+  flood:   '#3b82f6', drought: '#f59e0b', storm:  '#8b5cf6',
+  cyclone: '#ec4899', landslide: '#10b981', default: '#6b7280',
+};
+function hColor(label) {
+  return HAZARD_COLORS[label.toLowerCase()] || HAZARD_COLORS.default;
+}
+
+// ── Yearly chart ─────────────────────────────────────────────
+const yearlyChart = new Chart(document.getElementById('yearlyChart'), {
+  type: 'bar',
+  data: {
+    labels: yearlyData.labels,
+    datasets: [{
+      label: 'Events',
+      data: yearlyData.counts,
+      backgroundColor: 'rgba(79,70,229,.7)',
+      borderRadius: 4,
+    }],
+  },
+  options: {
+    plugins: { legend: { display: false } },
+    scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+  },
+});
+function switchYearly(key, btn) {
+  btn.closest('.chart-toggle').querySelectorAll('.ct-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const labels = { counts: 'Events', affected: 'People affected', casualties: 'Casualties' };
+  const colors = { counts: 'rgba(79,70,229,.7)', affected: 'rgba(16,185,129,.7)', casualties: 'rgba(220,38,38,.7)' };
+  yearlyChart.data.datasets[0].data = yearlyData[key];
+  yearlyChart.data.datasets[0].label = labels[key];
+  yearlyChart.data.datasets[0].backgroundColor = colors[key];
+  yearlyChart.update();
+}
+
+// ── Hazard chart ─────────────────────────────────────────────
+const hazardChart = new Chart(document.getElementById('hazardChart'), {
+  type: 'doughnut',
+  data: {
+    labels: hazardData.labels,
+    datasets: [{ data: hazardData.counts, backgroundColor: hazardData.labels.map(hColor), borderWidth: 2 }],
+  },
+  options: { plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } },
+});
+function switchHazard(key, btn) {
+  btn.closest('.chart-toggle').querySelectorAll('.ct-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  hazardChart.data.datasets[0].data = hazardData[key];
+  hazardChart.update();
+}
+
+// ── Country chart ─────────────────────────────────────────────
+const countryChart = new Chart(document.getElementById('countryChart'), {
+  type: 'bar',
+  data: {
+    labels: countryData.labels,
+    datasets: [{
+      label: 'Events',
+      data: countryData.counts,
+      backgroundColor: 'rgba(79,70,229,.65)',
+      borderRadius: 3,
+    }],
+  },
+  options: {
+    indexAxis: 'y',
+    plugins: { legend: { display: false } },
+    scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
+  },
+});
+function switchCountry(key, btn) {
+  btn.closest('.chart-toggle').querySelectorAll('.ct-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const colors = { counts: 'rgba(79,70,229,.65)', affected: 'rgba(16,185,129,.65)' };
+  countryChart.data.datasets[0].data = countryData[key];
+  countryChart.data.datasets[0].backgroundColor = colors[key];
+  countryChart.update();
+}
+
+// ── Monthly timeline ─────────────────────────────────────────
+new Chart(document.getElementById('monthlyChart'), {
+  type: 'bar',
+  data: {
+    labels: monthlyData.labels,
+    datasets: [
+      {
+        label: 'Events',
+        data: monthlyData.counts,
+        backgroundColor: 'rgba(79,70,229,.6)',
+        borderRadius: 3,
+        yAxisID: 'y',
+      },
+      {
+        label: 'People affected',
+        data: monthlyData.affected,
+        type: 'line',
+        borderColor: '#10b981',
+        backgroundColor: 'rgba(16,185,129,.08)',
+        tension: .3,
+        fill: true,
+        pointRadius: 2,
+        yAxisID: 'y1',
+      },
+    ],
+  },
+  options: {
+    plugins: { legend: { position: 'top', labels: { font: { size: 11 } } } },
+    scales: {
+      y:  { beginAtZero: true, position: 'left',  ticks: { precision: 0 }, title: { display: true, text: 'Events', font: { size: 10 } } },
+      y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Affected', font: { size: 10 } } },
+    },
+  },
+});
+{% endif %}
+</script>
+{% endblock %}
