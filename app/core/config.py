@@ -1,7 +1,8 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env")
     DATABASE_URL: str
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
@@ -31,8 +32,6 @@ class Settings(BaseSettings):
     CHIRPS_LON_MIN: float = 60.0
     CHIRPS_LON_MAX: float = 155.0
 
-    class Config:
-        env_file = ".env"
 
 
 settings = Settings()
