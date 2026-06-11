@@ -6,15 +6,17 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.background import enqueue
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.risk import compute_risk_score
 from app.core.spi import TIMESCALES, spi_category
 from app.models.seasonal import SeasonalForecast
 from app.models.spi import SPIRecord
+from app.models.trigger import TriggerActivation
 
 router = APIRouter(prefix="/drought")
 templates = Jinja2Templates(directory="app/templates")
@@ -58,6 +60,12 @@ async def drought_dashboard(
     )
     latest_seasonal = sf_r.scalar_one_or_none()
 
+    # Active trigger count for risk score
+    n_active = await db.scalar(
+        select(func.count()).select_from(TriggerActivation)
+        .where(TriggerActivation.status == "active")
+    )
+
     if not records:
         return templates.TemplateResponse(
             request, "drought_dashboard.html",
@@ -76,6 +84,7 @@ async def drought_dashboard(
                 "heatmap_years": [],
                 "heatmap_json": "{}",
                 "latest_seasonal": latest_seasonal,
+                "risk": compute_risk_score({}, latest_seasonal, n_active or 0),
             },
         )
 
@@ -191,6 +200,7 @@ async def drought_dashboard(
             "n_months": len(by_scale[1]),
             "baseline_info": baseline_info,
             "latest_seasonal": latest_seasonal,
+            "risk": compute_risk_score(current, latest_seasonal, n_active or 0),
         },
     )
 

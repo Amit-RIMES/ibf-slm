@@ -12,8 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.gaps import check_data_gaps
+from app.core.risk import compute_risk_score
+from app.core.spi import TIMESCALES, spi_category
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
+from app.models.seasonal import SeasonalForecast
+from app.models.spi import SPIRecord
 from app.models.trigger import Trigger, TriggerActivation
 from app.models.user import User
 from app.routers.forecasts import COUNTRY_NAMES
@@ -201,6 +205,37 @@ async def dashboard(
     impacts_filtered = bool(impact_filters)
     data_gaps = await check_data_gaps(db)
 
+    # ── Composite risk score ──────────────────────────────────────────────────
+    import calendar as _cal
+    _MONTH_ABBR = [_cal.month_abbr[i] for i in range(1, 13)]
+
+    spi_r = await db.execute(
+        select(SPIRecord).order_by(SPIRecord.year, SPIRecord.month, SPIRecord.timescale)
+    )
+    dash_spi_current: dict[int, dict] = {}
+    by_scale_dash: dict[int, list] = {ts: [] for ts in TIMESCALES}
+    for rec in spi_r.scalars().all():
+        if rec.timescale in by_scale_dash:
+            by_scale_dash[rec.timescale].append(rec)
+    for ts, recs in by_scale_dash.items():
+        latest = next((r for r in reversed(recs) if r.spi_value is not None), None)
+        if latest:
+            label, colour = spi_category(latest.spi_value)
+            dash_spi_current[ts] = {
+                "spi": round(latest.spi_value, 2),
+                "label": label,
+                "colour": colour,
+                "month_name": _MONTH_ABBR[latest.month - 1],
+                "year": latest.year,
+            }
+
+    sf_dash_r = await db.execute(
+        select(SeasonalForecast).order_by(SeasonalForecast.issue_date.desc()).limit(1)
+    )
+    latest_seasonal_dash = sf_dash_r.scalar_one_or_none()
+
+    risk = compute_risk_score(dash_spi_current, latest_seasonal_dash, len(active_activations))
+
     return templates.TemplateResponse(
     request,
     "dashboard.html",
@@ -232,5 +267,6 @@ async def dashboard(
             "country": country,
             "hazard_types": HAZARD_TYPES,
             "impacts_filtered": impacts_filtered,
+            "risk": risk,
         },
 )

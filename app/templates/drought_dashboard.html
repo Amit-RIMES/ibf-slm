@@ -64,8 +64,25 @@
     padding:.75rem 1rem; font-size:.82rem; color:#1e40af; margin-bottom:1.25rem; }
   .notice.success { background:#f0fdf4; border-color:#bbf7d0; color:#166534; }
 
+  /* Risk gauge */
+  .risk-card { display:flex; align-items:flex-start; gap:2rem; flex-wrap:wrap; }
+  .gauge-wrap { flex-shrink:0; display:flex; flex-direction:column; align-items:center; }
+  .gauge-title { font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.07em; color:#9ca3af; margin-bottom:.6rem; }
+  .gauge-level { margin-top:.3rem; font-size:.85rem; font-weight:700; }
+  .risk-breakdown { flex:1; min-width:220px; }
+  .risk-row { margin-bottom:.9rem; }
+  .risk-row-header { display:flex; justify-content:space-between; align-items:baseline;
+    margin-bottom:.3rem; }
+  .risk-row-label { font-size:.78rem; font-weight:600; color:#374151; }
+  .risk-row-pts { font-size:.78rem; color:#9ca3af; }
+  .risk-bar-bg { background:#f3f4f6; border-radius:999px; height:7px; }
+  .risk-bar-fill { border-radius:999px; height:7px; transition:width .4s ease; }
+  .risk-note { font-size:.75rem; color:#9ca3af; margin-top:.3rem; }
+
   @media(max-width:640px) {
     .status-grid { grid-template-columns:1fr; }
+    .risk-card { flex-direction:column; align-items:center; }
   }
 </style>
 {% endblock %}
@@ -121,6 +138,114 @@
       </button>
     </form>
     {% endif %}
+  </div>
+
+  <!-- Composite risk gauge -->
+  <div class="card risk-card" id="risk-card">
+    <div class="gauge-wrap">
+      <div class="gauge-title">Composite Risk Score</div>
+      <svg id="risk-gauge" viewBox="0 0 200 125" width="200" height="125" aria-label="Risk gauge">
+        <!-- Gray background track -->
+        <path d="M 15 110 A 85 85 0 0 0 185 110"
+              fill="none" stroke="#e5e7eb" stroke-width="20" stroke-linecap="butt"/>
+        <!-- Green zone 0–25 (180°→135°) -->
+        <path d="M 15 110 A 85 85 0 0 0 39.9 49.9"
+              fill="none" stroke="#22c55e" stroke-width="18" stroke-linecap="butt"/>
+        <!-- Amber zone 25–50 (135°→90°) -->
+        <path d="M 39.9 49.9 A 85 85 0 0 0 100 25"
+              fill="none" stroke="#f59e0b" stroke-width="18" stroke-linecap="butt"/>
+        <!-- Orange zone 50–75 (90°→45°) -->
+        <path d="M 100 25 A 85 85 0 0 0 160.1 49.9"
+              fill="none" stroke="#f97316" stroke-width="18" stroke-linecap="butt"/>
+        <!-- Red zone 75–100 (45°→0°) -->
+        <path d="M 160.1 49.9 A 85 85 0 0 0 185 110"
+              fill="none" stroke="#dc2626" stroke-width="18" stroke-linecap="butt"/>
+        <!-- White inner ring for donut effect -->
+        <path d="M 25 110 A 75 75 0 0 0 175 110"
+              fill="none" stroke="#fff" stroke-width="10" stroke-linecap="butt"/>
+        <!-- Needle -->
+        <line id="gauge-needle" x1="100" y1="110" x2="100" y2="42"
+              stroke="#1f2937" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="100" cy="110" r="5" fill="#1f2937"/>
+        <!-- Score and level text -->
+        <text id="gauge-score" x="100" y="94" text-anchor="middle"
+              font-size="26" font-weight="800" fill="#1f2937">{{ risk.total }}</text>
+        <text id="gauge-level-text" x="100" y="113" text-anchor="middle"
+              font-size="9" font-weight="700" fill="{{ risk.level_color }}"
+              text-transform="uppercase" letter-spacing="1">{{ risk.level | upper }}</text>
+      </svg>
+    </div>
+
+    <div class="risk-breakdown">
+      <div style="font-size:.82rem;font-weight:700;color:#374151;margin-bottom:.85rem;">
+        Score breakdown
+        <span style="font-size:.75rem;font-weight:400;color:#9ca3af;margin-left:.4rem;">
+          — {% if risk.has_data %}based on current data{% else %}no data available{% endif %}
+        </span>
+      </div>
+
+      <!-- SPI row -->
+      <div class="risk-row">
+        <div class="risk-row-header">
+          <span class="risk-row-label">SPI Drought index</span>
+          <span class="risk-row-pts">{{ risk.spi_pts }} / 40</span>
+        </div>
+        <div class="risk-bar-bg">
+          <div class="risk-bar-fill"
+               style="width:{{ (risk.spi_pts / 40 * 100) | round }}%;
+                      background:{% if risk.spi_pts == 0 %}#22c55e{% elif risk.spi_pts <= 20 %}#f59e0b{% else %}#dc2626{% endif %};"></div>
+        </div>
+        <div class="risk-note">
+          {% if risk.worst_spi is not none %}
+            Worst SPI: {{ "%+.2f" | format(risk.worst_spi) }}
+          {% else %}
+            No SPI data for selected source
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Seasonal row -->
+      <div class="risk-row">
+        <div class="risk-row-header">
+          <span class="risk-row-label">Seasonal outlook</span>
+          <span class="risk-row-pts">{{ risk.seasonal_pts }} / 30</span>
+        </div>
+        <div class="risk-bar-bg">
+          <div class="risk-bar-fill"
+               style="width:{{ (risk.seasonal_pts / 30 * 100) | round }}%;
+                      background:{% if risk.seasonal_pts == 0 %}#22c55e{% elif risk.seasonal_pts == 10 %}#f59e0b{% else %}#dc2626{% endif %};"></div>
+        </div>
+        <div class="risk-note">
+          {% if latest_seasonal %}
+            {{ latest_seasonal.below_normal_pct }}% below-normal probability
+          {% else %}
+            No seasonal forecast on record
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Triggers row -->
+      <div class="risk-row">
+        <div class="risk-row-header">
+          <span class="risk-row-label">Active trigger alerts</span>
+          <span class="risk-row-pts">{{ risk.trigger_pts }} / 30</span>
+        </div>
+        <div class="risk-bar-bg">
+          <div class="risk-bar-fill"
+               style="width:{{ (risk.trigger_pts / 30 * 100) | round }}%;
+                      background:{% if risk.trigger_pts == 0 %}#22c55e{% elif risk.trigger_pts == 10 %}#f59e0b{% else %}#dc2626{% endif %};"></div>
+        </div>
+        <div class="risk-note">
+          {% set n_act = (risk.trigger_pts / 10) | int %}
+          {{ n_act }} active alert{{ 's' if n_act != 1 else '' }}
+          · <a href="/alerts" style="color:#4f46e5;">view map</a>
+        </div>
+      </div>
+
+      <div style="font-size:.72rem;color:#d1d5db;margin-top:.25rem;">
+        Max 100 pts · SPI 40 · Seasonal 30 · Triggers 30
+      </div>
+    </div>
   </div>
 
   {% if not current %}
@@ -434,4 +559,18 @@
   </script>
   {% endif %}
 </div>
+
+<script>
+(function() {
+  const score = {{ risk.total }};
+  const cx = 100, cy = 110, needleLen = 68;
+  // Score 0 → angle 180° (left), score 100 → angle 0° (right), through top
+  const angleDeg = 180 - score * 1.8;
+  const angleRad = angleDeg * Math.PI / 180;
+  const x2 = cx + needleLen * Math.cos(angleRad);
+  const y2 = cy - needleLen * Math.sin(angleRad);
+  const needle = document.getElementById('gauge-needle');
+  if (needle) { needle.setAttribute('x2', x2.toFixed(1)); needle.setAttribute('y2', y2.toFixed(1)); }
+})();
+</script>
 {% endblock %}

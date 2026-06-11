@@ -179,6 +179,61 @@
     </div>
   </div>
 
+  <!-- Composite risk score widget -->
+  <div style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.07);
+              padding:1.25rem 1.5rem;margin-bottom:1rem;
+              display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;">
+    <!-- Mini gauge -->
+    <div style="flex-shrink:0;text-align:center;">
+      <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+                  color:#9ca3af;margin-bottom:.3rem;">Composite Risk</div>
+      <svg id="dash-gauge" viewBox="0 0 140 88" width="140" height="88">
+        <path d="M 10 77 A 60 60 0 0 0 130 77"
+              fill="none" stroke="#e5e7eb" stroke-width="14" stroke-linecap="butt"/>
+        <path d="M 10 77 A 60 60 0 0 0 27.6 34.9"
+              fill="none" stroke="#22c55e" stroke-width="13" stroke-linecap="butt"/>
+        <path d="M 27.6 34.9 A 60 60 0 0 0 70 17"
+              fill="none" stroke="#f59e0b" stroke-width="13" stroke-linecap="butt"/>
+        <path d="M 70 17 A 60 60 0 0 0 112.4 34.9"
+              fill="none" stroke="#f97316" stroke-width="13" stroke-linecap="butt"/>
+        <path d="M 112.4 34.9 A 60 60 0 0 0 130 77"
+              fill="none" stroke="#dc2626" stroke-width="13" stroke-linecap="butt"/>
+        <path d="M 17 77 A 53 53 0 0 0 123 77"
+              fill="none" stroke="#fff" stroke-width="7" stroke-linecap="butt"/>
+        <line id="dash-needle" x1="70" y1="77" x2="70" y2="25"
+              stroke="#1f2937" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="70" cy="77" r="4" fill="#1f2937"/>
+        <text x="70" y="67" text-anchor="middle" font-size="18" font-weight="800"
+              fill="#1f2937">{{ risk.total }}</text>
+      </svg>
+    </div>
+    <!-- Level + breakdown pills -->
+    <div style="flex:1;min-width:160px;">
+      <div style="font-size:1.1rem;font-weight:800;color:{{ risk.level_color }};margin-bottom:.5rem;">
+        {{ risk.level }} risk
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.35rem;">
+        {% for label, pts, max_pts in [
+            ('SPI', risk.spi_pts, 40),
+            ('Seasonal', risk.seasonal_pts, 30),
+            ('Triggers', risk.trigger_pts, 30)
+        ] %}
+        <div style="display:flex;align-items:center;gap:.5rem;">
+          <span style="font-size:.72rem;font-weight:600;color:#6b7280;width:56px;">{{ label }}</span>
+          <div style="flex:1;background:#f3f4f6;border-radius:999px;height:6px;">
+            <div style="width:{{ (pts / max_pts * 100) | round }}%;background:{{ risk.level_color }};
+                        border-radius:999px;height:6px;min-width:{% if pts > 0 %}4px{% else %}0{% endif %};"></div>
+          </div>
+          <span style="font-size:.72rem;color:#9ca3af;width:32px;text-align:right;">{{ pts }}/{{ max_pts }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <a href="/drought" style="font-size:.8rem;color:#4f46e5;font-weight:600;white-space:nowrap;">
+      Full analysis →
+    </a>
+  </div>
+
   <!-- Filters -->
   <form method="get" action="/dashboard"
         style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;
@@ -526,6 +581,17 @@
       },
     },
   });
+})();
+
+// Position dashboard mini-gauge needle
+(function() {
+  const score = {{ risk.total }};
+  const cx = 70, cy = 77, len = 48;
+  const angleRad = (180 - score * 1.8) * Math.PI / 180;
+  const x2 = cx + len * Math.cos(angleRad);
+  const y2 = cy - len * Math.sin(angleRad);
+  const n = document.getElementById('dash-needle');
+  if (n) { n.setAttribute('x2', x2.toFixed(1)); n.setAttribute('y2', y2.toFixed(1)); }
 })();
 </script>
 {% endblock %}
