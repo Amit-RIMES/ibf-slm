@@ -507,3 +507,20 @@ async def send_trigger_activation_email(
             logger.info("Trigger alert sent to %s", email)
         except Exception as exc:
             logger.error("Failed to send trigger alert to %s: %s", email, exc)
+
+
+async def send_bulletin_email(recipients: list[str], subject: str, html: str) -> int:
+    """Send bulletin HTML to all recipients. Returns count of successful sends."""
+    if not settings.SMTP_HOST:
+        logger.warning("SMTP not configured — bulletin email skipped (%d recipient(s))", len(recipients))
+        return 0
+
+    sent = 0
+    for addr in recipients:
+        try:
+            await asyncio.to_thread(_send_sync, addr, subject, html)
+            logger.info("Bulletin sent to %s", addr)
+            sent += 1
+        except Exception as exc:
+            logger.error("Failed to send bulletin to %s: %s", addr, exc)
+    return sent

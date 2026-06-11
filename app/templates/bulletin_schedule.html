@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}Bulletin Schedule — IBF App{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/forecasts/drift">Drift</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/drought">Drought</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/seasonal">Seasonal</a>
+    <a href="/bulletin" class="active">Bulletin</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<style>
+  .main { max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 1.5rem; }
+
+  .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07);
+          padding: 1.5rem; margin-bottom: 1.5rem; }
+  .card-title { font-size: .78rem; font-weight: 700; text-transform: uppercase;
+                letter-spacing: .06em; color: #9ca3af; margin-bottom: 1.1rem; }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .form-group { display: flex; flex-direction: column; gap: .35rem; }
+  .form-group label { font-size: .8rem; font-weight: 600; color: #374151; }
+  .form-group input, .form-group select { padding: .5rem .75rem; border: 1px solid #d1d5db;
+    border-radius: 8px; font-size: .875rem; background: #fff; }
+  .form-group input:focus, .form-group select:focus { outline: none; border-color: #4f46e5; }
+  .form-group.full { grid-column: 1 / -1; }
+
+  .toggle-row { display: flex; align-items: center; gap: .75rem; margin-bottom: 1.1rem; }
+  .toggle-label { font-size: .9rem; font-weight: 600; }
+  input[type=checkbox] { width: 18px; height: 18px; accent-color: #4f46e5; cursor: pointer; }
+
+  .btn { padding: .55rem 1.25rem; border-radius: 8px; font-size: .875rem;
+         font-weight: 600; cursor: pointer; border: none; }
+  .btn-primary { background: #4f46e5; color: #fff; }
+  .btn-primary:hover { background: #4338ca; }
+  .btn-danger  { background: #fee2e2; color: #dc2626; }
+  .btn-danger:hover { background: #fecaca; }
+  .btn-send { background: #059669; color: #fff; }
+  .btn-send:hover { background: #047857; }
+  .btn-sm { padding: .3rem .75rem; font-size: .78rem; }
+
+  .alert-box { padding: .75rem 1rem; border-radius: 8px; font-size: .875rem;
+               margin-bottom: 1rem; font-weight: 500; }
+  .alert-success { background: #d1fae5; color: #065f46; }
+  .alert-error   { background: #fee2e2; color: #991b1b; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  th { text-align: left; padding: .55rem .75rem; font-size: .72rem; font-weight: 700;
+       text-transform: uppercase; letter-spacing: .06em; color: #9ca3af;
+       border-bottom: 1px solid #e5e7eb; }
+  td { padding: .65rem .75rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+
+  .badge { display: inline-block; padding: .15rem .55rem; border-radius: 999px;
+           font-size: .72rem; font-weight: 700; }
+  .badge-active   { background: #d1fae5; color: #065f46; }
+  .badge-inactive { background: #f3f4f6; color: #6b7280; }
+
+  .sub-add { display: flex; gap: .75rem; margin-top: .75rem; }
+  .sub-add input { flex: 1; padding: .5rem .75rem; border: 1px solid #d1d5db;
+                   border-radius: 8px; font-size: .875rem; }
+
+  .last-sent { font-size: .8rem; color: #9ca3af; margin-top: .5rem; }
+
+  #freq-weekly { display: none; }
+</style>
+
+<div class="main">
+  <h1>Bulletin Email Schedule</h1>
+
+  {% if saved %}
+  <div class="alert-box alert-success">Settings saved.</div>
+  {% elif sent %}
+  <div class="alert-box alert-success">Bulletin sent to {{ sent }} recipient(s).</div>
+  {% elif error %}
+  <div class="alert-box alert-error">Error: {{ error | replace('+', ' ') }}</div>
+  {% endif %}
+
+  <!-- Schedule config -->
+  <div class="card">
+    <div class="card-title">Delivery Schedule</div>
+    <form method="post" action="/bulletin/schedule">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+
+      <div class="toggle-row">
+        <input type="checkbox" id="enabled" name="enabled" value="1"
+               {% if cfg.enabled %}checked{% endif %}>
+        <label for="enabled" class="toggle-label">Enable scheduled delivery</label>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Frequency</label>
+          <select name="frequency" id="frequency" onchange="updateFreq()">
+            <option value="daily"  {% if cfg.frequency == 'daily'  %}selected{% endif %}>Daily</option>
+            <option value="weekly" {% if cfg.frequency == 'weekly' %}selected{% endif %}>Weekly</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="freq-weekly">
+          <label>Day of week</label>
+          <select name="day_of_week">
+            {% for name in day_names %}
+            <option value="{{ loop.index0 }}" {% if cfg.day_of_week == loop.index0 %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Send time (UTC hour)</label>
+          <select name="hour">
+            {% for h in range(24) %}
+            <option value="{{ h }}" {% if cfg.hour == h %}selected{% endif %}>{{ '%02d:00' % h }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>SPI source</label>
+          <select name="source">
+            {% for s in spi_sources %}
+            <option {% if cfg.source == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Window (days)</label>
+          <select name="days">
+            {% for d in [7, 14, 30, 60, 90] %}
+            <option value="{{ d }}" {% if cfg.days == d %}selected{% endif %}>{{ d }} days</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group full">
+          <label>Subject template
+            <span style="font-size:.75rem;color:#9ca3af;font-weight:400;">
+              — use {month} and {year}
+            </span>
+          </label>
+          <input type="text" name="subject_template" value="{{ cfg.subject_template }}"
+                 placeholder="IBF-SLM Bulletin — {month} {year}">
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:1rem;margin-top:1.25rem;">
+        <button type="submit" class="btn btn-primary">Save schedule</button>
+        {% if cfg.last_sent_at %}
+        <span class="last-sent">Last sent: {{ cfg.last_sent_at.strftime('%Y-%m-%d %H:%M') }} UTC</span>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+  <!-- Recipients -->
+  <div class="card">
+    <div class="card-title">Recipients ({{ subscribers|length }})</div>
+
+    {% if subscribers %}
+    <table>
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Name</th>
+          <th>Status</th>
+          <th>Added</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sub in subscribers %}
+        <tr>
+          <td style="font-weight:500;">{{ sub.email }}</td>
+          <td style="color:#6b7280;">{{ sub.name or '—' }}</td>
+          <td>
+            <span class="badge {% if sub.is_active %}badge-active{% else %}badge-inactive{% endif %}">
+              {{ 'Active' if sub.is_active else 'Paused' }}
+            </span>
+          </td>
+          <td style="color:#9ca3af;font-size:.82rem;">{{ sub.created_at.strftime('%Y-%m-%d') }}</td>
+          <td style="text-align:right;">
+            <form method="post" action="/bulletin/subscribers/{{ sub.id }}/toggle"
+                  style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+              <button type="submit" class="btn btn-sm"
+                      style="background:#f3f4f6;color:#374151;border:none;cursor:pointer;">
+                {{ 'Pause' if sub.is_active else 'Activate' }}
+              </button>
+            </form>
+            <form method="post" action="/bulletin/subscribers/{{ sub.id }}/delete"
+                  style="display:inline;margin-left:.35rem;"
+                  onsubmit="return confirm('Remove {{ sub.email }}?')">
+              <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+              <button type="submit" class="btn btn-sm btn-danger">Remove</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:#9ca3af;font-size:.875rem;">No recipients yet.</p>
+    {% endif %}
+
+    <form method="post" action="/bulletin/subscribers/add">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+      <div class="sub-add">
+        <input type="email" name="email" placeholder="email@example.com" required>
+        <input type="text"  name="name"  placeholder="Name (optional)" style="max-width:180px;">
+        <button type="submit" class="btn btn-primary btn-sm">Add recipient</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Send now -->
+  <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:1rem;">
+    <div>
+      <div style="font-weight:600;margin-bottom:.25rem;">Send bulletin now</div>
+      <div style="font-size:.82rem;color:#6b7280;">
+        Generates and delivers to all active recipients immediately, using current schedule settings.
+      </div>
+    </div>
+    <form method="post" action="/bulletin/schedule/send-now">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+      <button type="submit" class="btn btn-send"
+              {% if not subscribers %}disabled title="Add recipients first"{% endif %}>
+        Send now
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+function updateFreq() {
+  const f = document.getElementById('frequency').value;
+  document.getElementById('freq-weekly').style.display = f === 'weekly' ? 'flex' : 'none';
+}
+updateFreq();
+</script>
+{% endblock %}

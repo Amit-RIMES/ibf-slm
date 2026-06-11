@@ -1,7 +1,7 @@
 import calendar
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.spi import TIMESCALES, spi_category
+from app.models.bulletin_schedule import BulletinSchedule, BulletinSubscriber
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
 from app.models.observed_rainfall import ObservedRainfall
@@ -21,6 +22,145 @@ router = APIRouter(prefix="/bulletin")
 templates = Jinja2Templates(directory="app/templates")
 
 _MONTH_ABBR = [calendar.month_abbr[i] for i in range(1, 13)]
+_DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+# ── Shared context builder (used by route + scheduler) ───────────────────────
+
+async def _build_bulletin_context(
+    db: AsyncSession,
+    source: str,
+    days: int,
+    title: str = "",
+    username: str = "Scheduled",
+) -> dict:
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=days)
+    cutoff_date = cutoff.date()
+
+    spi_r = await db.execute(
+        select(SPIRecord)
+        .where(SPIRecord.source == source)
+        .order_by(SPIRecord.year, SPIRecord.month, SPIRecord.timescale)
+    )
+    spi_records = spi_r.scalars().all()
+
+    by_scale: dict[int, list[SPIRecord]] = {ts: [] for ts in TIMESCALES}
+    for rec in spi_records:
+        if rec.timescale in by_scale:
+            by_scale[rec.timescale].append(rec)
+
+    spi_current: dict[int, dict] = {}
+    for ts, recs in by_scale.items():
+        latest = next((r for r in reversed(recs) if r.spi_value is not None), None)
+        if latest:
+            label, colour = spi_category(latest.spi_value)
+            spi_current[ts] = {
+                "spi": round(latest.spi_value, 2),
+                "label": label,
+                "colour": colour,
+                "year": latest.year,
+                "month": latest.month,
+                "month_name": _MONTH_ABBR[latest.month - 1],
+                "n_reference": latest.n_reference,
+                "low_confidence": latest.n_reference < 5,
+            }
+
+    sf_r = await db.execute(
+        select(SeasonalForecast).order_by(SeasonalForecast.issue_date.desc()).limit(1)
+    )
+    latest_seasonal = sf_r.scalar_one_or_none()
+
+    fc_r = await db.execute(
+        select(ForecastUpload).order_by(ForecastUpload.uploaded_at.desc()).limit(1)
+    )
+    latest_forecast = fc_r.scalar_one_or_none()
+
+    active_r = await db.execute(
+        select(Trigger)
+        .where(Trigger.is_active == True)  # noqa: E712
+        .order_by(Trigger.hazard_type, Trigger.name)
+    )
+    active_triggers = active_r.scalars().all()
+
+    act_r = await db.execute(
+        select(TriggerActivation, Trigger)
+        .join(Trigger, TriggerActivation.trigger_id == Trigger.id)
+        .where(TriggerActivation.triggered_at >= cutoff)
+        .order_by(TriggerActivation.triggered_at.desc())
+        .limit(20)
+    )
+    activation_rows = [{"activation": act, "trigger": trig} for act, trig in act_r.all()]
+    n_unacknowledged = sum(1 for r in activation_rows if r["activation"].status == "active")
+
+    imp_r = await db.execute(
+        select(ImpactRecord)
+        .where(ImpactRecord.event_date >= cutoff_date)
+        .order_by(ImpactRecord.event_date.desc())
+        .limit(15)
+    )
+    recent_impacts = imp_r.scalars().all()
+
+    total_affected = sum(i.affected_population or 0 for i in recent_impacts)
+    total_casualties = sum(i.casualties or 0 for i in recent_impacts)
+    total_displaced = sum(i.displaced or 0 for i in recent_impacts)
+
+    last_obs_r = await db.execute(
+        select(ObservedRainfall).order_by(ObservedRainfall.obs_date.desc()).limit(1)
+    )
+    last_obs = last_obs_r.scalar_one_or_none()
+
+    drought_status = "No active drought signal"
+    worst_spi = None
+    for ts in [6, 3, 1]:
+        if ts in spi_current and spi_current[ts]["spi"] <= -1.0:
+            worst_spi = spi_current[ts]
+            break
+    if worst_spi:
+        drought_status = (
+            f"SPI-{ts} indicates {worst_spi['label'].lower()} conditions "
+            f"({worst_spi['spi']:+.2f}) as of "
+            f"{worst_spi['month_name']} {worst_spi['year']}."
+        )
+
+    n_impacts = len(recent_impacts)
+    impact_summary = (
+        f"{n_impacts} impact event{'s' if n_impacts != 1 else ''} recorded in the past {days} days"
+        + (f", affecting {total_affected:,} people" if total_affected else "")
+        + "."
+    )
+
+    bulletin_title = title.strip() or f"IBF-SLM Situational Bulletin — {now.strftime('%B %Y')}"
+
+    from types import SimpleNamespace
+    fake_user = SimpleNamespace(username=username)
+
+    return {
+        "user": fake_user,
+        "now": now,
+        "days": days,
+        "source": source,
+        "bulletin_title": bulletin_title,
+        "spi_current": spi_current,
+        "latest_seasonal": latest_seasonal,
+        "latest_forecast": latest_forecast,
+        "active_triggers": active_triggers,
+        "activation_rows": activation_rows,
+        "n_unacknowledged": n_unacknowledged,
+        "recent_impacts": recent_impacts,
+        "total_affected": total_affected,
+        "total_casualties": total_casualties,
+        "total_displaced": total_displaced,
+        "last_obs": last_obs,
+        "drought_status": drought_status,
+        "impact_summary": impact_summary,
+    }
+
+
+def _render_bulletin_html(ctx: dict) -> str:
+    """Render the bulletin template to a plain HTML string (no Request needed)."""
+    tpl = templates.env.get_template("bulletin.html")
+    return tpl.render(**ctx)
 
 
 # ── Selection form ────────────────────────────────────────────────────────────
@@ -54,139 +194,181 @@ async def bulletin_generate(
     if not user:
         return RedirectResponse("/login", status_code=303)
 
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(days=days)
-    cutoff_date = cutoff.date()
+    ctx = await _build_bulletin_context(db, source, days, title, username=user.username)
+    ctx["user"] = user  # real user object for the route response
+    return templates.TemplateResponse(request, "bulletin.html", ctx)
 
-    # ── SPI status ────────────────────────────────────────────────────────────
-    spi_r = await db.execute(
-        select(SPIRecord)
-        .where(SPIRecord.source == source)
-        .order_by(SPIRecord.year, SPIRecord.month, SPIRecord.timescale)
+
+# ── Schedule admin page ───────────────────────────────────────────────────────
+
+async def _get_or_create_schedule(db: AsyncSession) -> BulletinSchedule:
+    cfg = await db.scalar(select(BulletinSchedule).where(BulletinSchedule.id == 1))
+    if not cfg:
+        cfg = BulletinSchedule(id=1)
+        db.add(cfg)
+        await db.flush()
+    return cfg
+
+
+@router.get("/schedule", response_class=HTMLResponse)
+async def bulletin_schedule_page(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user or user.role != "admin":
+        return RedirectResponse("/login", status_code=303)
+
+    cfg = await _get_or_create_schedule(db)
+    await db.commit()
+
+    subscribers_r = await db.execute(
+        select(BulletinSubscriber).order_by(BulletinSubscriber.created_at)
     )
-    spi_records = spi_r.scalars().all()
+    subscribers = subscribers_r.scalars().all()
 
-    by_scale: dict[int, list[SPIRecord]] = {ts: [] for ts in TIMESCALES}
-    for rec in spi_records:
-        if rec.timescale in by_scale:
-            by_scale[rec.timescale].append(rec)
-
-    spi_current: dict[int, dict] = {}
-    for ts, recs in by_scale.items():
-        latest = next((r for r in reversed(recs) if r.spi_value is not None), None)
-        if latest:
-            label, colour = spi_category(latest.spi_value)
-            spi_current[ts] = {
-                "spi": round(latest.spi_value, 2),
-                "label": label,
-                "colour": colour,
-                "year": latest.year,
-                "month": latest.month,
-                "month_name": _MONTH_ABBR[latest.month - 1],
-                "n_reference": latest.n_reference,
-                "low_confidence": latest.n_reference < 5,
-            }
-
-    # ── Latest seasonal forecast ──────────────────────────────────────────────
-    sf_r = await db.execute(
-        select(SeasonalForecast)
-        .order_by(SeasonalForecast.issue_date.desc())
-        .limit(1)
-    )
-    latest_seasonal = sf_r.scalar_one_or_none()
-
-    # ── Latest 15-day forecast ────────────────────────────────────────────────
-    fc_r = await db.execute(
-        select(ForecastUpload)
-        .order_by(ForecastUpload.uploaded_at.desc())
-        .limit(1)
-    )
-    latest_forecast = fc_r.scalar_one_or_none()
-
-    # ── Active triggers ───────────────────────────────────────────────────────
-    active_r = await db.execute(
-        select(Trigger)
-        .where(Trigger.is_active == True)  # noqa: E712
-        .order_by(Trigger.hazard_type, Trigger.name)
-    )
-    active_triggers = active_r.scalars().all()
-
-    # ── Recent activations in window ──────────────────────────────────────────
-    act_r = await db.execute(
-        select(TriggerActivation, Trigger)
-        .join(Trigger, TriggerActivation.trigger_id == Trigger.id)
-        .where(TriggerActivation.triggered_at >= cutoff)
-        .order_by(TriggerActivation.triggered_at.desc())
-        .limit(20)
-    )
-    activation_rows = [{"activation": act, "trigger": trig} for act, trig in act_r.all()]
-
-    n_unacknowledged = sum(
-        1 for r in activation_rows if r["activation"].status == "active"
-    )
-
-    # ── Recent impacts ────────────────────────────────────────────────────────
-    imp_r = await db.execute(
-        select(ImpactRecord)
-        .where(ImpactRecord.event_date >= cutoff_date)
-        .order_by(ImpactRecord.event_date.desc())
-        .limit(15)
-    )
-    recent_impacts = imp_r.scalars().all()
-
-    total_affected = sum(i.affected_population or 0 for i in recent_impacts)
-    total_casualties = sum(i.casualties or 0 for i in recent_impacts)
-    total_displaced = sum(i.displaced or 0 for i in recent_impacts)
-
-    # ── CHIRPS coverage ───────────────────────────────────────────────────────
-    last_obs_r = await db.execute(
-        select(ObservedRainfall).order_by(ObservedRainfall.obs_date.desc()).limit(1)
-    )
-    last_obs = last_obs_r.scalar_one_or_none()
-
-    # ── Executive summary (derived text) ─────────────────────────────────────
-    drought_status = "No active drought signal"
-    worst_spi = None
-    for ts in [6, 3, 1]:
-        if ts in spi_current and spi_current[ts]["spi"] <= -1.0:
-            worst_spi = spi_current[ts]
-            break
-    if worst_spi:
-        drought_status = (
-            f"SPI-{ts} indicates {worst_spi['label'].lower()} conditions "
-            f"({worst_spi['spi']:+.2f}) as of "
-            f"{worst_spi['month_name']} {worst_spi['year']}."
-        )
-
-    n_impacts = len(recent_impacts)
-    impact_summary = (
-        f"{n_impacts} impact event{'s' if n_impacts != 1 else ''} recorded in the past {days} days"
-        + (f", affecting {total_affected:,} people" if total_affected else "")
-        + "."
-    )
-
-    bulletin_title = title.strip() or f"IBF-SLM Situational Bulletin — {now.strftime('%B %Y')}"
+    sources_r = await db.execute(select(SPIRecord.source).distinct())
+    spi_sources = [r[0] for r in sources_r.all()] or ["CHIRPS"]
 
     return templates.TemplateResponse(
-        request, "bulletin.html",
+        request, "bulletin_schedule.html",
         {
             "user": user,
-            "now": now,
-            "days": days,
-            "source": source,
-            "bulletin_title": bulletin_title,
-            "spi_current": spi_current,
-            "latest_seasonal": latest_seasonal,
-            "latest_forecast": latest_forecast,
-            "active_triggers": active_triggers,
-            "activation_rows": activation_rows,
-            "n_unacknowledged": n_unacknowledged,
-            "recent_impacts": recent_impacts,
-            "total_affected": total_affected,
-            "total_casualties": total_casualties,
-            "total_displaced": total_displaced,
-            "last_obs": last_obs,
-            "drought_status": drought_status,
-            "impact_summary": impact_summary,
+            "cfg": cfg,
+            "subscribers": subscribers,
+            "spi_sources": spi_sources,
+            "day_names": _DAY_NAMES,
+            "saved": request.query_params.get("saved"),
+            "sent": request.query_params.get("sent"),
+            "error": request.query_params.get("error"),
         },
     )
+
+
+@router.post("/schedule", response_class=HTMLResponse)
+async def bulletin_schedule_save(
+    request: Request,
+    enabled: str = Form(""),
+    frequency: str = Form("daily"),
+    day_of_week: int = Form(0),
+    hour: int = Form(7),
+    source: str = Form("CHIRPS"),
+    days: int = Form(30),
+    subject_template: str = Form("IBF-SLM Bulletin — {month} {year}"),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user or user.role != "admin":
+        return RedirectResponse("/login", status_code=303)
+
+    cfg = await _get_or_create_schedule(db)
+    cfg.enabled = bool(enabled)
+    cfg.frequency = frequency if frequency in ("daily", "weekly") else "daily"
+    cfg.day_of_week = max(0, min(6, day_of_week))
+    cfg.hour = max(0, min(23, hour))
+    cfg.source = source
+    cfg.days = max(1, min(365, days))
+    cfg.subject_template = subject_template or "IBF-SLM Bulletin — {month} {year}"
+    await db.commit()
+
+    from app.scheduler import apply_bulletin_schedule
+    await apply_bulletin_schedule()
+
+    return RedirectResponse("/bulletin/schedule?saved=1", status_code=303)
+
+
+# ── Subscriber management ─────────────────────────────────────────────────────
+
+@router.post("/subscribers/add", response_class=HTMLResponse)
+async def subscriber_add(
+    request: Request,
+    email: str = Form(...),
+    name: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user or user.role != "admin":
+        return RedirectResponse("/login", status_code=303)
+
+    email = email.strip().lower()
+    if "@" not in email:
+        return RedirectResponse("/bulletin/schedule?error=invalid+email", status_code=303)
+
+    existing = await db.scalar(
+        select(BulletinSubscriber).where(BulletinSubscriber.email == email)
+    )
+    if not existing:
+        db.add(BulletinSubscriber(email=email, name=name.strip()))
+        await db.commit()
+
+    return RedirectResponse("/bulletin/schedule?saved=1", status_code=303)
+
+
+@router.post("/subscribers/{sub_id}/toggle", response_class=HTMLResponse)
+async def subscriber_toggle(
+    sub_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user or user.role != "admin":
+        return RedirectResponse("/login", status_code=303)
+
+    sub = await db.scalar(select(BulletinSubscriber).where(BulletinSubscriber.id == sub_id))
+    if sub:
+        sub.is_active = not sub.is_active
+        await db.commit()
+
+    return RedirectResponse("/bulletin/schedule?saved=1", status_code=303)
+
+
+@router.post("/subscribers/{sub_id}/delete", response_class=HTMLResponse)
+async def subscriber_delete(
+    sub_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user or user.role != "admin":
+        return RedirectResponse("/login", status_code=303)
+
+    sub = await db.scalar(select(BulletinSubscriber).where(BulletinSubscriber.id == sub_id))
+    if sub:
+        await db.delete(sub)
+        await db.commit()
+
+    return RedirectResponse("/bulletin/schedule?saved=1", status_code=303)
+
+
+# ── Manual send-now ───────────────────────────────────────────────────────────
+
+@router.post("/schedule/send-now", response_class=HTMLResponse)
+async def bulletin_send_now(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user or user.role != "admin":
+        return RedirectResponse("/login", status_code=303)
+
+    cfg = await _get_or_create_schedule(db)
+    subscribers_r = await db.execute(
+        select(BulletinSubscriber).where(BulletinSubscriber.is_active == True)  # noqa: E712
+    )
+    recipients = [s.email for s in subscribers_r.scalars().all()]
+
+    if not recipients:
+        return RedirectResponse("/bulletin/schedule?error=no+recipients", status_code=303)
+
+    ctx = await _build_bulletin_context(db, cfg.source, cfg.days, username=user.username)
+    html = _render_bulletin_html(ctx)
+    subject = _format_subject(cfg.subject_template, ctx["now"])
+
+    from app.core.email import send_bulletin_email
+    sent = await send_bulletin_email(recipients, subject, html)
+
+    cfg.last_sent_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    return RedirectResponse(f"/bulletin/schedule?sent={sent}", status_code=303)
+
+
+def _format_subject(template: str, now: datetime) -> str:
+    return template.format(month=now.strftime("%B"), year=now.strftime("%Y"))

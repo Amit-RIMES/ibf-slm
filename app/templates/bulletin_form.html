@@ -54,8 +54,19 @@
 </nav>
 
 <div class="main">
-  <h1>Generate Bulletin</h1>
-  <div class="sub">Produce a print-ready stakeholder bulletin drawing on current SPI, seasonal outlook, alerts, and impacts.</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+    <div>
+      <h1 style="margin-bottom:.25rem;">Generate Bulletin</h1>
+      <div class="sub">Produce a print-ready stakeholder bulletin drawing on current SPI, seasonal outlook, alerts, and impacts.</div>
+    </div>
+    {% if user.role == "admin" %}
+    <a href="/bulletin/schedule"
+       style="padding:.45rem 1rem;background:#f3f4f6;border-radius:8px;
+              font-size:.8rem;font-weight:600;color:#374151;text-decoration:none;">
+      ⚙ Schedule &amp; recipients
+    </a>
+    {% endif %}
+  </div>
 
   <div class="form-card">
     <form method="get" action="/bulletin/generate">

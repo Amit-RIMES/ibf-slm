@@ -8,6 +8,7 @@ from sqlalchemy import delete, func, select
 from app.core.background import enqueue
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
+from app.models.bulletin_schedule import BulletinSchedule
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
 from app.models.sync import SyncConfig, SyncLog
@@ -22,6 +23,7 @@ _ESCALATION_JOB_ID = "alert_escalation"
 _DIGEST_JOB_ID = "weekly_digest"
 _CHIRPS_JOB_ID = "chirps_sync"
 _GAP_CHECK_JOB_ID = "data_gap_check"
+_BULLETIN_JOB_ID = "bulletin_email"
 
 
 async def _run_daily_sync():
@@ -298,6 +300,67 @@ async def _run_gap_check():
         )
 
 
+async def _run_bulletin_email() -> None:
+    from app.core.email import send_bulletin_email
+    from app.models.bulletin_schedule import BulletinSchedule, BulletinSubscriber
+    from app.routers.bulletin import _build_bulletin_context, _format_subject, _render_bulletin_html
+
+    async with AsyncSessionLocal() as db:
+        cfg = await db.scalar(select(BulletinSchedule).where(BulletinSchedule.id == 1))
+        if not cfg or not cfg.enabled:
+            return
+
+        subscribers_r = await db.execute(
+            select(BulletinSubscriber).where(BulletinSubscriber.is_active == True)  # noqa: E712
+        )
+        recipients = [s.email for s in subscribers_r.scalars().all()]
+        if not recipients:
+            return
+
+        ctx = await _build_bulletin_context(db, cfg.source, cfg.days)
+        html = _render_bulletin_html(ctx)
+        subject = _format_subject(cfg.subject_template, ctx["now"])
+
+        sent = await send_bulletin_email(recipients, subject, html)
+
+        cfg.last_sent_at = datetime.now(timezone.utc)
+        await db.commit()
+
+    logger.info("Bulletin email dispatched to %d/%d recipient(s)", sent, len(recipients))
+
+
+async def apply_bulletin_schedule() -> None:
+    """(Re)schedule the bulletin job from DB config. Safe to call at any time."""
+    async with AsyncSessionLocal() as db:
+        cfg = await db.scalar(select(BulletinSchedule).where(BulletinSchedule.id == 1))
+
+    if _scheduler.get_job(_BULLETIN_JOB_ID):
+        _scheduler.remove_job(_BULLETIN_JOB_ID)
+
+    if not cfg or not cfg.enabled:
+        return
+
+    if cfg.frequency == "weekly":
+        _scheduler.add_job(
+            _run_bulletin_email,
+            trigger="cron",
+            day_of_week=cfg.day_of_week,
+            hour=cfg.hour,
+            minute=0,
+            id=_BULLETIN_JOB_ID,
+            replace_existing=True,
+        )
+    else:
+        _scheduler.add_job(
+            _run_bulletin_email,
+            trigger="cron",
+            hour=cfg.hour,
+            minute=0,
+            id=_BULLETIN_JOB_ID,
+            replace_existing=True,
+        )
+
+
 async def _cleanup_old_forecasts(db, retention_days: int) -> int:
     if not retention_days:
         return 0
@@ -377,6 +440,9 @@ async def apply_schedule():
             id=_GAP_CHECK_JOB_ID,
             replace_existing=True,
         )
+
+    # Bulletin email — schedule driven by DB config
+    await apply_bulletin_schedule()
 
 
 def start_scheduler():
