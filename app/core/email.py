@@ -288,6 +288,60 @@ async def send_sync_failure_email(admin_emails: list[str], n_consecutive: int, b
             logger.error("Failed to send sync failure alert to %s: %s", email, exc)
 
 
+async def send_data_gap_email(admin_emails: list[str], gaps: dict, base_url: str) -> None:
+    lines = []
+    if gaps["chirps_alert"]:
+        d = gaps["chirps_gap_days"]
+        last = gaps["last_chirps_date"]
+        lines.append(
+            f"<li><strong>CHIRPS observed rainfall</strong>: no new data for <strong>{d} day{'s' if d != 1 else ''}</strong>"
+            + (f" (last record: {last})" if last else "") + "</li>"
+        )
+    if gaps["forecast_alert"]:
+        d = gaps["forecast_gap_days"]
+        last = gaps["last_forecast_at"]
+        lines.append(
+            f"<li><strong>Forecast uploads</strong>: no new data for <strong>{d} day{'s' if d != 1 else ''}</strong>"
+            + (f" (last upload: {last.strftime('%Y-%m-%d %H:%M UTC') if last else 'never'})" ) + "</li>"
+        )
+    if not lines:
+        return
+    subject = "[IBF] Data gap detected — missing input data"
+    html = f"""
+    <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;padding:2rem;">
+      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;
+                  padding:1rem 1.25rem;margin-bottom:1.5rem;">
+        <span style="font-size:1.1rem">⚠️</span>
+        <strong style="color:#9a3412;margin-left:.4rem;">Data gap detected</strong>
+      </div>
+      <p style="color:#4b5563;">One or more data streams have not received new data:</p>
+      <ul style="color:#374151;margin:1rem 0 1rem 1.25rem;line-height:1.8;">
+        {''.join(lines)}
+      </ul>
+      <p style="color:#4b5563;">
+        Stale data may affect trigger evaluations and SPI drought indices.
+        Please check data sources and ingestion pipelines.
+      </p>
+      <p style="margin-top:1.25rem;">
+        <a href="{base_url}/admin/health"
+           style="display:inline-block;padding:.65rem 1.25rem;background:#ea580c;
+                  color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">
+          View system health →
+        </a>
+      </p>
+      <p style="color:#9ca3af;font-size:.8rem;margin-top:1rem;">IBF App — {base_url}</p>
+    </div>
+    """
+    if not settings.SMTP_HOST:
+        logger.warning("SMTP not configured. Data gap alert skipped.")
+        return
+    for email in admin_emails:
+        try:
+            await asyncio.to_thread(_send_sync, email, subject, html)
+        except Exception as exc:
+            logger.error("Failed to send data gap alert to %s: %s", email, exc)
+
+
 async def send_escalation_email(
     admin_emails: list[str],
     activation: "TriggerActivation",

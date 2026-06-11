@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     CHIRPS_LON_MIN: float = 60.0
     CHIRPS_LON_MAX: float = 155.0
 
+    # Data gap alerting
+    DATA_GAP_CHIRPS_DAYS: int = 3       # alert if no new CHIRPS for this many days
+    DATA_GAP_FORECAST_DAYS: int = 3     # alert if no new forecast for this many days
+    DATA_GAP_ALERT_COOLDOWN_HOURS: int = 24  # min hours between repeat gap alert emails
+
 
 
 settings = Settings()

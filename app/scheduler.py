@@ -21,6 +21,7 @@ _JOB_ID = "daily_sync"
 _ESCALATION_JOB_ID = "alert_escalation"
 _DIGEST_JOB_ID = "weekly_digest"
 _CHIRPS_JOB_ID = "chirps_sync"
+_GAP_CHECK_JOB_ID = "data_gap_check"
 
 
 async def _run_daily_sync():
@@ -232,6 +233,63 @@ async def _run_chirps_sync():
         logger.debug("CHIRPS sync: no new data")
 
 
+async def _run_gap_check():
+    from app.core.email import send_data_gap_email
+    from app.core.gaps import check_data_gaps
+
+    async with AsyncSessionLocal() as db:
+        gaps = await check_data_gaps(db)
+        if not gaps["any_alert"]:
+            return
+
+        now = datetime.now(timezone.utc)
+        cooldown = timedelta(hours=settings.DATA_GAP_ALERT_COOLDOWN_HOURS)
+
+        cfg_r = await db.execute(select(SyncConfig).where(SyncConfig.id == 1))
+        cfg = cfg_r.scalar_one_or_none()
+
+        should_alert_chirps = gaps["chirps_alert"] and (
+            cfg is None
+            or cfg.last_chirps_gap_alert_at is None
+            or (now - cfg.last_chirps_gap_alert_at) >= cooldown
+        )
+        should_alert_forecast = gaps["forecast_alert"] and (
+            cfg is None
+            or cfg.last_forecast_gap_alert_at is None
+            or (now - cfg.last_forecast_gap_alert_at) >= cooldown
+        )
+
+        if not should_alert_chirps and not should_alert_forecast:
+            return
+
+        # Only include alert types that are within their cooldown window
+        active_gaps = dict(gaps)
+        if not should_alert_chirps:
+            active_gaps["chirps_alert"] = False
+        if not should_alert_forecast:
+            active_gaps["forecast_alert"] = False
+
+        admins = await db.execute(
+            select(User.email).where(User.role == "admin", User.is_active == True)  # noqa: E712
+        )
+        admin_emails = [r[0] for r in admins.all()]
+        if admin_emails:
+            enqueue(send_data_gap_email(admin_emails, active_gaps, settings.APP_BASE_URL))
+
+        if cfg:
+            if should_alert_chirps:
+                cfg.last_chirps_gap_alert_at = now
+            if should_alert_forecast:
+                cfg.last_forecast_gap_alert_at = now
+            await db.commit()
+
+        logger.warning(
+            "Data gap alert sent: CHIRPS=%s (%s days), forecast=%s (%s days)",
+            gaps["chirps_alert"], gaps["chirps_gap_days"],
+            gaps["forecast_alert"], gaps["forecast_gap_days"],
+        )
+
+
 async def _cleanup_old_forecasts(db, retention_days: int) -> int:
     if not retention_days:
         return 0
@@ -298,6 +356,17 @@ async def apply_schedule():
             hour=2,
             minute=30,
             id=_CHIRPS_JOB_ID,
+            replace_existing=True,
+        )
+
+    # Data gap check — daily at 08:00 UTC (after CHIRPS sync window)
+    if not _scheduler.get_job(_GAP_CHECK_JOB_ID):
+        _scheduler.add_job(
+            _run_gap_check,
+            trigger="cron",
+            hour=8,
+            minute=0,
+            id=_GAP_CHECK_JOB_ID,
             replace_existing=True,
         )
 

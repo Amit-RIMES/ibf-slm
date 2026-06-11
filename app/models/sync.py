@@ -16,6 +16,8 @@ class SyncConfig(Base):
     retention_days: Mapped[int] = mapped_column(Integer, default=90, nullable=False, server_default="90")
     last_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_run_status: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)  # ok / error / partial
+    last_chirps_gap_alert_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_forecast_gap_alert_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class SyncLog(Base):

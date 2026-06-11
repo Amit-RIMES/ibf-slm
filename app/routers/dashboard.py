@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.gaps import check_data_gaps
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
 from app.models.trigger import Trigger, TriggerActivation
@@ -198,12 +199,14 @@ async def dashboard(
     }
 
     impacts_filtered = bool(impact_filters)
+    data_gaps = await check_data_gaps(db)
 
     return templates.TemplateResponse(
     request,
     "dashboard.html",
     {
             "user": user,
+            "data_gaps": data_gaps,
             "stats": {
                 "total_users": total_users,
                 "pending_count": pending_count,
