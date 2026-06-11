@@ -1,4 +1,5 @@
 import calendar
+import json
 import logging
 from datetime import datetime, timezone
 
@@ -65,6 +66,8 @@ async def drought_dashboard(
                 "drought_events": [],
                 "n_months": 0,
                 "baseline_info": None,
+                "heatmap_years": [],
+                "heatmap_json": "{}",
             },
         )
 
@@ -113,6 +116,26 @@ async def drought_dashboard(
     chart_spi3 = _chart_vals(3, keys)
     chart_spi6 = _chart_vals(6, keys)
 
+    # Heatmap data: year × month grid per timescale
+    heatmap_years = sorted({r.year for r in records})
+    heatmap: dict[int, dict] = {}
+    for ts, recs in by_scale.items():
+        lookup = {(r.year, r.month): r for r in recs}
+        heatmap[ts] = {}
+        for yr in heatmap_years:
+            heatmap[ts][yr] = {}
+            for mo in range(1, 13):
+                rec = lookup.get((yr, mo))
+                if rec and rec.spi_value is not None:
+                    _, colour = spi_category(rec.spi_value)
+                    heatmap[ts][yr][mo] = {
+                        "v": round(rec.spi_value, 2),
+                        "c": colour,
+                        "n": rec.n_reference,
+                    }
+                else:
+                    heatmap[ts][yr][mo] = None
+
     # Drought events: months where any timescale SPI <= -1
     drought_set: dict[tuple[int, int], dict] = {}
     for ts, recs in by_scale.items():
@@ -147,6 +170,8 @@ async def drought_dashboard(
         request, "drought_dashboard.html",
         {
             "user": user,
+            "heatmap_years": heatmap_years,
+            "heatmap_json": json.dumps(heatmap),
             "source": source,
             "sources": sources,
             "current": current,
