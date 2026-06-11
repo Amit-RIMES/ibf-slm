@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% block title %}Drought Index — IBF App{% endblock %}
+{% block extra_styles %}
+<style>
+  nav { background:#fff; border-bottom:1px solid #e5e7eb; padding:.85rem 2rem;
+        display:flex; align-items:center; justify-content:space-between; }
+  nav .brand { font-weight:700; font-size:1.1rem; color:#4f46e5; }
+  nav .nav-links { display:flex; align-items:center; gap:1.5rem; font-size:.875rem; }
+  nav .nav-links a { color:#6b7280; text-decoration:none; }
+  nav .nav-links a.active { color:#4f46e5; font-weight:600; }
+  nav .nav-links a.logout { color:#dc2626; font-weight:500; }
+
+  .main { max-width:1000px; margin:2rem auto; padding:0 1rem; }
+  h1 { font-size:1.4rem; font-weight:700; margin-bottom:.2rem; }
+  .sub { color:#6b7280; font-size:.875rem; margin-bottom:1.5rem; }
+
+  .filter-bar { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07);
+    padding:.9rem 1.2rem; margin-bottom:1.5rem; display:flex; gap:.75rem; align-items:flex-end; flex-wrap:wrap; }
+  .filter-bar label { font-size:.75rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; color:#9ca3af; display:block; margin-bottom:.3rem; }
+  select { padding:.45rem .75rem; border:1px solid #d1d5db; border-radius:7px; font-size:.875rem; background:#fff; }
+  .btn { padding:.5rem 1.1rem; background:#4f46e5; color:#fff; border:none;
+    border-radius:8px; font-size:.875rem; font-weight:600; cursor:pointer; }
+  .btn-sm { padding:.35rem .85rem; font-size:.8rem; }
+  .btn-danger { background:#dc2626; }
+
+  .card { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.08);
+    padding:1.5rem; margin-bottom:1.25rem; }
+
+  /* Status row */
+  .status-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-bottom:1.5rem; }
+  .status-card { border-radius:12px; padding:1.25rem 1.5rem; color:#fff; }
+  .status-card .scale { font-size:.78rem; font-weight:700; letter-spacing:.1em;
+    text-transform:uppercase; opacity:.85; margin-bottom:.4rem; }
+  .status-card .val { font-size:2.2rem; font-weight:800; line-height:1; margin-bottom:.3rem; }
+  .status-card .lbl { font-size:.85rem; font-weight:600; opacity:.9; }
+  .status-card .meta { font-size:.75rem; opacity:.75; margin-top:.35rem; }
+  .no-data { color:#9ca3af; font-style:italic; }
+
+  /* Chart */
+  .chart-title { font-size:.88rem; font-weight:700; color:#374151; margin-bottom:.5rem; }
+  .chart-sub { font-size:.78rem; color:#9ca3af; margin-bottom:1rem; }
+  .tab-row { display:flex; gap:.5rem; margin-bottom:1rem; }
+  .tab { padding:.35rem .9rem; border:1px solid #d1d5db; border-radius:999px;
+    font-size:.8rem; font-weight:600; cursor:pointer; background:#f9fafb; color:#6b7280; }
+  .tab.active { background:#4f46e5; color:#fff; border-color:#4f46e5; }
+
+  /* Legend */
+  .legend { display:flex; flex-wrap:wrap; gap:.5rem 1rem; margin-bottom:1rem; font-size:.75rem; }
+  .legend-item { display:flex; align-items:center; gap:.35rem; }
+  .legend-swatch { width:12px; height:12px; border-radius:2px; flex-shrink:0; }
+
+  /* Table */
+  table { width:100%; border-collapse:collapse; font-size:.875rem; }
+  th { text-align:left; padding:.55rem .75rem; font-size:.72rem; font-weight:700;
+    text-transform:uppercase; letter-spacing:.06em; color:#9ca3af; border-bottom:2px solid #e5e7eb; }
+  td { padding:.65rem .75rem; border-bottom:1px solid #f3f4f6; }
+  tr:last-child td { border-bottom:none; }
+
+  .spi-val { font-weight:700; }
+  .spi-none { color:#d1d5db; }
+
+  .notice { background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px;
+    padding:.75rem 1rem; font-size:.82rem; color:#1e40af; margin-bottom:1.25rem; }
+  .notice.success { background:#f0fdf4; border-color:#bbf7d0; color:#166534; }
+
+  @media(max-width:640px) {
+    .status-grid { grid-template-columns:1fr; }
+  }
+</style>
+{% endblock %}
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/forecasts/drift">Drift</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/observed">Observed</a>
+    <a href="/drought" class="active">Drought</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <h1>Drought Index Monitor</h1>
+  <p class="sub">Standardized Precipitation Index (SPI) computed from CHIRPS observed rainfall.</p>
+
+  {% if request.query_params.get('recomputed') %}
+  <div class="notice success">SPI recomputation enqueued — refresh in a moment to see updated values.</div>
+  {% endif %}
+
+  <!-- Source filter -->
+  <div class="filter-bar">
+    <form method="get" action="/drought" style="display:flex;gap:.75rem;align-items:flex-end;">
+      <div>
+        <label>Source</label>
+        <select name="source">
+          {% for s in sources %}
+          <option value="{{ s }}" {% if s == source %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn">View</button>
+    </form>
+    {% if user.role == "admin" %}
+    <form method="post" action="/drought/recompute" style="margin-left:auto;">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+      <button type="submit" class="btn btn-sm btn-danger"
+        onclick="return confirm('Recompute all SPI records from CHIRPS data?')">
+        ↻ Recompute SPI
+      </button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if not current %}
+  <div class="card">
+    <p class="no-data" style="text-align:center;padding:2rem;">
+      No SPI data available for <strong>{{ source }}</strong>.
+      {% if user.role == "admin" %}
+      Use the <em>Recompute SPI</em> button after syncing CHIRPS data.
+      {% else %}
+      Ask an admin to sync CHIRPS data and recompute the drought index.
+      {% endif %}
+    </p>
+  </div>
+  {% else %}
+
+  <!-- Current status cards -->
+  <div class="status-grid">
+    {% for ts in [1, 3, 6] %}
+    {% set info = current.get(ts) %}
+    {% if info %}
+    <div class="status-card" style="background:{{ info.colour }};">
+      <div class="scale">SPI-{{ ts }}</div>
+      <div class="val">{{ "%+.2f"|format(info.spi) }}</div>
+      <div class="lbl">{{ info.label }}</div>
+      <div class="meta">{{ info.month_name }} {{ info.year }} · {{ info.precip_mm }} mm ({{ info.n_days }}d){% if info.low_confidence %} · ⚠ low confidence (n={{ info.n_reference }}){% endif %}</div>
+    </div>
+    {% else %}
+    <div class="status-card" style="background:#e5e7eb;color:#6b7280;">
+      <div class="scale">SPI-{{ ts }}</div>
+      <div class="val">—</div>
+      <div class="lbl">Insufficient data</div>
+      <div class="meta">Needs {{ ts * 4 }}+ months of data</div>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+
+  <!-- SPI chart -->
+  <div class="card">
+    <div class="chart-title">SPI Time Series — {{ source }}</div>
+    <div class="chart-sub">
+      {% if baseline_info %}Reference period: {{ baseline_info }}{% endif %}
+    </div>
+
+    <div class="tab-row">
+      <button class="tab active" onclick="showSeries('spi1',this)">SPI-1</button>
+      <button class="tab" onclick="showSeries('spi3',this)">SPI-3</button>
+      <button class="tab" onclick="showSeries('spi6',this)">SPI-6</button>
+      <button class="tab" onclick="showSeries('all',this)">All</button>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-swatch" style="background:#991b1b"></div>Extremely Dry (≤ −2)</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#f97316"></div>Severely Dry (−2 to −1.5)</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#fde68a"></div>Moderately Dry (−1.5 to −1)</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#d1d5db"></div>Near Normal</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#a8d4ea"></div>Moderately Wet</div>
+      <div class="legend-item"><div class="legend-swatch" style="background:#1a65b0"></div>Extremely Wet (≥ +2)</div>
+    </div>
+
+    <canvas id="spiChart" height="90"></canvas>
+  </div>
+
+  <!-- Drought events table -->
+  {% if drought_events %}
+  <div class="card">
+    <div class="chart-title" style="margin-bottom:1rem;">Drought Events (SPI ≤ −1.0, recent 24 months)</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Month</th>
+          <th>SPI-1</th>
+          <th>SPI-3</th>
+          <th>SPI-6</th>
+          <th>Severity</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ev in drought_events %}
+        {% set worst = [ev.spi1, ev.spi3, ev.spi6] | select('ne', None) | list | min %}
+        <tr>
+          <td style="font-weight:600">{{ ev.month_name }} {{ ev.year }}</td>
+          <td>
+            {% if ev.spi1 is not none %}
+            <span class="spi-val" style="color:{{ 'spi_category(ev.spi1)[1]' }}">{{ "%+.2f"|format(ev.spi1) }}</span>
+            {% else %}<span class="spi-none">—</span>{% endif %}
+          </td>
+          <td>
+            {% if ev.spi3 is not none %}
+            <span class="spi-val">{{ "%+.2f"|format(ev.spi3) }}</span>
+            {% else %}<span class="spi-none">—</span>{% endif %}
+          </td>
+          <td>
+            {% if ev.spi6 is not none %}
+            <span class="spi-val">{{ "%+.2f"|format(ev.spi6) }}</span>
+            {% else %}<span class="spi-none">—</span>{% endif %}
+          </td>
+          <td>
+            {% if worst <= -2.0 %}
+            <span style="background:#fef2f2;color:#991b1b;padding:.15rem .55rem;border-radius:999px;font-size:.75rem;font-weight:700">Extreme</span>
+            {% elif worst <= -1.5 %}
+            <span style="background:#fff7ed;color:#c2410c;padding:.15rem .55rem;border-radius:999px;font-size:.75rem;font-weight:700">Severe</span>
+            {% else %}
+            <span style="background:#fefce8;color:#854d0e;padding:.15rem .55rem;border-radius:999px;font-size:.75rem;font-weight:700">Moderate</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card">
+    <p style="color:#6b7280;font-size:.9rem;text-align:center;padding:1.5rem;">
+      No drought events (SPI ≤ −1) in the available record for <strong>{{ source }}</strong>.
+    </p>
+  </div>
+  {% endif %}
+
+  <!-- Methodology note -->
+  <div class="notice" style="margin-top:.5rem;">
+    <strong>Methodology:</strong> SPI is computed using the WMO gamma distribution method (McKee et al., 1993).
+    Monthly totals are accumulated from daily CHIRPS precip_mean values.
+    The gamma distribution is fitted per calendar month using all available history up to that date.
+    A minimum of 4 same-month reference values is required; earlier months show <em>—</em>.
+    SPI-<em>N</em> uses an <em>N</em>-month accumulation window.
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script>
+    const labels = {{ chart_labels | tojson }};
+    const spi1   = {{ chart_spi1  | tojson }};
+    const spi3   = {{ chart_spi3  | tojson }};
+    const spi6   = {{ chart_spi6  | tojson }};
+
+    const datasets = {
+      spi1: { label: 'SPI-1', data: spi1, borderColor: '#4f46e5', backgroundColor: 'rgba(79,70,229,.08)', tension: .3, fill: true, pointRadius: 2 },
+      spi3: { label: 'SPI-3', data: spi3, borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,.08)', tension: .3, fill: false, pointRadius: 2 },
+      spi6: { label: 'SPI-6', data: spi6, borderColor: '#059669', backgroundColor: 'rgba(5,150,105,.08)', tension: .3, fill: false, pointRadius: 2 },
+    };
+
+    const chart = new Chart(document.getElementById('spiChart'), {
+      type: 'line',
+      data: { labels, datasets: [datasets.spi1] },
+      options: {
+        spanGaps: true,
+        plugins: {
+          legend: { position: 'top' },
+          annotation: undefined,
+        },
+        scales: {
+          y: {
+            min: -3.5, max: 3.5,
+            ticks: { stepSize: 0.5 },
+            grid: { color: ctx => {
+              const v = ctx.tick?.value;
+              if (v === -2 || v === 2) return 'rgba(220,38,38,.35)';
+              if (v === -1 || v === 1) return 'rgba(234,179,8,.35)';
+              if (v === 0) return 'rgba(0,0,0,.2)';
+              return 'rgba(0,0,0,.05)';
+            }},
+          },
+        },
+      },
+    });
+
+    function showSeries(key, btn) {
+      document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (key === 'all') {
+        chart.data.datasets = [datasets.spi1, datasets.spi3, datasets.spi6];
+      } else {
+        chart.data.datasets = [datasets[key]];
+      }
+      chart.update();
+    }
+  </script>
+  {% endif %}
+</div>
+{% endblock %}

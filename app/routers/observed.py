@@ -251,15 +251,16 @@ async def observed_sync(
     if user.role != "admin":
         return _FORBIDDEN
 
+    from app.core.background import enqueue
     from app.core.chirps import sync_recent_days
     from app.core.database import AsyncSessionLocal
-    from app.core.background import enqueue
+    from app.core.spi import recompute_spi
 
     _lbd = lookback_days
 
     async def _do_sync():
         async with AsyncSessionLocal() as sync_db:
-            await sync_recent_days(
+            ingested = await sync_recent_days(
                 sync_db,
                 lookback_days=_lbd,
                 lat_min=settings.CHIRPS_LAT_MIN,
@@ -267,6 +268,9 @@ async def observed_sync(
                 lon_min=settings.CHIRPS_LON_MIN,
                 lon_max=settings.CHIRPS_LON_MAX,
             )
+        if ingested:
+            async with AsyncSessionLocal() as spi_db:
+                await recompute_spi(spi_db)
 
     enqueue(_do_sync())
     return RedirectResponse("/observed?synced=1", status_code=303)
