@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}New Seasonal Outlook — IBF App{% endblock %}
+{% block extra_styles %}
+<style>
+  nav { background:#fff; border-bottom:1px solid #e5e7eb; padding:.85rem 2rem;
+        display:flex; align-items:center; justify-content:space-between; }
+  nav .brand { font-weight:700; font-size:1.1rem; color:#4f46e5; }
+  nav .nav-links { display:flex; align-items:center; gap:1.5rem; font-size:.875rem; }
+  nav .nav-links a { color:#6b7280; text-decoration:none; }
+  nav .nav-links a.active { color:#4f46e5; font-weight:600; }
+  nav .nav-links a.logout { color:#dc2626; font-weight:500; }
+
+  .main { max-width:680px; margin:2rem auto; padding:0 1rem; }
+  h1 { font-size:1.4rem; font-weight:700; margin-bottom:1.5rem; }
+
+  .form-card { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.08);
+    padding:2rem; }
+
+  .form-group { margin-bottom:1.25rem; }
+  .form-group label { display:block; font-size:.8rem; font-weight:700;
+    text-transform:uppercase; letter-spacing:.05em; color:#6b7280; margin-bottom:.4rem; }
+  .form-group input, .form-group select, .form-group textarea {
+    width:100%; padding:.55rem .8rem; border:1px solid #d1d5db; border-radius:8px;
+    font-size:.9rem; background:#fff; box-sizing:border-box; }
+  .form-group textarea { min-height:80px; resize:vertical; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline:none; border-color:#4f46e5; box-shadow:0 0 0 3px rgba(79,70,229,.1); }
+
+  .form-row { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  .form-row-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; }
+
+  .section-label { font-size:.78rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.07em; color:#9ca3af; margin:1.5rem 0 .75rem;
+    border-top:1px solid #f3f4f6; padding-top:1rem; }
+
+  .hint { font-size:.75rem; color:#9ca3af; margin-top:.3rem; }
+
+  .error-box { background:#fef2f2; border:1px solid #fecaca; border-radius:8px;
+    padding:.75rem 1rem; margin-bottom:1.25rem; font-size:.875rem; color:#b91c1c; }
+  .error-box ul { margin:.4rem 0 0 1rem; padding:0; }
+
+  .btn-submit { background:#4f46e5; color:#fff; border:none; border-radius:8px;
+    padding:.65rem 1.5rem; font-size:.9rem; font-weight:600; cursor:pointer;
+    margin-top:.5rem; }
+  .btn-submit:hover { opacity:.88; }
+  .btn-cancel { font-size:.875rem; color:#6b7280; margin-left:1rem; }
+
+  .tercile-sum { font-size:.78rem; color:#9ca3af; margin-top:.3rem; }
+  .tercile-sum.warn { color:#d97706; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/drought">Drought</a>
+    <a href="/seasonal" class="active">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <h1>New Seasonal Outlook</h1>
+
+  {% if errors %}
+  <div class="error-box">
+    <strong>Please fix the following:</strong>
+    <ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  <div class="form-card">
+    <form method="post" action="/seasonal">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+
+      <div class="section-label">Forecast metadata</div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Source *</label>
+          <input list="source-list" name="source" placeholder="e.g. IRI, ECMWF-SEAS5" required>
+          <datalist id="source-list">
+            {% for s in sources %}<option value="{{ s }}">{% endfor %}
+          </datalist>
+        </div>
+        <div class="form-group">
+          <label>Variable *</label>
+          <select name="variable">
+            <option value="precip">Precipitation</option>
+            <option value="temp">Temperature</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Issue Date *</label>
+        <input type="date" name="issue_date" required>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Valid Start *</label>
+          <input type="date" name="valid_start" required>
+        </div>
+        <div class="form-group">
+          <label>Valid End *</label>
+          <input type="date" name="valid_end" required>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Region Label</label>
+        <input type="text" name="region_label" placeholder="e.g. Southeast Asia, Thailand">
+      </div>
+
+      <div class="section-label">Tercile probabilities (must sum to 100)</div>
+
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>Below Normal %</label>
+          <input type="number" name="below_normal_pct" id="bn" min="0" max="100" step="1"
+            placeholder="e.g. 40" oninput="updateSum()">
+        </div>
+        <div class="form-group">
+          <label>Near Normal %</label>
+          <input type="number" name="near_normal_pct" id="nn" min="0" max="100" step="1"
+            placeholder="e.g. 30" oninput="updateSum()">
+        </div>
+        <div class="form-group">
+          <label>Above Normal %</label>
+          <input type="number" name="above_normal_pct" id="an" min="0" max="100" step="1"
+            placeholder="e.g. 30" oninput="updateSum()">
+        </div>
+      </div>
+      <div id="tercile-sum" class="tercile-sum"></div>
+
+      <div class="section-label">Optional fields</div>
+
+      <div class="form-group">
+        <label>Precip Anomaly % of Normal</label>
+        <input type="number" name="precip_anomaly_pct" step="0.1" placeholder="e.g. 80 means 20% below normal">
+        <div class="hint">Leave blank if not available</div>
+      </div>
+
+      <div class="section-label">Bounding box (optional)</div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Lat Min</label>
+          <input type="number" name="lat_min" step="0.1" min="-90" max="90">
+        </div>
+        <div class="form-group">
+          <label>Lat Max</label>
+          <input type="number" name="lat_max" step="0.1" min="-90" max="90">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Lon Min</label>
+          <input type="number" name="lon_min" step="0.1" min="-180" max="180">
+        </div>
+        <div class="form-group">
+          <label>Lon Max</label>
+          <input type="number" name="lon_max" step="0.1" min="-180" max="180">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Notes / Methodology</label>
+        <textarea name="notes" placeholder="Source URL, method, caveats…"></textarea>
+      </div>
+
+      <div>
+        <button type="submit" class="btn-submit">Save Outlook</button>
+        <a href="/seasonal" class="btn-cancel">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function updateSum() {
+  const b = parseFloat(document.getElementById('bn').value) || 0;
+  const n = parseFloat(document.getElementById('nn').value) || 0;
+  const a = parseFloat(document.getElementById('an').value) || 0;
+  const s = b + n + a;
+  const el = document.getElementById('tercile-sum');
+  if (b || n || a) {
+    el.textContent = `Sum: ${s.toFixed(0)}% ${s === 100 ? '✓' : '(must equal 100)'}`;
+    el.className = 'tercile-sum' + (Math.abs(s - 100) > 1 ? ' warn' : '');
+  } else {
+    el.textContent = '';
+  }
+}
+</script>
+{% endblock %}

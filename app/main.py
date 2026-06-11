@@ -9,8 +9,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
 from app.core.csrf import _token_for, validate_csrf
 from app.core.database import Base, engine
-from app.models import forecast, impact, trigger, sync, reset_token, audit, api_key, webhook, activation_comment, observed_rainfall, spi  # noqa: F401
-from app.routers import admin, alerts, api, auth, chat, dashboard, drought, forecasts, impacts, observed, reports, triggers, totp
+from app.models import forecast, impact, trigger, sync, reset_token, audit, api_key, webhook, activation_comment, observed_rainfall, spi, seasonal  # noqa: F401
+from app.routers import admin, alerts, api, auth, bulletin, chat, dashboard, drought, forecasts, impacts, observed, reports, seasonal as seasonal_router, triggers, totp
 from app.routers import sync as sync_router
 from app.scheduler import apply_schedule, start_scheduler, stop_scheduler
 
@@ -90,7 +90,18 @@ async def csrf_middleware(request: Request, call_next):
         submitted = request.headers.get("X-CSRF-Token", "")
         if not submitted:
             ct = request.headers.get("content-type", "")
-            if "form" in ct or "multipart" in ct:
+            if "application/x-www-form-urlencoded" in ct:
+                try:
+                    # Read via body() so Starlette caches the bytes in request._body.
+                    # This lets the route handler re-read the form from the cache via
+                    # stream() without hitting the "stream consumed" guard.
+                    body_bytes = await request.body()
+                    from urllib.parse import parse_qs
+                    parsed = parse_qs(body_bytes.decode("utf-8", errors="replace"))
+                    submitted = parsed.get("csrf_token", [""])[0]
+                except Exception:
+                    pass
+            elif "multipart" in ct:
                 try:
                     form = await request.form()
                     submitted = str(form.get("csrf_token", ""))
@@ -116,6 +127,8 @@ app.include_router(totp.router)
 app.include_router(chat.router)
 app.include_router(drought.router)
 app.include_router(reports.router)
+app.include_router(seasonal_router.router)
+app.include_router(bulletin.router)
 
 
 @app.get("/")

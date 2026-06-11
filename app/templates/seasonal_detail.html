@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}Seasonal Outlook — IBF App{% endblock %}
+{% block extra_styles %}
+<style>
+  nav { background:#fff; border-bottom:1px solid #e5e7eb; padding:.85rem 2rem;
+        display:flex; align-items:center; justify-content:space-between; }
+  nav .brand { font-weight:700; font-size:1.1rem; color:#4f46e5; }
+  nav .nav-links { display:flex; align-items:center; gap:1.5rem; font-size:.875rem; }
+  nav .nav-links a { color:#6b7280; text-decoration:none; }
+  nav .nav-links a.active { color:#4f46e5; font-weight:600; }
+  nav .nav-links a.logout { color:#dc2626; font-weight:500; }
+
+  .main { max-width:720px; margin:2rem auto; padding:0 1rem; }
+  .page-header { display:flex; align-items:flex-start; justify-content:space-between;
+    gap:1rem; margin-bottom:1.5rem; flex-wrap:wrap; }
+  h1 { font-size:1.4rem; font-weight:700; }
+  .sub { font-size:.875rem; color:#6b7280; margin-top:.2rem; }
+
+  .card { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.08);
+    padding:1.75rem; margin-bottom:1.25rem; }
+
+  .meta-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem 2rem; }
+  .meta-item { }
+  .meta-item .lbl { font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.06em; color:#9ca3af; margin-bottom:.2rem; }
+  .meta-item .val { font-size:.92rem; color:#1f2937; font-weight:600; }
+
+  .badge { display:inline-block; padding:.2rem .65rem; border-radius:999px;
+    font-size:.72rem; font-weight:700; text-transform:uppercase; }
+  .badge-precip { background:#dbeafe; color:#1d4ed8; }
+  .badge-temp   { background:#fee2e2; color:#991b1b; }
+
+  .tercile-section { margin-top:1.5rem; }
+  .tercile-label { font-size:.8rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.06em; color:#6b7280; margin-bottom:.85rem; }
+  .tercile-row { display:flex; align-items:stretch; height:40px; border-radius:8px;
+    overflow:hidden; gap:2px; }
+  .tercile-seg { display:flex; align-items:center; justify-content:center;
+    font-size:.82rem; font-weight:700; color:#fff; }
+  .seg-below { background:#ef4444; }
+  .seg-near  { background:#9ca3af; }
+  .seg-above { background:#22c55e; color:#fff; }
+  .tercile-legend { display:flex; gap:1rem; margin-top:.6rem; font-size:.78rem; }
+  .tl-item { display:flex; align-items:center; gap:.35rem; }
+  .tl-swatch { width:12px; height:12px; border-radius:2px; flex-shrink:0; }
+
+  .anomaly-pill {
+    display:inline-block; padding:.35rem 1rem; border-radius:999px;
+    font-size:.92rem; font-weight:700; margin-top:.75rem;
+  }
+
+  .notes-box { background:#f9fafb; border-radius:8px; padding:1rem;
+    font-size:.875rem; color:#374151; white-space:pre-wrap; margin-top:.5rem; }
+
+  .btn-danger { background:#dc2626; color:#fff; border:none; border-radius:8px;
+    padding:.45rem 1rem; font-size:.875rem; font-weight:600; cursor:pointer; }
+  .btn-danger:hover { opacity:.88; }
+  .btn-outline { border:1px solid #d1d5db; border-radius:8px; padding:.45rem 1rem;
+    font-size:.875rem; color:#374151; text-decoration:none; }
+  .btn-outline:hover { background:#f3f4f6; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/drought">Drought</a>
+    <a href="/seasonal" class="active">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <div>
+      <h1>{{ sf.source }} — Seasonal Outlook</h1>
+      <div class="sub">
+        <span class="badge badge-{{ sf.variable }}">{{ sf.variable }}</span>
+        &nbsp;Issued {{ sf.issue_date }} &nbsp;·&nbsp;
+        Valid {{ sf.valid_start.strftime('%b %Y') }} – {{ sf.valid_end.strftime('%b %Y') }}
+        {% if sf.region_label %}&nbsp;·&nbsp; {{ sf.region_label }}{% endif %}
+      </div>
+    </div>
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
+      <a href="/seasonal" class="btn-outline">← Back</a>
+      {% if user.role == "admin" %}
+      <form method="post" action="/seasonal/{{ sf.id }}/delete"
+            onsubmit="return confirm('Delete this outlook?')">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <button type="submit" class="btn-danger">Delete</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="meta-grid">
+      <div class="meta-item">
+        <div class="lbl">Source</div>
+        <div class="val">{{ sf.source }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="lbl">Variable</div>
+        <div class="val"><span class="badge badge-{{ sf.variable }}">{{ sf.variable }}</span></div>
+      </div>
+      <div class="meta-item">
+        <div class="lbl">Issued</div>
+        <div class="val">{{ sf.issue_date }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="lbl">Valid Period</div>
+        <div class="val">{{ sf.valid_start.strftime('%d %b %Y') }} – {{ sf.valid_end.strftime('%d %b %Y') }}</div>
+      </div>
+      {% if sf.region_label %}
+      <div class="meta-item">
+        <div class="lbl">Region</div>
+        <div class="val">{{ sf.region_label }}</div>
+      </div>
+      {% endif %}
+      {% if sf.lat_min is not none %}
+      <div class="meta-item">
+        <div class="lbl">Bounding Box</div>
+        <div class="val" style="font-size:.82rem;">
+          Lat {{ sf.lat_min }}–{{ sf.lat_max }}, Lon {{ sf.lon_min }}–{{ sf.lon_max }}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if sf.below_normal_pct is not none %}
+    <div class="tercile-section">
+      <div class="tercile-label">Tercile Probabilities</div>
+      <div class="tercile-row">
+        <div class="tercile-seg seg-below" style="flex:{{ sf.below_normal_pct }}">
+          {{ sf.below_normal_pct|int }}%
+        </div>
+        <div class="tercile-seg seg-near"  style="flex:{{ sf.near_normal_pct }}">
+          {{ sf.near_normal_pct|int }}%
+        </div>
+        <div class="tercile-seg seg-above" style="flex:{{ sf.above_normal_pct }}">
+          {{ sf.above_normal_pct|int }}%
+        </div>
+      </div>
+      <div class="tercile-legend">
+        <div class="tl-item"><div class="tl-swatch" style="background:#ef4444"></div> Below Normal</div>
+        <div class="tl-item"><div class="tl-swatch" style="background:#9ca3af"></div> Near Normal</div>
+        <div class="tl-item"><div class="tl-swatch" style="background:#22c55e"></div> Above Normal</div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if sf.precip_anomaly_pct is not none %}
+    <div style="margin-top:1rem;">
+      <div class="tercile-label">Precipitation Anomaly</div>
+      {% set pct = sf.precip_anomaly_pct %}
+      {% if pct < 80 %}
+        <span class="anomaly-pill" style="background:#fee2e2;color:#991b1b;">{{ pct|int }}% of normal (significantly below)</span>
+      {% elif pct < 95 %}
+        <span class="anomaly-pill" style="background:#fef3c7;color:#92400e;">{{ pct|int }}% of normal (below)</span>
+      {% elif pct <= 105 %}
+        <span class="anomaly-pill" style="background:#f3f4f6;color:#374151;">{{ pct|int }}% of normal (near normal)</span>
+      {% elif pct <= 120 %}
+        <span class="anomaly-pill" style="background:#dcfce7;color:#166534;">{{ pct|int }}% of normal (above)</span>
+      {% else %}
+        <span class="anomaly-pill" style="background:#bbf7d0;color:#14532d;">{{ pct|int }}% of normal (significantly above)</span>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  {% if sf.notes %}
+  <div class="card">
+    <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+                color:#9ca3af;margin-bottom:.5rem;">Notes / Methodology</div>
+    <div class="notes-box">{{ sf.notes }}</div>
+  </div>
+  {% endif %}
+
+  <div style="font-size:.78rem;color:#9ca3af;margin-top:.5rem;">
+    Uploaded {{ sf.uploaded_at.strftime('%d %b %Y %H:%M') if sf.uploaded_at else '—' }} UTC
+    {% if sf.uploaded_by %}by {{ sf.uploaded_by.username }}{% endif %}
+  </div>
+</div>
+{% endblock %}

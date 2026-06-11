@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ bulletin_title }}</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, sans-serif; font-size: 14px;
+    color: #1f2937; background: #fff; }
+
+  /* ── Toolbar (screen only) ────── */
+  .toolbar {
+    position: sticky; top: 0; z-index: 100;
+    background: #1f2937; color: #fff;
+    padding: .6rem 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: .875rem;
+  }
+  .toolbar a { color: #93c5fd; text-decoration: none; font-size: .82rem; }
+  .toolbar a:hover { text-decoration: underline; }
+  .btn-print {
+    background: #4f46e5; color: #fff; border: none; border-radius: 7px;
+    padding: .45rem 1.2rem; font-size: .85rem; font-weight: 600; cursor: pointer;
+  }
+  .btn-print:hover { opacity: .88; }
+
+  /* ── Page layout ─────────────── */
+  .page { max-width: 860px; margin: 2rem auto; padding: 0 1.5rem 4rem; }
+
+  /* ── Header ──────────────────── */
+  .bulletin-header {
+    border-bottom: 3px solid #4f46e5;
+    padding-bottom: 1.25rem;
+    margin-bottom: 2rem;
+  }
+  .bulletin-header .org {
+    font-size: .78rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .1em; color: #6b7280; margin-bottom: .3rem;
+  }
+  .bulletin-header h1 {
+    font-size: 1.5rem; font-weight: 800; color: #1f2937; line-height: 1.2;
+    margin-bottom: .5rem;
+  }
+  .bulletin-header .meta {
+    font-size: .82rem; color: #6b7280;
+    display: flex; gap: 1.5rem; flex-wrap: wrap;
+  }
+  .bulletin-header .meta strong { color: #374151; }
+
+  /* ── Section headers ─────────── */
+  .section { margin-bottom: 2rem; }
+  .section-title {
+    font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .1em; color: #6b7280; border-bottom: 1px solid #e5e7eb;
+    padding-bottom: .4rem; margin-bottom: 1rem;
+  }
+
+  /* ── Executive summary ───────── */
+  .exec-box {
+    background: #eff6ff; border-left: 4px solid #4f46e5;
+    border-radius: 0 8px 8px 0; padding: 1rem 1.25rem;
+    font-size: .92rem; line-height: 1.7; color: #1e3a5f;
+    margin-bottom: 2rem;
+  }
+
+  /* ── SPI cards ───────────────── */
+  .spi-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: .85rem; }
+  .spi-card { border-radius: 10px; padding: 1rem 1.25rem; color: #fff; }
+  .spi-card .sc-scale { font-size: .72rem; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; opacity: .85; margin-bottom: .25rem; }
+  .spi-card .sc-val { font-size: 2rem; font-weight: 800; line-height: 1; margin-bottom: .2rem; }
+  .spi-card .sc-lbl { font-size: .82rem; font-weight: 600; opacity: .9; }
+  .spi-card .sc-meta { font-size: .72rem; opacity: .75; margin-top: .25rem; }
+  .spi-none { background: #f3f4f6; color: #9ca3af; }
+
+  /* ── Seasonal outlook ────────── */
+  .tercile-bar { display: flex; height: 20px; border-radius: 6px; overflow: hidden; gap: 1px; }
+  .tb-below { background: #ef4444; display: flex; align-items: center; justify-content: center;
+    font-size: .75rem; font-weight: 700; color: #fff; }
+  .tb-near  { background: #9ca3af; display: flex; align-items: center; justify-content: center;
+    font-size: .75rem; font-weight: 700; color: #fff; }
+  .tb-above { background: #22c55e; display: flex; align-items: center; justify-content: center;
+    font-size: .75rem; font-weight: 700; color: #fff; }
+  .tercile-legend { display: flex; gap: 1rem; margin-top: .5rem; font-size: .75rem; }
+  .tl-item { display: flex; align-items: center; gap: .3rem; }
+  .tl-sw { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  /* ── Stat boxes ──────────────── */
+  .stat-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .stat-box { flex: 1; min-width: 120px; background: #f9fafb; border-radius: 8px;
+    padding: .85rem 1rem; }
+  .stat-box .sv { font-size: 1.4rem; font-weight: 800; color: #1f2937; line-height: 1; }
+  .stat-box .sl { font-size: .7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; color: #9ca3af; margin-top: .2rem; }
+
+  /* ── Tables ──────────────────── */
+  table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  th { background: #f9fafb; font-weight: 700; font-size: .68rem; text-transform: uppercase;
+    letter-spacing: .05em; color: #9ca3af; padding: .45rem .65rem; text-align: left;
+    border-bottom: 1px solid #e5e7eb; }
+  td { padding: .5rem .65rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+
+  /* ── Badges ──────────────────── */
+  .badge { display: inline-block; padding: .15rem .55rem; border-radius: 999px;
+    font-size: .68rem; font-weight: 700; text-transform: uppercase; }
+  .badge-flood     { background: #dbeafe; color: #1d4ed8; }
+  .badge-storm     { background: #f3e8ff; color: #7e22ce; }
+  .badge-drought   { background: #fef3c7; color: #92400e; }
+  .badge-landslide { background: #dcfce7; color: #166534; }
+  .badge-heatwave  { background: #fee2e2; color: #991b1b; }
+  .badge-cyclone   { background: #e0f2fe; color: #0369a1; }
+  .badge-other     { background: #f3f4f6; color: #374151; }
+
+  .status-active { color: #dc2626; font-weight: 600; }
+  .status-ack    { color: #16a34a; }
+
+  .no-data { color: #9ca3af; font-style: italic; font-size: .875rem; }
+
+  /* ── Alert box ───────────────── */
+  .alert-warn {
+    background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px;
+    padding: .7rem 1rem; font-size: .82rem; color: #9a3412; margin-bottom: 1rem;
+  }
+
+  /* ── Forecast box ────────────── */
+  .fc-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: .75rem; }
+  .fc-box { background: #f9fafb; border-radius: 8px; padding: .75rem 1rem; }
+  .fc-box .fv { font-size: 1.1rem; font-weight: 700; color: #1f2937; }
+  .fc-box .fl { font-size: .68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; color: #9ca3af; margin-top: .15rem; }
+
+  /* ── Footer ──────────────────── */
+  .footer {
+    margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;
+    font-size: .75rem; color: #9ca3af; display: flex;
+    justify-content: space-between; flex-wrap: wrap; gap: .5rem;
+  }
+
+  /* ── Print ───────────────────── */
+  @media print {
+    .toolbar { display: none !important; }
+    .page { margin: 0; padding: 1cm 1.5cm 1.5cm; max-width: none; }
+    body { font-size: 12px; }
+    .bulletin-header h1 { font-size: 1.3rem; }
+    .spi-grid { break-inside: avoid; }
+    .section { break-inside: avoid; }
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Toolbar ─────────────────────────────────────────────────────────── -->
+<div class="toolbar">
+  <div>
+    <a href="/bulletin">← Edit options</a>
+    &nbsp;&nbsp;
+    <a href="/dashboard">Dashboard</a>
+  </div>
+  <button class="btn-print" onclick="window.print()">Print / Save PDF</button>
+</div>
+
+<div class="page">
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <div class="bulletin-header">
+    <div class="org">Index-Based Forecasting — Slow-onset Livelihood Monitoring (IBF-SLM)</div>
+    <h1>{{ bulletin_title }}</h1>
+    <div class="meta">
+      <span><strong>Issued:</strong> {{ now.strftime('%d %B %Y, %H:%M') }} UTC</span>
+      <span><strong>Data source:</strong> {{ source }}</span>
+      <span><strong>Reporting window:</strong> Last {{ days }} days</span>
+      <span><strong>Prepared by:</strong> {{ user.username }}</span>
+    </div>
+  </div>
+
+  <!-- ── Executive summary ──────────────────────────────────────────────── -->
+  <div class="exec-box">
+    <strong>Summary:</strong>
+    {{ drought_status }}
+    {{ impact_summary }}
+    {% if n_unacknowledged > 0 %}
+    {{ n_unacknowledged }} trigger alert{{ 's' if n_unacknowledged != 1 }} currently unacknowledged.
+    {% endif %}
+  </div>
+
+  <!-- ── SPI Drought Status ─────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">Drought Status — Standardised Precipitation Index (SPI)</div>
+    {% if spi_current %}
+    <div class="spi-grid">
+      {% for ts in [1, 3, 6] %}
+      {% if ts in spi_current %}
+      {% set s = spi_current[ts] %}
+      <div class="spi-card" style="background:{{ s.colour }};">
+        <div class="sc-scale">SPI-{{ ts }}</div>
+        <div class="sc-val">{{ '%+.2f' % s.spi }}</div>
+        <div class="sc-lbl">{{ s.label }}</div>
+        <div class="sc-meta">{{ s.month_name }} {{ s.year }}
+          {% if s.low_confidence %}· low confidence (n={{ s.n_reference }}){% endif %}
+        </div>
+      </div>
+      {% else %}
+      <div class="spi-card spi-none">
+        <div class="sc-scale">SPI-{{ ts }}</div>
+        <div class="sc-val" style="font-size:1.2rem;">—</div>
+        <div class="sc-lbl">No data</div>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="no-data">No SPI data available for source {{ source }}.</p>
+    {% endif %}
+  </div>
+
+  <!-- ── Seasonal Outlook ───────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">Seasonal Outlook</div>
+    {% if latest_seasonal %}
+    {% set sf = latest_seasonal %}
+    <table style="margin-bottom:.75rem;">
+      <tr>
+        <th>Source</th><th>Issued</th><th>Valid Period</th>
+        <th>Variable</th><th>Region</th>
+      </tr>
+      <tr>
+        <td><strong>{{ sf.source }}</strong></td>
+        <td>{{ sf.issue_date }}</td>
+        <td>{{ sf.valid_start.strftime('%b %Y') }} – {{ sf.valid_end.strftime('%b %Y') }}</td>
+        <td style="text-transform:capitalize;">{{ sf.variable }}</td>
+        <td>{{ sf.region_label or '—' }}</td>
+      </tr>
+    </table>
+    {% if sf.below_normal_pct is not none %}
+    <div class="tercile-bar">
+      <div class="tb-below" style="flex:{{ sf.below_normal_pct }}">{{ sf.below_normal_pct|int }}%</div>
+      <div class="tb-near"  style="flex:{{ sf.near_normal_pct }}">{{ sf.near_normal_pct|int }}%</div>
+      <div class="tb-above" style="flex:{{ sf.above_normal_pct }}">{{ sf.above_normal_pct|int }}%</div>
+    </div>
+    <div class="tercile-legend">
+      <div class="tl-item"><div class="tl-sw" style="background:#ef4444"></div> Below Normal</div>
+      <div class="tl-item"><div class="tl-sw" style="background:#9ca3af"></div> Near Normal</div>
+      <div class="tl-item"><div class="tl-sw" style="background:#22c55e"></div> Above Normal</div>
+    </div>
+    {% endif %}
+    {% if sf.precip_anomaly_pct is not none %}
+    <p style="margin-top:.6rem;font-size:.82rem;color:#374151;">
+      Precipitation anomaly: <strong>{{ sf.precip_anomaly_pct|int }}% of climatological normal</strong>
+    </p>
+    {% endif %}
+    {% if sf.notes %}
+    <p style="margin-top:.5rem;font-size:.78rem;color:#6b7280;">{{ sf.notes }}</p>
+    {% endif %}
+    <p style="font-size:.75rem;color:#9ca3af;margin-top:.5rem;">
+      <a href="/seasonal/{{ sf.id }}" style="color:#4f46e5;">View full detail →</a>
+    </p>
+    {% else %}
+    <p class="no-data">No seasonal outlook recorded. <a href="/seasonal/new" style="color:#4f46e5;">Add one</a>.</p>
+    {% endif %}
+  </div>
+
+  <!-- ── 15-Day Forecast ────────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">Latest 15-Day Precipitation Forecast</div>
+    {% if latest_forecast %}
+    {% set fc = latest_forecast %}
+    <div class="fc-grid">
+      <div class="fc-box">
+        <div class="fv">{{ '%.1f' % fc.precip_mean }} mm</div>
+        <div class="fl">Mean precip</div>
+      </div>
+      <div class="fc-box">
+        <div class="fv">{{ '%.1f' % fc.precip_max }} mm</div>
+        <div class="fl">Max precip</div>
+      </div>
+      <div class="fc-box">
+        <div class="fv">{{ '%.1f' % fc.precip_min }} mm</div>
+        <div class="fl">Min precip</div>
+      </div>
+      <div class="fc-box">
+        <div class="fv">{{ fc.source or '—' }}</div>
+        <div class="fl">Source</div>
+      </div>
+    </div>
+    <p style="font-size:.75rem;color:#9ca3af;margin-top:.6rem;">
+      Uploaded {{ fc.uploaded_at.strftime('%d %b %Y %H:%M') if fc.uploaded_at else '—' }} UTC
+      &nbsp;·&nbsp; <a href="/forecasts/{{ fc.id }}" style="color:#4f46e5;">View →</a>
+    </p>
+    {% if fc.is_anomaly %}
+    <div class="alert-warn" style="margin-top:.75rem;">
+      Anomaly detected — this forecast has an anomaly score of {{ '%.2f' % fc.anomaly_score }} (z-score vs recent baseline).
+    </div>
+    {% endif %}
+    {% else %}
+    <p class="no-data">No forecast data available.</p>
+    {% endif %}
+  </div>
+
+  <!-- ── Trigger Alerts ────────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">Trigger Alerts</div>
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="sv">{{ active_triggers | length }}</div>
+        <div class="sl">Active triggers</div>
+      </div>
+      <div class="stat-box">
+        <div class="sv">{{ activation_rows | length }}</div>
+        <div class="sl">Activations ({{ days }}d)</div>
+      </div>
+      <div class="stat-box">
+        <div class="sv {% if n_unacknowledged > 0 %}status-active{% endif %}">{{ n_unacknowledged }}</div>
+        <div class="sl">Unacknowledged</div>
+      </div>
+    </div>
+    {% if activation_rows %}
+    <table>
+      <thead>
+        <tr>
+          <th>Trigger</th><th>Hazard</th><th>Fired</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in activation_rows[:10] %}
+        <tr>
+          <td style="font-weight:600;">{{ row.trigger.name }}</td>
+          <td><span class="badge badge-{{ row.trigger.hazard_type }}">{{ row.trigger.hazard_type }}</span></td>
+          <td style="white-space:nowrap;color:#6b7280;">
+            {{ row.activation.triggered_at.strftime('%d %b %Y %H:%M') if row.activation.triggered_at else '—' }}
+          </td>
+          <td class="{{ 'status-active' if row.activation.status == 'active' else 'status-ack' }}">
+            {{ row.activation.status | capitalize }}
+          </td>
+        </tr>
+        {% endfor %}
+        {% if activation_rows | length > 10 %}
+        <tr><td colspan="4" style="color:#9ca3af;font-size:.78rem;">
+          + {{ (activation_rows | length) - 10 }} more — <a href="/triggers" style="color:#4f46e5;">view all</a>
+        </td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="no-data">No trigger activations in the reporting window.</p>
+    {% endif %}
+  </div>
+
+  <!-- ── Recent Impacts ─────────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">Recent Impact Records (last {{ days }} days)</div>
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="sv">{{ recent_impacts | length }}</div>
+        <div class="sl">Events</div>
+      </div>
+      <div class="stat-box">
+        <div class="sv">{{ '{:,}'.format(total_affected) }}</div>
+        <div class="sl">People affected</div>
+      </div>
+      <div class="stat-box">
+        <div class="sv">{{ '{:,}'.format(total_casualties) }}</div>
+        <div class="sl">Casualties</div>
+      </div>
+      <div class="stat-box">
+        <div class="sv">{{ '{:,}'.format(total_displaced) }}</div>
+        <div class="sl">Displaced</div>
+      </div>
+    </div>
+    {% if recent_impacts %}
+    <table>
+      <thead>
+        <tr>
+          <th>Event</th><th>Date</th><th>Hazard</th><th>Country</th>
+          <th style="text-align:right;">Affected</th><th style="text-align:right;">Casualties</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for imp in recent_impacts %}
+        <tr>
+          <td style="font-weight:600;">{{ imp.event_name }}</td>
+          <td style="white-space:nowrap;color:#6b7280;">{{ imp.event_date }}</td>
+          <td><span class="badge badge-{{ imp.hazard_type }}">{{ imp.hazard_type }}</span></td>
+          <td>{{ imp.country }}</td>
+          <td style="text-align:right;">
+            {{ '{:,}'.format(imp.affected_population) if imp.affected_population is not none else '—' }}
+          </td>
+          <td style="text-align:right;">{{ imp.casualties if imp.casualties is not none else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="no-data">No impacts recorded in the reporting window.</p>
+    {% endif %}
+  </div>
+
+  <!-- ── Data Coverage ──────────────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-title">Data Coverage</div>
+    <table>
+      <tr>
+        <th>Stream</th><th>Last Record</th><th>Status</th>
+      </tr>
+      <tr>
+        <td>CHIRPS Observed Rainfall</td>
+        <td>{{ last_obs.obs_date if last_obs else '—' }}</td>
+        <td>{% if last_obs %}✓ Available{% else %}<span style="color:#dc2626;">No data</span>{% endif %}</td>
+      </tr>
+      <tr>
+        <td>15-Day Forecast</td>
+        <td>{{ latest_forecast.uploaded_at.strftime('%d %b %Y') if latest_forecast and latest_forecast.uploaded_at else '—' }}</td>
+        <td>{% if latest_forecast %}✓ Available{% else %}<span style="color:#dc2626;">No data</span>{% endif %}</td>
+      </tr>
+      <tr>
+        <td>Seasonal Outlook</td>
+        <td>{{ latest_seasonal.issue_date if latest_seasonal else '—' }}</td>
+        <td>{% if latest_seasonal %}✓ Available{% else %}<span style="color:#f59e0b;">Not recorded</span>{% endif %}</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- ── Footer ─────────────────────────────────────────────────────────── -->
+  <div class="footer">
+    <span>IBF-SLM — Index-Based Forecasting / Slow-onset Livelihood Monitoring</span>
+    <span>Generated {{ now.strftime('%d %b %Y %H:%M') }} UTC by {{ user.username }}</span>
+  </div>
+
+</div>
+</body>
+</html>

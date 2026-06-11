@@ -13,6 +13,7 @@ from app.core.background import enqueue
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.spi import TIMESCALES, spi_category
+from app.models.seasonal import SeasonalForecast
 from app.models.spi import SPIRecord
 
 router = APIRouter(prefix="/drought")
@@ -51,6 +52,12 @@ async def drought_dashboard(
     )
     sources = [r[0] for r in sources_r.all()] or ["CHIRPS"]
 
+    # Latest seasonal forecast
+    sf_r = await db.execute(
+        select(SeasonalForecast).order_by(SeasonalForecast.issue_date.desc()).limit(1)
+    )
+    latest_seasonal = sf_r.scalar_one_or_none()
+
     if not records:
         return templates.TemplateResponse(
             request, "drought_dashboard.html",
@@ -68,6 +75,7 @@ async def drought_dashboard(
                 "baseline_info": None,
                 "heatmap_years": [],
                 "heatmap_json": "{}",
+                "latest_seasonal": latest_seasonal,
             },
         )
 
@@ -182,6 +190,7 @@ async def drought_dashboard(
             "drought_events": drought_events,
             "n_months": len(by_scale[1]),
             "baseline_info": baseline_info,
+            "latest_seasonal": latest_seasonal,
         },
     )
 

@@ -81,6 +81,8 @@
     <a href="/alerts">Alerts</a>
     <a href="/observed">Observed</a>
     <a href="/drought" class="active">Drought</a>
+    <a href="/seasonal">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
     <a href="/sync">Auto-Sync</a>
     <a href="/reports/operational">Report</a>
     <a href="/chat">AI Assistant</a>
@@ -155,6 +157,47 @@
     {% endif %}
     {% endfor %}
   </div>
+
+  <!-- Seasonal outlook -->
+  {% if latest_seasonal %}
+  {% set sf = latest_seasonal %}
+  <div class="card" style="padding:1.1rem 1.5rem;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+      <div>
+        <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#9ca3af;margin-bottom:.3rem;">
+          Latest Seasonal Outlook
+        </div>
+        <div style="font-weight:700;font-size:.95rem;color:#1f2937;">
+          {{ sf.source }}
+          <span style="font-size:.78rem;font-weight:400;color:#6b7280;margin-left:.5rem;">
+            Issued {{ sf.issue_date }} · Valid {{ sf.valid_start.strftime('%b %Y') }}–{{ sf.valid_end.strftime('%b %Y') }}
+            {% if sf.region_label %} · {{ sf.region_label }}{% endif %}
+          </span>
+        </div>
+        {% if sf.below_normal_pct is not none %}
+        <div style="margin-top:.65rem;">
+          <div style="display:flex;height:16px;border-radius:4px;overflow:hidden;gap:1px;min-width:200px;max-width:320px;">
+            <div style="flex:{{ sf.below_normal_pct }};background:#ef4444;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:#fff;">{{ sf.below_normal_pct|int }}%</div>
+            <div style="flex:{{ sf.near_normal_pct }};background:#9ca3af;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:#fff;">{{ sf.near_normal_pct|int }}%</div>
+            <div style="flex:{{ sf.above_normal_pct }};background:#22c55e;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:#fff;">{{ sf.above_normal_pct|int }}%</div>
+          </div>
+          <div style="display:flex;gap:.75rem;margin-top:.3rem;font-size:.72rem;color:#6b7280;">
+            <span>Below normal</span><span>Near normal</span><span>Above normal</span>
+          </div>
+        </div>
+        {% endif %}
+        {% if sf.precip_anomaly_pct is not none %}
+        <div style="margin-top:.4rem;font-size:.8rem;color:#374151;">
+          Precip anomaly: <strong>{{ sf.precip_anomaly_pct|int }}% of normal</strong>
+        </div>
+        {% endif %}
+      </div>
+      <a href="/seasonal/{{ sf.id }}" style="font-size:.8rem;color:#4f46e5;font-weight:600;white-space:nowrap;">
+        View detail →
+      </a>
+    </div>
+  </div>
+  {% endif %}
 
   <!-- SPI chart -->
   <div class="card">

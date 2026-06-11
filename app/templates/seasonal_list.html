@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}Seasonal Forecasts — IBF App{% endblock %}
+{% block extra_styles %}
+<style>
+  nav { background:#fff; border-bottom:1px solid #e5e7eb; padding:.85rem 2rem;
+        display:flex; align-items:center; justify-content:space-between; }
+  nav .brand { font-weight:700; font-size:1.1rem; color:#4f46e5; }
+  nav .nav-links { display:flex; align-items:center; gap:1.5rem; font-size:.875rem; }
+  nav .nav-links a { color:#6b7280; text-decoration:none; }
+  nav .nav-links a.active { color:#4f46e5; font-weight:600; }
+  nav .nav-links a.logout { color:#dc2626; font-weight:500; }
+
+  .main { max-width:1100px; margin:2rem auto; padding:0 1rem; }
+  .page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1.5rem; }
+  h1 { font-size:1.4rem; font-weight:700; }
+
+  .filter-bar { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap;
+    margin-bottom:1.25rem; background:#fff; border-radius:10px;
+    padding:1rem 1.25rem; box-shadow:0 1px 4px rgba(0,0,0,.07); }
+  .filter-bar select, .filter-bar input[type=text] {
+    padding:.45rem .75rem; border:1px solid #d1d5db; border-radius:7px;
+    font-size:.875rem; background:#fff; }
+  .btn-filter { background:#4f46e5; color:#fff; border:none; border-radius:7px;
+    padding:.45rem 1rem; font-size:.875rem; font-weight:600; cursor:pointer; }
+  .btn-filter:hover { opacity:.85; }
+  .btn-clear { font-size:.82rem; color:#6b7280; }
+  .result-count { font-size:.82rem; color:#9ca3af; margin-left:auto; }
+
+  .btn-new { background:#4f46e5; color:#fff; border-radius:8px; padding:.5rem 1.2rem;
+    font-size:.875rem; font-weight:600; text-decoration:none; }
+  .btn-new:hover { opacity:.85; }
+
+  table { width:100%; border-collapse:collapse; font-size:.875rem; }
+  th { text-align:left; padding:.6rem .75rem; font-size:.72rem; font-weight:700;
+    text-transform:uppercase; letter-spacing:.06em; color:#9ca3af; border-bottom:1px solid #e5e7eb; }
+  td { padding:.7rem .75rem; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:#f9fafb; }
+
+  .badge { display:inline-block; padding:.2rem .65rem; border-radius:999px;
+    font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+  .badge-precip { background:#dbeafe; color:#1d4ed8; }
+  .badge-temp   { background:#fee2e2; color:#991b1b; }
+
+  .tercile-bar { display:flex; height:10px; border-radius:4px; overflow:hidden;
+    min-width:90px; gap:1px; }
+  .tb-below { background:#ef4444; }
+  .tb-near  { background:#d1d5db; }
+  .tb-above { background:#22c55e; }
+
+  .empty { color:#9ca3af; font-size:.9rem; padding:2rem 0; text-align:center; }
+
+  .pagination { display:flex; align-items:center; gap:.35rem; margin-top:1.25rem; justify-content:center; }
+  .page-btn { display:inline-flex; align-items:center; justify-content:center; min-width:2rem; height:2rem;
+    padding:0 .6rem; border-radius:6px; font-size:.875rem; border:1px solid #e5e7eb;
+    background:#fff; color:#374151; text-decoration:none; }
+  .page-btn:hover { background:#f3f4f6; }
+  .page-btn.active { background:#4f46e5; color:#fff; border-color:#4f46e5; font-weight:600; pointer-events:none; }
+  .page-btn.disabled { color:#d1d5db; pointer-events:none; border-color:#f3f4f6; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/forecasts/drift">Drift</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/drought">Drought</a>
+    <a href="/seasonal" class="active">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <h1>Seasonal Forecasts</h1>
+    {% if user.role == "admin" %}
+    <a href="/seasonal/new" class="btn-new">+ New Outlook</a>
+    {% endif %}
+  </div>
+
+  <form method="get" action="/seasonal" class="filter-bar">
+    <select name="source">
+      <option value="">All sources</option>
+      {% for s in all_sources %}
+      <option value="{{ s }}" {% if source == s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <select name="variable">
+      <option value="">All variables</option>
+      <option value="precip" {% if variable == 'precip' %}selected{% endif %}>Precipitation</option>
+      <option value="temp"   {% if variable == 'temp'   %}selected{% endif %}>Temperature</option>
+    </select>
+    <input type="text" name="year" placeholder="Year (e.g. 2025)" value="{{ year }}" style="width:140px;">
+    <button type="submit" class="btn-filter">Filter</button>
+    {% if source or variable or year %}
+    <a href="/seasonal" class="btn-clear">✕ Clear</a>
+    {% endif %}
+    <span class="result-count">{{ total }} outlook{{ 's' if total != 1 }}</span>
+  </form>
+
+  <div class="card">
+    {% if rows %}
+    <table>
+      <thead>
+        <tr>
+          <th>Source</th>
+          <th>Variable</th>
+          <th>Issued</th>
+          <th>Valid Period</th>
+          <th>Region</th>
+          <th>Below / Near / Above</th>
+          <th>Anomaly %</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sf in rows %}
+        <tr>
+          <td style="font-weight:600;">{{ sf.source }}</td>
+          <td><span class="badge badge-{{ sf.variable }}">{{ sf.variable }}</span></td>
+          <td style="white-space:nowrap;">{{ sf.issue_date }}</td>
+          <td style="white-space:nowrap;color:#6b7280;">
+            {{ sf.valid_start.strftime('%b %Y') }} – {{ sf.valid_end.strftime('%b %Y') }}
+          </td>
+          <td>{{ sf.region_label or '—' }}</td>
+          <td>
+            {% if sf.below_normal_pct is not none %}
+            <div style="display:flex;align-items:center;gap:.5rem;">
+              <div class="tercile-bar">
+                <div class="tb-below" style="width:{{ sf.below_normal_pct }}%"></div>
+                <div class="tb-near"  style="width:{{ sf.near_normal_pct }}%"></div>
+                <div class="tb-above" style="width:{{ sf.above_normal_pct }}%"></div>
+              </div>
+              <span style="font-size:.75rem;color:#6b7280;">
+                {{ sf.below_normal_pct|int }}/ {{ sf.near_normal_pct|int }}/ {{ sf.above_normal_pct|int }}
+              </span>
+            </div>
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% if sf.precip_anomaly_pct is not none %}
+            {{ sf.precip_anomaly_pct|int }}%
+            {% else %}—{% endif %}
+          </td>
+          <td><a href="/seasonal/{{ sf.id }}" style="font-size:.8rem;">View</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">
+      No seasonal forecasts yet.
+      {% if user.role == "admin" %}<a href="/seasonal/new">Add the first one.</a>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  {% if pages > 1 %}
+  {% set base_url = "/seasonal?source=" ~ source ~ "&variable=" ~ variable ~ "&year=" ~ year %}
+  <div class="pagination">
+    {% if page > 1 %}
+      <a class="page-btn" href="{{ base_url }}&page={{ page - 1 }}">← Prev</a>
+    {% else %}
+      <span class="page-btn disabled">← Prev</span>
+    {% endif %}
+    {% for p in range(1, pages + 1) %}
+      {% if p == page %}
+        <span class="page-btn active">{{ p }}</span>
+      {% else %}
+        <a class="page-btn" href="{{ base_url }}&page={{ p }}">{{ p }}</a>
+      {% endif %}
+    {% endfor %}
+    {% if page < pages %}
+      <a class="page-btn" href="{{ base_url }}&page={{ page + 1 }}">Next →</a>
+    {% else %}
+      <span class="page-btn disabled">Next →</span>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
