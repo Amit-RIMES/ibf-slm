@@ -256,6 +256,22 @@
     </div>
   </div>
   {% endif %}
+
+  {% if perf_points_len > 0 %}
+  <div class="card">
+    <div class="section-title">Performance diagram — trigger skill</div>
+    <div style="font-size:.8rem;color:#6b7280;margin-bottom:.75rem;">
+      Axes: Success Ratio (SR = 1 − FAR) vs Probability of Detection (POD).
+      Ideal performance is the top-right corner. Iso-CSI curves shown for reference.
+    </div>
+    <div style="max-width:480px;margin:0 auto;">
+      <canvas id="perfChart" height="360"></canvas>
+    </div>
+    <div style="font-size:.75rem;color:#9ca3af;margin-top:.6rem;text-align:center;">
+      SR = hits / (hits + false alarms) &nbsp;|&nbsp; POD = hits / (hits + misses) &nbsp;|&nbsp; CSI contours at 0.1, 0.2, 0.3, 0.5
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
@@ -349,6 +365,84 @@
       }
     }
   });
+</script>
+{% endif %}
+
+{% if perf_points_len > 0 %}
+<script>
+(function() {
+  const PTS = {{ perf_points }};
+
+  // CSI iso-curves: POD = CSI*SR / (SR + CSI - CSI*SR)
+  function csiCurve(csi) {
+    const pts = [];
+    for (let sr = 0.01; sr <= 1.0; sr += 0.01) {
+      const pod = (csi * sr) / (sr + csi - csi * sr);
+      if (pod >= 0 && pod <= 1) pts.push({x: parseFloat(sr.toFixed(2)), y: parseFloat(pod.toFixed(3))});
+    }
+    return pts;
+  }
+
+  const CSI_LEVELS = [0.1, 0.2, 0.3, 0.5];
+  const CSI_COLORS = ['#d1d5db', '#9ca3af', '#6b7280', '#374151'];
+
+  const HAZARD_COLORS = {
+    flood: '#3b82f6', drought: '#f97316', storm: '#8b5cf6',
+    cyclone: '#ec4899', landslide: '#84cc16', heatwave: '#ef4444', other: '#6b7280'
+  };
+
+  const datasets = CSI_LEVELS.map((c, i) => ({
+    label: `CSI ${c}`,
+    data: csiCurve(c),
+    type: 'line',
+    borderColor: CSI_COLORS[i],
+    borderWidth: 1,
+    borderDash: [4, 4],
+    pointRadius: 0,
+    fill: false,
+    tension: 0,
+  }));
+
+  datasets.push({
+    label: 'Triggers',
+    data: PTS.map(p => ({x: p.sr, y: p.pod, name: p.name, csi: p.csi, hazard: p.hazard})),
+    type: 'scatter',
+    backgroundColor: PTS.map(p => HAZARD_COLORS[p.hazard] || '#6b7280'),
+    pointRadius: 7,
+    pointHoverRadius: 9,
+  });
+
+  new Chart(document.getElementById('perfChart'), {
+    type: 'scatter',
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          labels: { filter: item => item.datasetIndex === datasets.length - 1 || item.datasetIndex === 0
+                                    ? false : item.datasetIndex >= datasets.length - 1 ? false : true,
+                    generateLabels: chart => [{
+                      text: 'Triggers (colored by hazard)', fillStyle: '#6b7280', strokeStyle: '#6b7280', lineWidth: 0
+                    }]
+          }
+        },
+        tooltip: { callbacks: {
+          label: ctx => {
+            const raw = ctx.raw;
+            if (raw.name) return [`${raw.name}`, `SR: ${raw.x} · POD: ${raw.y} · CSI: ${raw.csi ?? '—'}`];
+            return `CSI ${ctx.dataset.label.split(' ')[1]}`;
+          }
+        }}
+      },
+      scales: {
+        x: { min: 0, max: 1, title: { display: true, text: 'Success Ratio (SR = 1 − FAR)', font: { size: 11 } },
+             grid: { color: '#f3f4f6' }, ticks: { stepSize: 0.25 } },
+        y: { min: 0, max: 1, title: { display: true, text: 'Probability of Detection (POD)', font: { size: 11 } },
+             grid: { color: '#f3f4f6' }, ticks: { stepSize: 0.25 } }
+      }
+    }
+  });
+})();
 </script>
 {% endif %}
 {% endblock %}

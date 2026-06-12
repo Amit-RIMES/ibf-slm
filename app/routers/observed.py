@@ -257,6 +257,22 @@ async def observed_verify(
             "n": n,
         })
 
+    # ── Performance diagram data (SR vs POD scatter) ─────────────────────────
+    perf_points = []
+    for c in contingency:
+        if c["pod"] is not None and c["far"] is not None:
+            sr = round(1 - c["far"], 3)
+            perf_points.append({
+                "name": c["trigger"].name,
+                "hazard": c["trigger"].hazard_type or "other",
+                "sr": sr,
+                "pod": c["pod"],
+                "csi": c["csi"],
+                "hits": c["hits"],
+                "far": c["far"],
+                "misses": c["misses"],
+            })
+
     return templates.TemplateResponse(
         request, "observed_verify.html",
         {
@@ -272,6 +288,8 @@ async def observed_verify(
             "obs_count": len(observations),
             "skill_trend": json.dumps(skill_trend),
             "skill_trend_len": len(skill_trend),
+            "perf_points": json.dumps(perf_points),
+            "perf_points_len": len(perf_points),
         },
     )
 

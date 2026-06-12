@@ -16,6 +16,7 @@ from app.core.risk import compute_risk_score
 from app.core.spi import TIMESCALES, spi_category
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
+from app.models.risk_history import RiskScoreRecord
 from app.models.seasonal import SeasonalForecast
 from app.models.spi import SPIRecord
 from app.models.trigger import Trigger, TriggerActivation
@@ -236,6 +237,21 @@ async def dashboard(
 
     risk = compute_risk_score(dash_spi_current, latest_seasonal_dash, len(active_activations))
 
+    dash_hist_r = await db.execute(
+        select(RiskScoreRecord)
+        .where(RiskScoreRecord.source == "CHIRPS")
+        .order_by(RiskScoreRecord.scored_at.desc())
+        .limit(14)
+    )
+    dash_hist = list(reversed(dash_hist_r.scalars().all()))
+    risk_sparkline = json.dumps([
+        {
+            "label": (r.scored_at if r.scored_at.tzinfo else r.scored_at.replace(tzinfo=timezone.utc)).strftime("%b %d"),
+            "total": r.total,
+        }
+        for r in dash_hist
+    ])
+
     return templates.TemplateResponse(
     request,
     "dashboard.html",
@@ -268,5 +284,6 @@ async def dashboard(
             "hazard_types": HAZARD_TYPES,
             "impacts_filtered": impacts_filtered,
             "risk": risk,
+            "risk_sparkline": risk_sparkline,
         },
 )

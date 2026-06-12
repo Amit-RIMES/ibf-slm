@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import calendar
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
     from app.models.seasonal import SeasonalForecast
+
+_MONTH_ABBR = [calendar.month_abbr[i] for i in range(1, 13)]
 
 
 def compute_risk_score(
@@ -82,3 +87,75 @@ def compute_risk_score(
         "worst_spi": worst_spi,
         "has_data": has_data,
     }
+
+
+async def compute_and_record_risk_score(db: "AsyncSession", source: str = "CHIRPS") -> dict:
+    """Query current state, compute risk score, persist one record per day, return score dict."""
+    from sqlalchemy import func, select
+    from app.core.spi import TIMESCALES, spi_category
+    from app.models.risk_history import RiskScoreRecord
+    from app.models.seasonal import SeasonalForecast
+    from app.models.spi import SPIRecord
+    from app.models.trigger import TriggerActivation
+
+    spi_r = await db.execute(
+        select(SPIRecord)
+        .where(SPIRecord.source == source)
+        .order_by(SPIRecord.year, SPIRecord.month, SPIRecord.timescale)
+    )
+    by_scale: dict[int, list] = {ts: [] for ts in TIMESCALES}
+    for rec in spi_r.scalars().all():
+        if rec.timescale in by_scale:
+            by_scale[rec.timescale].append(rec)
+
+    current_spi: dict = {}
+    for ts, recs in by_scale.items():
+        latest = next((r for r in reversed(recs) if r.spi_value is not None), None)
+        if latest:
+            label, colour = spi_category(latest.spi_value)
+            current_spi[ts] = {"spi": round(latest.spi_value, 2), "label": label, "colour": colour}
+
+    sf_r = await db.execute(
+        select(SeasonalForecast).order_by(SeasonalForecast.issue_date.desc()).limit(1)
+    )
+    latest_seasonal = sf_r.scalar_one_or_none()
+
+    n_active = await db.scalar(
+        select(func.count()).select_from(TriggerActivation)
+        .where(TriggerActivation.status == "active")
+    ) or 0
+
+    risk = compute_risk_score(current_spi, latest_seasonal, n_active)
+
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow_start = today_start + timedelta(days=1)
+
+    existing = await db.scalar(
+        select(RiskScoreRecord).where(
+            RiskScoreRecord.source == source,
+            RiskScoreRecord.scored_at >= today_start,
+            RiskScoreRecord.scored_at < tomorrow_start,
+        )
+    )
+    if existing:
+        existing.total = risk["total"]
+        existing.level = risk["level"]
+        existing.spi_pts = risk["spi_pts"]
+        existing.seasonal_pts = risk["seasonal_pts"]
+        existing.trigger_pts = risk["trigger_pts"]
+        existing.worst_spi = risk.get("worst_spi")
+        existing.scored_at = now
+    else:
+        db.add(RiskScoreRecord(
+            scored_at=now,
+            source=source,
+            total=risk["total"],
+            level=risk["level"],
+            spi_pts=risk["spi_pts"],
+            seasonal_pts=risk["seasonal_pts"],
+            trigger_pts=risk["trigger_pts"],
+            worst_spi=risk.get("worst_spi"),
+        ))
+    await db.commit()
+    return risk

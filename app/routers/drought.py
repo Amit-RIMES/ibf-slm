@@ -14,6 +14,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.risk import compute_risk_score
 from app.core.spi import TIMESCALES, spi_category
+from app.models.risk_history import RiskScoreRecord
 from app.models.seasonal import SeasonalForecast
 from app.models.spi import SPIRecord
 from app.models.trigger import TriggerActivation
@@ -66,6 +67,48 @@ async def drought_dashboard(
         .where(TriggerActivation.status == "active")
     )
 
+    risk_hist_r = await db.execute(
+        select(RiskScoreRecord)
+        .where(RiskScoreRecord.source == source)
+        .order_by(RiskScoreRecord.scored_at.desc())
+        .limit(30)
+    )
+    risk_hist_raw = list(reversed(risk_hist_r.scalars().all()))
+
+    def _build_history_json(records_asc):
+        return json.dumps([
+            {
+                "label": (r.scored_at if r.scored_at.tzinfo else r.scored_at.replace(tzinfo=timezone.utc)).strftime("%b %d"),
+                "total": r.total,
+                "level": r.level,
+                "level_color": (
+                    "#dc2626" if r.level == "Extreme" else
+                    "#f97316" if r.level == "High" else
+                    "#f59e0b" if r.level == "Moderate" else "#22c55e"
+                ),
+            }
+            for r in records_asc
+        ])
+
+    def _consecutive_days(records_desc, current_level):
+        count = 0
+        for r in records_desc:
+            if r.level == current_level:
+                count += 1
+            else:
+                break
+        return count
+
+    def _trend(records_desc):
+        if len(records_desc) < 3:
+            return "stable"
+        vals = [r.total for r in records_desc[:3]]
+        if vals[0] > vals[1] > vals[2]:
+            return "rising"
+        if vals[0] < vals[1] < vals[2]:
+            return "falling"
+        return "stable"
+
     if not records:
         return templates.TemplateResponse(
             request, "drought_dashboard.html",
@@ -85,6 +128,10 @@ async def drought_dashboard(
                 "heatmap_json": "{}",
                 "latest_seasonal": latest_seasonal,
                 "risk": compute_risk_score({}, latest_seasonal, n_active or 0),
+                "risk_history": _build_history_json(risk_hist_raw),
+                "risk_history_len": len(risk_hist_raw),
+                "risk_consecutive_days": _consecutive_days(list(reversed(risk_hist_raw)), "Low"),
+                "risk_trend": _trend(list(reversed(risk_hist_raw))),
             },
         )
 
@@ -183,6 +230,9 @@ async def drought_dashboard(
     else:
         baseline_info = None
 
+    risk = compute_risk_score(current, latest_seasonal, n_active or 0)
+    risk_hist_desc = list(reversed(risk_hist_raw))
+
     return templates.TemplateResponse(
         request, "drought_dashboard.html",
         {
@@ -200,7 +250,11 @@ async def drought_dashboard(
             "n_months": len(by_scale[1]),
             "baseline_info": baseline_info,
             "latest_seasonal": latest_seasonal,
-            "risk": compute_risk_score(current, latest_seasonal, n_active or 0),
+            "risk": risk,
+            "risk_history": _build_history_json(risk_hist_raw),
+            "risk_history_len": len(risk_hist_raw),
+            "risk_consecutive_days": _consecutive_days(risk_hist_desc, risk["level"]),
+            "risk_trend": _trend(risk_hist_desc),
         },
     )
 

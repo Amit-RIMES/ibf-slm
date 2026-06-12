@@ -229,9 +229,14 @@
         {% endfor %}
       </div>
     </div>
-    <a href="/drought" style="font-size:.8rem;color:#4f46e5;font-weight:600;white-space:nowrap;">
-      Full analysis →
-    </a>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:.5rem;">
+      <a href="/drought" style="font-size:.8rem;color:#4f46e5;font-weight:600;white-space:nowrap;">
+        Full analysis →
+      </a>
+      <div id="dashSparkWrap" style="width:120px;height:36px;display:none;">
+        <canvas id="dashSparkline" height="36"></canvas>
+      </div>
+    </div>
   </div>
 
   <!-- Filters -->
@@ -592,6 +597,28 @@
   const y2 = cy - len * Math.sin(angleRad);
   const n = document.getElementById('dash-needle');
   if (n) { n.setAttribute('x2', x2.toFixed(1)); n.setAttribute('y2', y2.toFixed(1)); }
+})();
+(function() {
+  const S = {{ risk_sparkline }};
+  if (!S.length) return;
+  const wrap = document.getElementById('dashSparkWrap');
+  const ctx = document.getElementById('dashSparkline');
+  if (!wrap || !ctx) return;
+  wrap.style.display = 'block';
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: S.map(d => d.label),
+      datasets: [{ data: S.map(d => d.total),
+        borderColor: '{{ risk.level_color }}', backgroundColor: '{{ risk.level_color }}33',
+        fill: true, tension: 0.3, pointRadius: 0, borderWidth: 1.5 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: { x: { display: false }, y: { display: false, min: 0, max: 100 } }
+    }
+  });
 })();
 </script>
 {% endblock %}

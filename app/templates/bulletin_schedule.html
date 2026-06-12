@@ -158,8 +158,12 @@
         </div>
       </div>
 
-      <div style="display:flex;align-items:center;gap:1rem;margin-top:1.25rem;">
+      <div style="display:flex;align-items:center;gap:1rem;margin-top:1.25rem;flex-wrap:wrap;">
         <button type="submit" class="btn btn-primary">Save schedule</button>
+        <a href="/bulletin/generate?source={{ cfg.source }}&days={{ cfg.days }}" target="_blank"
+           class="btn" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;">
+          Preview bulletin ↗
+        </a>
         {% if cfg.last_sent_at %}
         <span class="last-sent">Last sent: {{ cfg.last_sent_at.strftime('%Y-%m-%d %H:%M') }} UTC</span>
         {% endif %}

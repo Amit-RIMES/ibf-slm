@@ -248,6 +248,25 @@
     </div>
   </div>
 
+  {% if risk_history_len > 1 %}
+  <div class="card" style="padding:.9rem 1.25rem;">
+    <div style="display:flex;align-items:baseline;gap:.6rem;margin-bottom:.4rem;">
+      <span style="font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;">30-day risk trend</span>
+      {% if risk_consecutive_days > 1 %}
+      <span style="font-size:.75rem;color:{{ risk.level_color }};font-weight:600;">
+        {{ risk_consecutive_days }} consecutive days — {{ risk.level }}
+      </span>
+      {% endif %}
+      {% if risk_trend == "rising" %}
+      <span style="font-size:.8rem;color:#dc2626;" title="Rising">↑</span>
+      {% elif risk_trend == "falling" %}
+      <span style="font-size:.8rem;color:#22c55e;" title="Falling">↓</span>
+      {% endif %}
+    </div>
+    <canvas id="riskSparkline" height="52"></canvas>
+  </div>
+  {% endif %}
+
   {% if not current %}
   <div class="card">
     <p class="no-data" style="text-align:center;padding:2rem;">
@@ -564,7 +583,6 @@
 (function() {
   const score = {{ risk.total }};
   const cx = 100, cy = 110, needleLen = 68;
-  // Score 0 → angle 180° (left), score 100 → angle 0° (right), through top
   const angleDeg = 180 - score * 1.8;
   const angleRad = angleDeg * Math.PI / 180;
   const x2 = cx + needleLen * Math.cos(angleRad);
@@ -573,4 +591,41 @@
   if (needle) { needle.setAttribute('x2', x2.toFixed(1)); needle.setAttribute('y2', y2.toFixed(1)); }
 })();
 </script>
+{% if risk_history_len > 1 %}
+<script>
+(function() {
+  const H = {{ risk_history }};
+  const ctx = document.getElementById('riskSparkline');
+  if (!ctx || !H.length) return;
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: H.map(d => d.label),
+      datasets: [{
+        data: H.map(d => d.total),
+        borderColor: '{{ risk.level_color }}',
+        backgroundColor: '{{ risk.level_color }}22',
+        fill: true,
+        tension: 0.35,
+        pointRadius: H.length > 14 ? 0 : 3,
+        pointHoverRadius: 5,
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: {
+        label: ctx => `Risk: ${ctx.parsed.y} / 100`
+      }}},
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 }, maxTicksLimit: 8 } },
+        y: { min: 0, max: 100, grid: { color: '#f3f4f6' },
+             ticks: { font: { size: 10 }, stepSize: 25,
+                      callback: v => ['Low','Mod','High','Ext',''][v/25] || v } }
+      }
+    }
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

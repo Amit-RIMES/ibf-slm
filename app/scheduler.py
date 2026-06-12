@@ -229,8 +229,11 @@ async def _run_chirps_sync():
     if ingested:
         logger.info("CHIRPS sync: ingested %d new day(s): %s", len(ingested), ingested)
         from app.core.spi import recompute_and_evaluate
+        from app.core.risk import compute_and_record_risk_score
         async with AsyncSessionLocal() as db:
             await recompute_and_evaluate(db)
+        async with AsyncSessionLocal() as db:
+            await compute_and_record_risk_score(db, source="CHIRPS")
     else:
         logger.debug("CHIRPS sync: no new data")
 
