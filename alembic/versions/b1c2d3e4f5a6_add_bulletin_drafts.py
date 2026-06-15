@@ -1,6 +1,6 @@
 """add bulletin_drafts table
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: b1c2d3e4f5a6
 Revises: f5a6b7c8d9e0
 Create Date: 2026-06-15
 
@@ -8,7 +8,7 @@ Create Date: 2026-06-15
 from alembic import op
 import sqlalchemy as sa
 
-revision = "a1b2c3d4e5f6"
+revision = "b1c2d3e4f5a6"
 down_revision = "f5a6b7c8d9e0"
 branch_labels = None
 depends_on = None
