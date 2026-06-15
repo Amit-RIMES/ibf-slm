@@ -91,6 +91,7 @@
     <a href="/alerts">Alerts</a>
     <a href="/sync">Auto-Sync</a>
     <a href="/drought">Drought</a>
+    <a href="/risk">Risk</a>
     <a href="/reports/operational">Report</a>
     <a href="/seasonal">Seasonal</a>
     <a href="/bulletin">Bulletin</a>
@@ -120,6 +121,9 @@
       <a href="/triggers/activations/export.csv?trigger_id={{ trigger.id }}"
          style="padding:.45rem 1rem; border:1px solid #d1d5db; border-radius:8px;
                 font-size:.85rem; font-weight:600; color:#6b7280; text-decoration:none;">↓ CSV</a>
+      <a href="/triggers/{{ trigger.id }}/export.geojson"
+         style="padding:.45rem 1rem; border:1px solid #d1d5db; border-radius:8px;
+                font-size:.85rem; font-weight:600; color:#6b7280; text-decoration:none;">↓ GeoJSON</a>
       <a href="/triggers/{{ trigger.id }}/edit"
         style="display:inline-block; padding:.45rem 1rem; background:#4f46e5; color:#fff; border-radius:8px; font-size:.85rem; font-weight:600;">Edit</a>
       <form method="post" action="/triggers/{{ trigger.id }}/delete" style="display:inline;"

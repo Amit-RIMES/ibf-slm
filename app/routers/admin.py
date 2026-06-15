@@ -17,6 +17,7 @@ from app.models.api_key import APIKey
 from app.models.audit import AuditLog
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
+from app.models.job_run import JobRun
 from app.models.sync import SyncConfig, SyncLog
 from app.models.trigger import Trigger, TriggerActivation
 from app.models.user import User
@@ -507,6 +508,29 @@ async def admin_health(request: Request, db: AsyncSession = Depends(get_db)):
         ("api_keys",           active_keys),
     ]
 
+    # ── Job run history ───────────────────────────────────────────
+    recent_runs_r = await db.execute(
+        select(JobRun).order_by(desc(JobRun.started_at)).limit(60)
+    )
+    all_recent_runs = recent_runs_r.scalars().all()
+    job_history: dict[str, list] = {}
+    for run in all_recent_runs:
+        job_history.setdefault(run.job_name, [])
+        if len(job_history[run.job_name]) < 5:
+            job_history[run.job_name].append(run)
+    # Ensure consistent ordering
+    _JOB_ORDER = ["daily_sync", "chirps_sync", "alert_escalation",
+                  "weekly_digest", "data_gap_check", "bulletin_email"]
+    job_history_rows = [
+        (name, job_history.get(name, []))
+        for name in _JOB_ORDER
+        if name in job_history
+    ]
+    # Include any unexpected job names not in the list
+    for name in job_history:
+        if name not in _JOB_ORDER:
+            job_history_rows.append((name, job_history[name]))
+
     import json as _json
     sync_sources_count = 0
     if sync_cfg and sync_cfg.sources:
@@ -538,6 +562,8 @@ async def admin_health(request: Request, db: AsyncSession = Depends(get_db)):
             "sync_ok": sync_ok, "sync_skipped": sync_skipped, "sync_errors": sync_errors,
             "sync_sources_count": sync_sources_count,
             "app_base_url": settings.APP_BASE_URL,
+            # job history
+            "job_history_rows": job_history_rows,
             # smtp + sys
             "smtp": smtp,
             "sys_info": sys_info,

@@ -9,8 +9,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
 from app.core.csrf import _token_for, validate_csrf
 from app.core.database import Base, engine
-from app.models import forecast, impact, trigger, sync, reset_token, audit, api_key, webhook, activation_comment, observed_rainfall, spi, seasonal, bulletin_schedule, risk_history  # noqa: F401
-from app.routers import admin, alerts, api, auth, bulletin, chat, dashboard, drought, forecasts, impacts, observed, reports, seasonal as seasonal_router, triggers, totp
+from app.models import forecast, impact, trigger, sync, reset_token, audit, api_key, webhook, activation_comment, observed_rainfall, spi, seasonal, bulletin_schedule, risk_history, job_run  # noqa: F401
+from app.routers import admin, alerts, api, auth, bulletin, chat, dashboard, drought, forecasts, impacts, observed, reports, risk_overview as risk_overview_router, seasonal as seasonal_router, triggers, totp
 from app.routers import sync as sync_router
 from app.scheduler import apply_schedule, start_scheduler, stop_scheduler
 
@@ -129,6 +129,7 @@ app.include_router(drought.router)
 app.include_router(reports.router)
 app.include_router(seasonal_router.router)
 app.include_router(bulletin.router)
+app.include_router(risk_overview_router.router)
 
 
 @app.get("/")

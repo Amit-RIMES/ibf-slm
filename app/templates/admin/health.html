@@ -326,6 +326,52 @@
     </div>
   </div>
 
+  <!-- Scheduler job history -->
+  <div class="section">
+    <div class="section-header"><span class="section-title">Scheduler Jobs</span></div>
+    <div class="section-body">
+      {% if job_history_rows %}
+      <table style="width:100%;border-collapse:collapse;font-size:.82rem;">
+        <thead>
+          <tr style="border-bottom:2px solid #e5e7eb;">
+            <th style="text-align:left;padding:.4rem .6rem;color:#6b7280;font-weight:600;">Job</th>
+            <th style="text-align:left;padding:.4rem .6rem;color:#6b7280;font-weight:600;">Last run</th>
+            <th style="text-align:left;padding:.4rem .6rem;color:#6b7280;font-weight:600;">Status</th>
+            <th style="text-align:left;padding:.4rem .6rem;color:#6b7280;font-weight:600;">Detail</th>
+            <th style="text-align:left;padding:.4rem .6rem;color:#6b7280;font-weight:600;">History</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job_name, runs in job_history_rows %}
+          {% set last = runs[0] %}
+          <tr style="border-bottom:1px solid #f3f4f6;">
+            <td style="padding:.5rem .6rem;font-family:monospace;font-size:.78rem;color:#374151;">{{ job_name }}</td>
+            <td style="padding:.5rem .6rem;color:#6b7280;white-space:nowrap;">{{ last.started_at.strftime("%m-%d %H:%M") }}</td>
+            <td style="padding:.5rem .6rem;">
+              {% if last.status == "ok" %}<span class="badge badge-ok">ok</span>
+              {% elif last.status == "error" %}<span class="badge badge-error">error</span>
+              {% else %}<span class="badge badge-skipped">{{ last.status }}</span>
+              {% endif %}
+            </td>
+            <td style="padding:.5rem .6rem;color:#6b7280;font-size:.78rem;">{{ last.detail or "—" }}</td>
+            <td style="padding:.5rem .6rem;">
+              {% for run in runs %}
+                {% if run.status == "ok" %}<span title="{{ run.started_at.strftime('%Y-%m-%d %H:%M') }}" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#22c55e;margin-right:2px;"></span>
+                {% elif run.status == "error" %}<span title="{{ run.started_at.strftime('%Y-%m-%d %H:%M') }}: {{ run.detail }}" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444;margin-right:2px;"></span>
+                {% else %}<span title="{{ run.started_at.strftime('%Y-%m-%d %H:%M') }}: {{ run.detail }}" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#d1d5db;margin-right:2px;"></span>
+                {% endif %}
+              {% endfor %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p style="color:#9ca3af;font-size:.85rem;margin-top:.5rem;">No scheduler jobs have run yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
   <!-- Quick links -->
   <div class="section">
     <div class="section-header"><span class="section-title">Quick Links</span></div>

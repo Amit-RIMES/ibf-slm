@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+{% block title %}Risk Overview — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; text-decoration: none; }
+  nav .nav-links a.active { color: #4f46e5; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; }
+
+  .main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 1.5rem; }
+
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .risk-card {
+    background: #fff; border-radius: 14px;
+    box-shadow: 0 1px 6px rgba(0,0,0,.08);
+    padding: 1.25rem 1.4rem;
+    border-top: 4px solid var(--lc);
+  }
+
+  .card-source { font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: #9ca3af; margin-bottom: .6rem; }
+  .card-level { font-size: 1.05rem; font-weight: 700; color: var(--lc); }
+  .card-score { font-size: 2.4rem; font-weight: 800; line-height: 1; color: #111827; }
+  .card-score-label { font-size: .72rem; color: #9ca3af; }
+
+  .gauge-track { background: #f3f4f6; border-radius: 99px; height: 7px; margin: .75rem 0 .5rem; overflow: hidden; }
+  .gauge-fill { height: 100%; border-radius: 99px; background: var(--lc); transition: width .3s; }
+
+  .component-row { display: flex; justify-content: space-between;
+    font-size: .78rem; color: #6b7280; margin-bottom: .3rem; }
+  .component-row strong { color: #374151; }
+
+  .spark-wrap { height: 36px; margin-top: .75rem; }
+  .updated { font-size: .72rem; color: #9ca3af; margin-top: .6rem; }
+  .no-data-tag { font-size: .78rem; color: #9ca3af; font-style: italic; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/forecasts">Forecasts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/drought">Drought</a>
+    <a href="/risk" class="active">Risk</a>
+    <a href="/seasonal">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <span>{{ user.username }}</span>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/auth/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <h1>Multi-Source Risk Overview</h1>
+
+  {% if cards %}
+  <div class="cards-grid">
+    {% for card in cards %}
+    <div class="risk-card" style="--lc: {{ card.level_color }};">
+      <div class="card-source">{{ card.source }}</div>
+      {% if card.has_data %}
+      <div style="display:flex;align-items:baseline;gap:.5rem;">
+        <div class="card-score">{{ card.total }}</div>
+        <div>
+          <div class="card-level">{{ card.level }}</div>
+          <div class="card-score-label">/ 100 pts</div>
+        </div>
+      </div>
+
+      <div class="gauge-track">
+        <div class="gauge-fill" style="width:{{ card.total }}%;"></div>
+      </div>
+
+      <div class="component-row">
+        <span>SPI component</span><strong>{{ card.spi_pts }} pts</strong>
+      </div>
+      <div class="component-row">
+        <span>Seasonal forecast</span><strong>{{ card.seasonal_pts }} pts</strong>
+      </div>
+      <div class="component-row">
+        <span>Active triggers</span><strong>{{ card.trigger_pts }} pts</strong>
+      </div>
+      {% if card.worst_spi is not none %}
+      <div class="component-row">
+        <span>Worst SPI</span><strong>{{ "%.2f"|format(card.worst_spi) }}</strong>
+      </div>
+      {% endif %}
+
+      <div class="spark-wrap">
+        <canvas id="spark-{{ loop.index }}" height="36"></canvas>
+      </div>
+
+      <div class="updated">Updated {{ card.last_updated }}</div>
+
+      {% else %}
+      <div class="no-data-tag">No risk history recorded yet</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p style="color:#9ca3af;">No data sources found. Ingest CHIRPS data or run a forecast import to generate risk scores.</p>
+  {% endif %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+{% for card in cards %}
+{% if card.has_data %}
+(function() {
+  var data = {{ card.sparkline_json }};
+  if (data.length < 2) return;
+  var ctx = document.getElementById('spark-{{ loop.index }}');
+  if (!ctx) return;
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: data.map(function(d){ return d.label; }),
+      datasets: [{
+        data: data.map(function(d){ return d.total; }),
+        borderColor: '{{ card.level_color }}',
+        borderWidth: 2,
+        pointRadius: 0,
+        fill: false,
+        tension: 0.3,
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: { x: { display: false }, y: { display: false, min: 0, max: 100 } },
+      animation: false,
+    }
+  });
+})();
+{% endif %}
+{% endfor %}
+</script>
+{% endblock body %}

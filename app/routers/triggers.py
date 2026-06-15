@@ -798,6 +798,20 @@ async def trigger_backtest(
             })
         sweep_json = json.dumps(sweep)
 
+    # Threshold recommendation — pick the sweep point with highest CSI (if better than current)
+    recommended_threshold = None
+    recommended_csi = None
+    if sweep_json != "[]":
+        import json as _json
+        _sweep = _json.loads(sweep_json)
+        _current_csi = next((s["csi"] for s in _sweep if s["is_current"]), None) or 0
+        _candidates = [s for s in _sweep if not s["is_current"] and s["csi"] is not None]
+        if _candidates:
+            _best = max(_candidates, key=lambda s: s["csi"])
+            if _best["csi"] > _current_csi:
+                recommended_threshold = _best["threshold"]
+                recommended_csi = _best["csi"]
+
     # Current threshold detailed stats
     current = compute_stats(trigger.threshold)
 
@@ -831,8 +845,87 @@ async def trigger_backtest(
             "roc_json": roc_json,
             "brier_score": brier_score,
             "reliability_json": reliability_json,
+            "recommended_threshold": recommended_threshold,
+            "recommended_csi": recommended_csi,
         },
 )
+
+
+@router.post("/{trigger_id}/apply-threshold", response_class=HTMLResponse)
+async def trigger_apply_threshold(
+    trigger_id: int,
+    request: Request,
+    threshold: float = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user or user.role != "admin":
+        return RedirectResponse("/login", status_code=303)
+
+    result = await db.execute(select(Trigger).where(Trigger.id == trigger_id))
+    trigger = result.scalar_one_or_none()
+    if trigger:
+        old = trigger.threshold
+        trigger.threshold = threshold
+        await db.commit()
+        await log_action(db, user.id, "trigger.update",
+                         f"Applied recommended threshold {threshold} (was {old}) for trigger '{trigger.name}'")
+    return RedirectResponse(f"/triggers/{trigger_id}/backtest", status_code=303)
+
+
+@router.get("/{trigger_id}/export.geojson")
+async def trigger_export_geojson(
+    trigger_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    from fastapi.responses import JSONResponse
+    import json as _json
+
+    user = await get_current_user(request, db)
+    if not user:
+        return JSONResponse({"error": "unauthenticated"}, status_code=401)
+
+    result = await db.execute(select(Trigger).where(Trigger.id == trigger_id))
+    trigger = result.scalar_one_or_none()
+    if not trigger:
+        return JSONResponse({"error": "not found"}, status_code=404)
+
+    if trigger.scope_polygon:
+        try:
+            ring = _json.loads(trigger.scope_polygon)
+            geometry = {"type": "Polygon", "coordinates": [ring]}
+        except Exception:
+            geometry = None
+    elif trigger.scope_lat_min is not None and trigger.scope_lon_min is not None:
+        lon1, lat1 = trigger.scope_lon_min, trigger.scope_lat_min
+        lon2, lat2 = trigger.scope_lon_max, trigger.scope_lat_max
+        geometry = {
+            "type": "Polygon",
+            "coordinates": [[
+                [lon1, lat1], [lon2, lat1], [lon2, lat2], [lon1, lat2], [lon1, lat1],
+            ]],
+        }
+    else:
+        geometry = None
+
+    feature = {
+        "type": "Feature",
+        "geometry": geometry,
+        "properties": {
+            "id": trigger.id,
+            "name": trigger.name,
+            "hazard_type": trigger.hazard_type,
+            "variable": trigger.variable,
+            "operator": trigger.operator,
+            "threshold": trigger.threshold,
+            "is_active": trigger.is_active,
+        },
+    }
+    return JSONResponse(
+        feature,
+        headers={"Content-Disposition": f'attachment; filename="trigger-{trigger_id}.geojson"'},
+    )
 
 
 @router.get("/{trigger_id}", response_class=HTMLResponse)
