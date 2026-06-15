@@ -4,12 +4,17 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.trigger import Trigger, TriggerActivation
+
+_HAZARD_COLORS = {
+    "flood": "#3b82f6", "storm": "#8b5cf6", "drought": "#f59e0b",
+    "landslide": "#10b981", "heatwave": "#ef4444", "cyclone": "#0ea5e9", "other": "#6b7280",
+}
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -128,6 +133,125 @@ async def alert_map(
             "heatmap_json": json.dumps(heatmap_points),
             "heatmap_total": heatmap_total,
             "heatmap_days": heatmap_days,
+        },
+    )
+
+
+@router.get("/alerts/timeline", response_class=HTMLResponse)
+async def alert_timeline(
+    request: Request,
+    days: int = 90,
+    hazard: str = "",
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    days = max(7, min(365, days))
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(days=days)
+    window_span = (now - window_start).total_seconds()
+
+    stmt = (
+        select(TriggerActivation)
+        .join(Trigger, TriggerActivation.trigger_id == Trigger.id)
+        .where(TriggerActivation.triggered_at >= window_start)
+        .order_by(TriggerActivation.triggered_at)
+    )
+    if hazard:
+        stmt = stmt.where(Trigger.hazard_type == hazard)
+
+    all_acts = (await db.execute(stmt)).scalars().all()
+
+    # Group by trigger, build bar data
+    by_trigger: dict[int, dict] = {}
+    for act in all_acts:
+        tid = act.trigger_id
+        if tid not in by_trigger:
+            t = act.trigger
+            by_trigger[tid] = {
+                "trigger_id": tid,
+                "name": t.name,
+                "hazard_type": t.hazard_type or "other",
+                "color": _HAZARD_COLORS.get(t.hazard_type or "other", "#6b7280"),
+                "bars": [],
+            }
+
+        at = act.triggered_at
+        if at.tzinfo is None:
+            at = at.replace(tzinfo=timezone.utc)
+
+        ack = act.acknowledged_at
+        if ack and ack.tzinfo is None:
+            ack = ack.replace(tzinfo=timezone.utc)
+        bar_end = min(ack if ack else now, now)
+        bar_start = max(at, window_start)
+
+        if bar_start >= now or bar_end <= window_start:
+            continue
+
+        left_pct = (bar_start - window_start).total_seconds() / window_span * 100
+        width_pct = max((bar_end - bar_start).total_seconds() / window_span * 100, 0.4)
+
+        if ack:
+            dur_h = round((ack - at).total_seconds() / 3600, 1)
+            end_label = ack.strftime("%b %d %H:%M")
+        else:
+            dur_h = None
+            end_label = "ongoing"
+
+        by_trigger[tid]["bars"].append({
+            "id": act.id,
+            "left_pct": round(left_pct, 2),
+            "width_pct": round(width_pct, 2),
+            "status": act.status,
+            "value": round(act.value, 2),
+            "start_label": at.strftime("%b %d %H:%M"),
+            "end_label": end_label,
+            "duration_h": dur_h,
+        })
+
+    rows = list(by_trigger.values())
+    # Sort: most recent activity first
+    rows.sort(
+        key=lambda r: max((b["left_pct"] + b["width_pct"] for b in r["bars"]), default=0),
+        reverse=True,
+    )
+
+    # Date ticks (aim for ~6 evenly spaced)
+    tick_every = max(1, days // 6)
+    ticks = []
+    tick_dt = window_start.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    while tick_dt <= now:
+        pct = (tick_dt - window_start).total_seconds() / window_span * 100
+        if 0 <= pct <= 100:
+            ticks.append({"label": tick_dt.strftime("%b %d"), "pct": round(pct, 2)})
+        tick_dt += timedelta(days=tick_every)
+
+    # Unique hazard types for filter dropdown
+    hazard_types_r = await db.execute(
+        select(Trigger.hazard_type).distinct().where(Trigger.hazard_type.isnot(None))
+    )
+    hazard_types = sorted(r[0] for r in hazard_types_r.all())
+
+    timeline_json = json.dumps({
+        "rows": rows,
+        "ticks": ticks,
+        "today_pct": 100.0,
+    })
+
+    return templates.TemplateResponse(
+        request,
+        "alert_timeline.html",
+        {
+            "user": user,
+            "timeline_json": timeline_json,
+            "days": days,
+            "hazard": hazard,
+            "hazard_types": hazard_types,
+            "total_activations": len(all_acts),
+            "total_triggers": len(rows),
         },
     )
 

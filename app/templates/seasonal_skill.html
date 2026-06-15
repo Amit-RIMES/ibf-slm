@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}Forecast Skill Scores — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; text-decoration: none; }
+  nav .nav-links a.active { color: #4f46e5; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; }
+
+  /* Sub-nav */
+  .sub-nav { display: flex; gap: .75rem; margin-bottom: 1.5rem; }
+  .sub-nav a { font-size: .875rem; color: #6b7280; padding: .3rem .85rem;
+    border-radius: 6px; border: 1px solid #e5e7eb; text-decoration: none; }
+  .sub-nav a:hover { background: #f9fafb; }
+  .sub-nav a.active { background: #eff6ff; color: #4f46e5; border-color: #bfdbfe; font-weight: 600; }
+
+  /* Filter bar */
+  .filter-bar { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+    margin-bottom: 1.25rem; }
+  .filter-bar select { padding: .4rem .75rem; border: 1px solid #d1d5db;
+    border-radius: 7px; font-size: .875rem; background: #fff; }
+  .btn-filter { background: #4f46e5; color: #fff; border: none; border-radius: 7px;
+    padding: .4rem 1rem; font-size: .875rem; font-weight: 600; cursor: pointer; }
+  .btn-filter:hover { opacity: .85; }
+  .btn-clear { font-size: .82rem; color: #6b7280; }
+
+  /* Summary chips */
+  .stats-bar { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .stat-chip { background: #fff; border-radius: 10px; padding: .75rem 1.1rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07); min-width: 120px; }
+  .stat-chip .val { font-size: 1.4rem; font-weight: 800; color: #111; line-height: 1; }
+  .stat-chip .lbl { font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; color: #9ca3af; margin-top: .2rem; }
+
+  /* Source cards */
+  .source-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem; margin-bottom: 1.75rem; }
+  .source-card { background: #fff; border-radius: 12px; padding: 1rem 1.2rem;
+    box-shadow: 0 1px 5px rgba(0,0,0,.07); border-top: 3px solid var(--sc); }
+  .sc-name { font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: #9ca3af; margin-bottom: .4rem; }
+  .sc-rpss { font-size: 1.6rem; font-weight: 800; color: var(--sc); line-height: 1; }
+  .sc-label { font-size: .75rem; font-weight: 700; color: var(--sc); }
+  .sc-sub { font-size: .78rem; color: #6b7280; margin-top: .35rem; }
+
+  /* RPSS gauge bar */
+  .rpss-bar { margin-top: .6rem; height: 5px; border-radius: 99px; background: #f3f4f6; overflow: hidden; }
+  .rpss-fill { height: 100%; border-radius: 99px; background: var(--sc); }
+
+  /* Explanation box */
+  .info-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+    padding: .9rem 1.1rem; font-size: .82rem; color: #64748b; margin-bottom: 1.5rem;
+    line-height: 1.6; }
+  .info-box strong { color: #334155; }
+
+  /* Detail table */
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  th { text-align: left; padding: .6rem .75rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; border-bottom: 1px solid #e5e7eb; }
+  td { padding: .65rem .75rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f9fafb; }
+
+  .tercile-bar { display: flex; height: 9px; border-radius: 3px; overflow: hidden;
+    min-width: 90px; gap: 1px; }
+  .tb-below { background: #ef4444; }
+  .tb-near  { background: #d1d5db; }
+  .tb-above { background: #22c55e; }
+
+  .obs-badge { display: inline-block; padding: .18rem .55rem; border-radius: 999px;
+    font-size: .7rem; font-weight: 700; }
+  .obs-0 { background: #fee2e2; color: #b91c1c; }
+  .obs-1 { background: #f3f4f6; color: #374151; }
+  .obs-2 { background: #dcfce7; color: #15803d; }
+
+  .rpss-val { font-variant-numeric: tabular-nums; font-weight: 700; }
+  .rpss-pos { color: #16a34a; }
+  .rpss-neg { color: #dc2626; }
+  .hit-icon { font-size: .95rem; }
+
+  .empty { color: #9ca3af; font-size: .9rem; padding: 3rem 0; text-align: center; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/forecasts/drift">Drift</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/drought">Drought</a>
+    <a href="/risk">Risk</a>
+    <a href="/seasonal" class="active">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <h1>Forecast Skill Scores</h1>
+  </div>
+
+  <div class="sub-nav">
+    <a href="/seasonal">Forecasts</a>
+    <a href="/seasonal/skill" class="active">Skill Scores</a>
+  </div>
+
+  <form method="get" action="/seasonal/skill" class="filter-bar">
+    <select name="source">
+      <option value="">All sources</option>
+      {% for s in available_sources %}
+      <option value="{{ s }}" {% if source == s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn-filter">Filter</button>
+    {% if source %}<a href="/seasonal/skill" class="btn-clear">✕ Clear</a>{% endif %}
+  </form>
+
+  <div class="info-box">
+    <strong>Ranked Probability Skill Score (RPSS)</strong> measures how much better a forecast is than
+    climatology (equal probability across terciles). <strong>RPSS &gt; 0</strong> = skillful;
+    <strong>RPSS = 1</strong> = perfect. RPS is computed per forecast from the cumulative probability
+    difference between forecast and observed outcome. Reference: RPS<sub>clim</sub> = 2/9 ≈ 0.222.
+    <strong>Hit rate</strong> = fraction of forecasts where the highest-probability tercile matched the observed outcome.
+  </div>
+
+  {% if n_total %}
+  <div class="stats-bar">
+    <div class="stat-chip">
+      <div class="val">{{ n_total }}</div>
+      <div class="lbl">Forecasts scored</div>
+    </div>
+    <div class="stat-chip">
+      <div class="val" style="color:{% if mean_rpss > 0 %}#16a34a{% else %}#dc2626{% endif %};">
+        {{ mean_rpss }}
+      </div>
+      <div class="lbl">Mean RPSS</div>
+    </div>
+    <div class="stat-chip">
+      <div class="val">{{ hit_rate }}%</div>
+      <div class="lbl">Hit rate</div>
+    </div>
+  </div>
+
+  {% if source_stats %}
+  <div class="source-cards">
+    {% for sc in source_stats %}
+    <div class="source-card" style="--sc: {{ sc.skill_color }};">
+      <div class="sc-name">{{ sc.source }}</div>
+      <div class="sc-rpss">{{ sc.mean_rpss }}</div>
+      <div class="sc-label">{{ sc.skill_label }}</div>
+      <div class="rpss-bar">
+        <div class="rpss-fill" style="width:{{ [[sc.mean_rpss * 100, 0]|max, 100]|min }}%;"></div>
+      </div>
+      <div class="sc-sub">
+        {{ sc.n }} forecast{{ 's' if sc.n != 1 }} · {{ sc.hit_rate }}% hit rate
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="card" style="padding: 0; overflow: hidden;">
+    <table>
+      <thead>
+        <tr>
+          <th>Source</th>
+          <th>Valid period</th>
+          <th>Region</th>
+          <th>Forecast (B/N/A %)</th>
+          <th>Observed</th>
+          <th>Tercile bounds</th>
+          <th>RPS</th>
+          <th>RPSS</th>
+          <th>Hit</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td style="font-weight:600;color:#111;">
+            <a href="/seasonal/{{ r.id }}" style="color:#4f46e5;text-decoration:none;">{{ r.source }}</a>
+          </td>
+          <td style="font-size:.82rem;color:#6b7280;">
+            {{ r.valid_start }}–{{ r.valid_end }}
+          </td>
+          <td style="font-size:.82rem;color:#6b7280;">{{ r.region }}</td>
+          <td>
+            <div class="tercile-bar">
+              <div class="tb-below" style="width:{{ r.below_pct }}%;"></div>
+              <div class="tb-near" style="width:{{ r.near_pct }}%;"></div>
+              <div class="tb-above" style="width:{{ r.above_pct }}%;"></div>
+            </div>
+            <div style="font-size:.72rem;color:#9ca3af;margin-top:.2rem;">
+              {{ r.below_pct }}/{{ r.near_pct }}/{{ r.above_pct }}
+            </div>
+          </td>
+          <td>
+            <span class="obs-badge obs-{{ r.obs_cat_idx }}">{{ r.obs_cat }}</span>
+            <div style="font-size:.72rem;color:#9ca3af;margin-top:.2rem;">
+              {{ r.obs_precip }} mm/day
+            </div>
+          </td>
+          <td style="font-size:.78rem;color:#9ca3af;">
+            &lt;{{ r.p33 }} / {{ r.p67 }}+
+          </td>
+          <td class="rpss-val" style="font-size:.82rem;">{{ r.rps }}</td>
+          <td>
+            <span class="rpss-val {% if r.rpss > 0 %}rpss-pos{% else %}rpss-neg{% endif %}">
+              {{ r.rpss }}
+            </span>
+          </td>
+          <td class="hit-icon">
+            {% if r.hit %}✓{% else %}✗{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% else %}
+  <div class="card">
+    <div class="empty">
+      No completed forecasts with tercile probabilities found{% if source %} for {{ source }}{% endif %}.
+      Forecasts need <strong>valid_end ≤ today</strong> and tercile probabilities to be scored.
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

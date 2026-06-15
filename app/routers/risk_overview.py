@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -13,6 +13,21 @@ from app.models.impact import ImpactRecord
 from app.models.risk_history import RiskScoreRecord
 from app.models.spi import SPIRecord
 from app.models.trigger import Trigger, TriggerActivation
+
+# Approximate centroids for common impact-reporting countries in RIMES region
+_COUNTRY_CENTROIDS = {
+    "Afghanistan": [33.9, 67.7], "Bangladesh": [23.7, 90.4], "Bhutan": [27.5, 90.4],
+    "Cambodia": [12.6, 104.9], "DR Congo": [-2.9, 23.7], "Fiji": [-17.7, 178.1],
+    "India": [22.0, 79.0], "Indonesia": [-2.5, 118.0], "Kenya": [0.0, 38.0],
+    "Laos": [18.2, 103.8], "Madagascar": [-20.0, 47.0], "Malaysia": [3.9, 109.7],
+    "Maldives": [3.2, 73.2], "Mongolia": [46.9, 103.8], "Mozambique": [-18.7, 35.5],
+    "Myanmar": [19.2, 96.1], "Nepal": [28.4, 84.1], "Pakistan": [30.4, 69.3],
+    "Papua New Guinea": [-6.3, 143.9], "Philippines": [12.9, 121.8],
+    "Samoa": [-13.6, -172.5], "Sri Lanka": [7.9, 80.8], "Tanzania": [-6.4, 35.0],
+    "Thailand": [15.9, 100.9], "Timor-Leste": [-8.9, 125.7], "Tonga": [-20.0, -175.2],
+    "Vietnam": [16.2, 107.8], "Yemen": [15.6, 48.5], "Zambia": [-13.1, 27.8],
+    "Zimbabwe": [-19.0, 29.8],
+}
 
 router = APIRouter(prefix="/risk")
 templates = Jinja2Templates(directory="app/templates")
@@ -194,5 +209,121 @@ async def risk_map(request: Request, db: AsyncSession = Depends(get_db)):
             "hazard_stats": hazard_stats,
             "total_triggers": len(all_triggers),
             "active_alert_count": len(active_trigger_ids),
+        },
+    )
+
+
+@router.get("/country", response_class=HTMLResponse)
+async def risk_country(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
+    # Aggregate impact stats per country
+    agg_rows = (await db.execute(
+        select(
+            ImpactRecord.country,
+            func.count().label("events"),
+            func.sum(ImpactRecord.affected_population).label("affected"),
+            func.sum(ImpactRecord.casualties).label("casualties"),
+            func.sum(ImpactRecord.displaced).label("displaced"),
+            func.sum(ImpactRecord.damage_usd).label("damage_usd"),
+            func.max(ImpactRecord.event_date).label("latest_date"),
+        )
+        .where(ImpactRecord.country.isnot(None))
+        .group_by(ImpactRecord.country)
+        .order_by(func.count().desc())
+    )).all()
+
+    # Most common hazard per country
+    hazard_rows = (await db.execute(
+        select(ImpactRecord.country, ImpactRecord.hazard_type, func.count().label("cnt"))
+        .where(ImpactRecord.country.isnot(None))
+        .group_by(ImpactRecord.country, ImpactRecord.hazard_type)
+        .order_by(ImpactRecord.country, func.count().desc())
+    )).all()
+    top_hazard: dict[str, str] = {}
+    for r in hazard_rows:
+        if r.country not in top_hazard:
+            top_hazard[r.country] = r.hazard_type or "other"
+
+    # Active trigger alert count per country via linked impacts
+    active_impact_rows = (await db.execute(
+        select(ImpactRecord.country, func.count().label("cnt"))
+        .join(TriggerActivation, ImpactRecord.trigger_activation_id == TriggerActivation.id)
+        .where(TriggerActivation.status == "active")
+        .where(ImpactRecord.country.isnot(None))
+        .group_by(ImpactRecord.country)
+    )).all()
+    active_by_country = {r.country: r.cnt for r in active_impact_rows}
+
+    HAZARD_COLORS = {
+        "flood": "#3b82f6", "storm": "#8b5cf6", "drought": "#f59e0b",
+        "landslide": "#10b981", "heatwave": "#ef4444", "cyclone": "#0ea5e9", "other": "#6b7280",
+    }
+
+    countries = []
+    map_points = []
+    for r in agg_rows:
+        cc = r.country
+        hz = top_hazard.get(cc, "other")
+        country = {
+            "name": cc,
+            "events": r.events,
+            "affected": int(r.affected or 0),
+            "casualties": int(r.casualties or 0),
+            "displaced": int(r.displaced or 0),
+            "damage_usd": float(r.damage_usd or 0),
+            "latest_date": r.latest_date.strftime("%b %d, %Y") if r.latest_date else "—",
+            "top_hazard": hz,
+            "color": HAZARD_COLORS.get(hz, "#6b7280"),
+            "active_alerts": active_by_country.get(cc, 0),
+        }
+        countries.append(country)
+        centroid = _COUNTRY_CENTROIDS.get(cc)
+        if centroid:
+            map_points.append({
+                "lat": centroid[0], "lon": centroid[1],
+                "name": cc, "events": r.events,
+                "affected": int(r.affected or 0),
+                "color": HAZARD_COLORS.get(hz, "#6b7280"),
+                "active_alerts": active_by_country.get(cc, 0),
+            })
+
+    # Also add impact points from ImpactRecord.lat/lon for records with coordinates
+    coord_impacts = (await db.execute(
+        select(ImpactRecord.lat, ImpactRecord.lon, ImpactRecord.country,
+               ImpactRecord.hazard_type, ImpactRecord.affected_population)
+        .where(ImpactRecord.lat.isnot(None))
+        .where(ImpactRecord.lon.isnot(None))
+        .order_by(desc(ImpactRecord.event_date))
+        .limit(500)
+    )).all()
+
+    impact_points = [
+        {
+            "lat": r.lat, "lon": r.lon,
+            "country": r.country or "",
+            "hazard_type": r.hazard_type or "other",
+            "affected": r.affected_population or 0,
+            "color": HAZARD_COLORS.get(r.hazard_type or "other", "#6b7280"),
+        }
+        for r in coord_impacts
+    ]
+
+    total_affected = sum(c["affected"] for c in countries)
+    total_events = sum(c["events"] for c in countries)
+
+    return templates.TemplateResponse(
+        request,
+        "risk_country.html",
+        {
+            "user": user,
+            "countries": countries,
+            "map_points_json": json.dumps(map_points),
+            "impact_points_json": json.dumps(impact_points),
+            "total_events": total_events,
+            "total_affected": total_affected,
+            "total_countries": len(countries),
         },
     )

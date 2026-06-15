@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+{% block title %}Activation Timeline — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; text-decoration: none; }
+  nav .nav-links a.active { color: #ef4444; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; }
+
+  .toolbar { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;
+    margin-bottom: 1.25rem; }
+  .toolbar form { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+  .toolbar select, .toolbar input { padding: .4rem .75rem; border: 1px solid #d1d5db;
+    border-radius: 7px; font-size: .875rem; background: #fff; }
+  .toolbar button { background: #4f46e5; color: #fff; border: none; border-radius: 7px;
+    padding: .4rem 1rem; font-size: .875rem; font-weight: 600; cursor: pointer; }
+  .toolbar button:hover { opacity: .85; }
+  .toolbar a.back { font-size: .875rem; color: #6b7280; border: 1px solid #e5e7eb;
+    border-radius: 7px; padding: .4rem .85rem; text-decoration: none; }
+
+  .summary-pill { font-size: .82rem; color: #6b7280; padding: .35rem .85rem;
+    background: #f3f4f6; border-radius: 999px; }
+
+  /* ── Timeline ──────────────────────────────────────────────────────── */
+  .tl-wrap { background: #fff; border-radius: 14px;
+    box-shadow: 0 1px 6px rgba(0,0,0,.07); overflow: hidden; }
+
+  .tl-header { display: grid; grid-template-columns: 180px 1fr;
+    border-bottom: 1px solid #e5e7eb; }
+  .tl-label-head { padding: .55rem .85rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af;
+    border-right: 1px solid #e5e7eb; }
+  .tl-tick-rail { position: relative; height: 28px; }
+  .tl-tick { position: absolute; top: 6px; font-size: .72rem; color: #9ca3af;
+    transform: translateX(-50%); white-space: nowrap; }
+  .tl-tick::before { content: ''; position: absolute; bottom: -4px; left: 50%;
+    width: 1px; height: 4px; background: #e5e7eb; }
+
+  .tl-row { display: grid; grid-template-columns: 180px 1fr;
+    border-bottom: 1px solid #f3f4f6; }
+  .tl-row:last-child { border-bottom: none; }
+  .tl-row:hover .tl-track { background: #fafafa; }
+
+  .tl-label { padding: .6rem .85rem; font-size: .8rem; font-weight: 600; color: #374151;
+    border-right: 1px solid #f3f4f6; display: flex; align-items: center; gap: .4rem;
+    min-height: 36px; }
+  .hazard-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .tl-label a { color: inherit; text-decoration: none; }
+  .tl-label a:hover { text-decoration: underline; color: #4f46e5; }
+
+  .tl-track { position: relative; min-height: 36px; padding: 4px 0; }
+  .today-line { position: absolute; top: 0; bottom: 0; width: 2px;
+    background: #ef4444; opacity: .5; pointer-events: none; z-index: 2; }
+
+  .tl-bar { position: absolute; top: 50%; transform: translateY(-50%);
+    height: 18px; border-radius: 4px; cursor: pointer;
+    display: flex; align-items: center; overflow: hidden;
+    transition: filter .15s; min-width: 4px; z-index: 1; }
+  .tl-bar:hover { filter: brightness(1.15); z-index: 3; }
+  .tl-bar.active { outline: 2px solid #dc2626; outline-offset: 1px; }
+
+  .bar-label { font-size: .68rem; font-weight: 700; color: #fff; padding: 0 .3rem;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+
+  /* ── Tooltip ──────────────────────────────────────────────────────── */
+  .tl-tip { display: none; position: fixed; z-index: 9999; background: #1e293b;
+    color: #e2e8f0; border-radius: 8px; padding: .6rem .85rem;
+    font-size: .78rem; pointer-events: none; max-width: 240px; line-height: 1.5; }
+  .tl-tip.visible { display: block; }
+  .tl-tip strong { color: #f1f5f9; }
+
+  .empty { color: #9ca3af; font-size: .9rem; padding: 3rem 0; text-align: center; }
+
+  /* ── Legend ───────────────────────────────────────────────────────── */
+  .legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .78rem;
+    color: #6b7280; margin-top: .85rem; }
+  .legend-item { display: flex; align-items: center; gap: .35rem; }
+  .legend-swatch { width: 14px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/forecasts/drift">Drift</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts" class="active">Alerts</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/drought">Drought</a>
+    <a href="/risk">Risk</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/seasonal">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <h1>Activation Timeline</h1>
+    <a href="/alerts" class="back" style="font-size:.875rem;color:#6b7280;border:1px solid #e5e7eb;
+       border-radius:7px;padding:.4rem .85rem;text-decoration:none;">← Alert Map</a>
+  </div>
+
+  <div class="toolbar">
+    <form method="get" action="/alerts/timeline">
+      <select name="days">
+        {% for d in [30, 60, 90, 180, 365] %}
+        <option value="{{ d }}" {% if d == days %}selected{% endif %}>Last {{ d }} days</option>
+        {% endfor %}
+      </select>
+      <select name="hazard">
+        <option value="">All hazards</option>
+        {% for h in hazard_types %}
+        <option value="{{ h }}" {% if h == hazard %}selected{% endif %} style="text-transform:capitalize;">
+          {{ h | capitalize }}
+        </option>
+        {% endfor %}
+      </select>
+      <button type="submit">Apply</button>
+    </form>
+    {% if total_activations %}
+    <span class="summary-pill">
+      {{ total_activations }} activation{{ 's' if total_activations != 1 }} across
+      {{ total_triggers }} trigger{{ 's' if total_triggers != 1 }}
+    </span>
+    {% endif %}
+  </div>
+
+  {% if total_activations %}
+  <div class="tl-wrap">
+    <div class="tl-header">
+      <div class="tl-label-head">Trigger</div>
+      <div class="tl-tick-rail" id="tick-rail"></div>
+    </div>
+    <div id="timeline-rows"></div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  {% else %}
+  <div class="card">
+    <div class="empty">No activations in the last {{ days }} days{% if hazard %} for {{ hazard }}{% endif %}.</div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="tl-tip" id="tl-tip"></div>
+
+<script>
+(function () {
+  const DATA = {{ timeline_json | safe }};
+  if (!DATA.rows.length) return;
+
+  const HAZARD_COLORS = {
+    flood: '#3b82f6', storm: '#8b5cf6', drought: '#f59e0b',
+    landslide: '#10b981', heatwave: '#ef4444', cyclone: '#0ea5e9', other: '#6b7280',
+  };
+
+  // ── Ticks ────────────────────────────────────────────────────────────
+  const tickRail = document.getElementById('tick-rail');
+  DATA.ticks.forEach(tk => {
+    const el = document.createElement('div');
+    el.className = 'tl-tick';
+    el.style.left = tk.pct + '%';
+    el.textContent = tk.label;
+    tickRail.appendChild(el);
+  });
+
+  // ── Rows ─────────────────────────────────────────────────────────────
+  const container = document.getElementById('timeline-rows');
+  const tip = document.getElementById('tl-tip');
+
+  function showTip(e, bar) {
+    const dur = bar.duration_h != null ? `${bar.duration_h}h` : 'ongoing';
+    tip.innerHTML =
+      `<strong>${bar.status === 'active' ? '⚡ Active' : '✓ Acknowledged'}</strong><br>` +
+      `Value: <strong>${bar.value}</strong><br>` +
+      `Start: ${bar.start_label}<br>` +
+      `End: ${bar.end_label} (${dur})<br>` +
+      `<a href="/triggers/activations/${bar.id}" style="color:#93c5fd;font-size:.72rem;">View activation →</a>`;
+    tip.classList.add('visible');
+    moveTip(e);
+  }
+
+  function moveTip(e) {
+    tip.style.left = (e.clientX + 14) + 'px';
+    tip.style.top = (e.clientY - 10) + 'px';
+  }
+
+  document.addEventListener('mousemove', e => {
+    if (tip.classList.contains('visible')) moveTip(e);
+  });
+
+  // Collect seen hazard types for legend
+  const seenHazards = new Set();
+
+  DATA.rows.forEach(row => {
+    const color = HAZARD_COLORS[row.hazard_type] || '#6b7280';
+    seenHazards.add(row.hazard_type);
+
+    const rowEl = document.createElement('div');
+    rowEl.className = 'tl-row';
+
+    const label = document.createElement('div');
+    label.className = 'tl-label';
+    label.innerHTML =
+      `<span class="hazard-dot" style="background:${color};"></span>` +
+      `<a href="/triggers/${row.trigger_id}">${row.name}</a>`;
+
+    const track = document.createElement('div');
+    track.className = 'tl-track';
+
+    // Today line (always at right edge = 100%)
+    const todayLine = document.createElement('div');
+    todayLine.className = 'today-line';
+    todayLine.style.left = '100%';
+    track.appendChild(todayLine);
+
+    row.bars.forEach(bar => {
+      const barEl = document.createElement('div');
+      barEl.className = 'tl-bar' + (bar.status === 'active' ? ' active' : '');
+      barEl.style.left = bar.left_pct + '%';
+      barEl.style.width = bar.width_pct + '%';
+      barEl.style.background = bar.status === 'active' ? '#dc2626' : color;
+      barEl.style.opacity = bar.status === 'active' ? '1' : '0.72';
+
+      // Show label only if bar is wide enough (>3%)
+      if (bar.width_pct > 3) {
+        const lbl = document.createElement('div');
+        lbl.className = 'bar-label';
+        lbl.textContent = bar.status === 'active' ? '⚡' : bar.start_label.slice(0, 6);
+        barEl.appendChild(lbl);
+      }
+
+      barEl.addEventListener('mouseenter', e => showTip(e, bar));
+      barEl.addEventListener('mouseleave', () => tip.classList.remove('visible'));
+      barEl.addEventListener('click', () => window.location = `/triggers/activations/${bar.id}`);
+      track.appendChild(barEl);
+    });
+
+    rowEl.appendChild(label);
+    rowEl.appendChild(track);
+    container.appendChild(rowEl);
+  });
+
+  // ── Legend ────────────────────────────────────────────────────────────
+  const legend = document.getElementById('legend');
+  // Active indicator
+  const actItem = document.createElement('span');
+  actItem.className = 'legend-item';
+  actItem.innerHTML = '<span class="legend-swatch" style="background:#dc2626;"></span> Active';
+  legend.appendChild(actItem);
+
+  seenHazards.forEach(h => {
+    const c = HAZARD_COLORS[h] || '#6b7280';
+    const item = document.createElement('span');
+    item.className = 'legend-item';
+    item.innerHTML =
+      `<span class="legend-swatch" style="background:${c};opacity:.72;"></span> ` +
+      h.charAt(0).toUpperCase() + h.slice(1) + ' (acknowledged)';
+    legend.appendChild(item);
+  });
+})();
+</script>
+{% endblock %}

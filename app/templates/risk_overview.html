@@ -66,10 +66,14 @@
 </nav>
 
 <div class="main">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
-    <h1 style="margin-bottom:0;">Multi-Source Risk Overview</h1>
-    <a href="/risk/map" style="font-size:.875rem;font-weight:600;color:#4f46e5;border:1px solid #c7d2fe;
-       border-radius:7px;padding:.4rem .9rem;text-decoration:none;">&#128506; Map view</a>
+  <h1 style="margin-bottom:1rem;">Multi-Source Risk Overview</h1>
+  <div style="display:flex;gap:.75rem;margin-bottom:1.5rem;">
+    <a href="/risk" style="font-size:.875rem;color:#4f46e5;padding:.3rem .85rem;
+       border-radius:6px;border:1px solid #bfdbfe;background:#eff6ff;font-weight:600;text-decoration:none;">Overview</a>
+    <a href="/risk/map" style="font-size:.875rem;color:#6b7280;padding:.3rem .85rem;
+       border-radius:6px;border:1px solid #e5e7eb;text-decoration:none;">Map</a>
+    <a href="/risk/country" style="font-size:.875rem;color:#6b7280;padding:.3rem .85rem;
+       border-radius:6px;border:1px solid #e5e7eb;text-decoration:none;">By Country</a>
   </div>
 
   {% if cards %}

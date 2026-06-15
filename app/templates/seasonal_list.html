@@ -50,6 +50,12 @@
 
   .empty { color:#9ca3af; font-size:.9rem; padding:2rem 0; text-align:center; }
 
+  .sub-nav { display: flex; gap: .75rem; margin-bottom: 1.25rem; }
+  .sub-nav a { font-size: .875rem; color: #6b7280; padding: .3rem .85rem;
+    border-radius: 6px; border: 1px solid #e5e7eb; text-decoration: none; }
+  .sub-nav a:hover { background: #f9fafb; }
+  .sub-nav a.active { background: #eff6ff; color: #4f46e5; border-color: #bfdbfe; font-weight: 600; }
+
   .pagination { display:flex; align-items:center; gap:.35rem; margin-top:1.25rem; justify-content:center; }
   .page-btn { display:inline-flex; align-items:center; justify-content:center; min-width:2rem; height:2rem;
     padding:0 .6rem; border-radius:6px; font-size:.875rem; border:1px solid #e5e7eb;
@@ -88,6 +94,11 @@
     {% if user.role == "admin" %}
     <a href="/seasonal/new" class="btn-new">+ New Outlook</a>
     {% endif %}
+  </div>
+
+  <div class="sub-nav">
+    <a href="/seasonal" class="active">Forecasts</a>
+    <a href="/seasonal/skill">Skill Scores</a>
   </div>
 
   <form method="get" action="/seasonal" class="filter-bar">
