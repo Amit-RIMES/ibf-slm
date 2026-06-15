@@ -372,3 +372,89 @@ async def bulletin_send_now(
 
 def _format_subject(template: str, now: datetime) -> str:
     return template.format(month=now.strftime("%B"), year=now.strftime("%Y"))
+
+
+# ── Bulletin drafts ───────────────────────────────────────────────────────────
+
+@router.get("/drafts", response_class=HTMLResponse)
+async def bulletin_drafts_list(request: Request, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import desc as _desc
+    from app.models.bulletin_draft import BulletinDraft
+
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
+    drafts_r = await db.execute(
+        select(BulletinDraft)
+        .order_by(_desc(BulletinDraft.created_at))
+        .limit(50)
+    )
+    drafts = drafts_r.scalars().all()
+
+    pending_count = sum(1 for d in drafts if d.status == "pending")
+
+    return templates.TemplateResponse(
+        request, "bulletin_drafts.html",
+        {"user": user, "drafts": drafts, "pending_count": pending_count},
+    )
+
+
+@router.post("/drafts/{draft_id}/dismiss", response_class=HTMLResponse)
+async def bulletin_draft_dismiss(
+    draft_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.bulletin_draft import BulletinDraft
+
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
+    draft = await db.scalar(select(BulletinDraft).where(BulletinDraft.id == draft_id))
+    if draft and draft.status == "pending":
+        draft.status = "dismissed"
+        await db.commit()
+
+    return RedirectResponse("/bulletin/drafts", status_code=303)
+
+
+@router.post("/drafts/{draft_id}/send", response_class=HTMLResponse)
+async def bulletin_draft_send(
+    draft_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.bulletin_draft import BulletinDraft
+
+    user = await get_current_user(request, db)
+    if not user or user.role != "admin":
+        return RedirectResponse("/login", status_code=303)
+
+    draft = await db.scalar(select(BulletinDraft).where(BulletinDraft.id == draft_id))
+    if not draft or draft.status != "pending":
+        return RedirectResponse("/bulletin/drafts", status_code=303)
+
+    cfg_r = await db.execute(select(BulletinSchedule).where(BulletinSchedule.id == 1))
+    cfg = cfg_r.scalar_one_or_none()
+    subscribers_r = await db.execute(
+        select(BulletinSubscriber).where(BulletinSubscriber.is_active == True)  # noqa: E712
+    )
+    recipients = [s.email for s in subscribers_r.scalars().all()]
+
+    if not recipients:
+        return RedirectResponse("/bulletin/drafts?error=no+recipients", status_code=303)
+
+    days = cfg.days if cfg else 30
+    ctx = await _build_bulletin_context(db, draft.source, days, title=draft.title, username=user.username)
+    html = _render_bulletin_html(ctx)
+    subject = draft.title or f"IBF-SLM {draft.risk_level} Risk Alert — {ctx['now'].strftime('%B %Y')}"
+
+    from app.core.email import send_bulletin_email
+    sent = await send_bulletin_email(recipients, subject, html)
+
+    draft.status = "sent"
+    await db.commit()
+
+    return RedirectResponse(f"/bulletin/drafts?sent={sent}", status_code=303)

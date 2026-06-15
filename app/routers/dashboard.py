@@ -206,6 +206,12 @@ async def dashboard(
     impacts_filtered = bool(impact_filters)
     data_gaps = await check_data_gaps(db)
 
+    # ── Pending bulletin drafts count ─────────────────────────────────────────
+    from app.models.bulletin_draft import BulletinDraft
+    pending_drafts = await db.scalar(
+        select(func.count()).select_from(BulletinDraft).where(BulletinDraft.status == "pending")
+    ) or 0
+
     # ── Composite risk score ──────────────────────────────────────────────────
     import calendar as _cal
     _MONTH_ABBR = [_cal.month_abbr[i] for i in range(1, 13)]
@@ -285,5 +291,6 @@ async def dashboard(
             "impacts_filtered": impacts_filtered,
             "risk": risk,
             "risk_sparkline": risk_sparkline,
+            "pending_drafts": pending_drafts,
         },
 )

@@ -402,6 +402,9 @@ async def trigger_list(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Trigger).order_by(desc(Trigger.created_at)))
     triggers = result.scalars().all()
 
+    from app.core.performance import compute_trigger_quality
+    quality = await compute_trigger_quality(db, list(triggers))
+
     import json as _json
     scoped = [
         {
@@ -421,7 +424,8 @@ async def trigger_list(request: Request, db: AsyncSession = Depends(get_db)):
     {"user": user, "triggers": triggers,
          "OPERATOR_SYMBOLS": OPERATOR_SYMBOLS, "VARIABLE_LABELS": VARIABLE_LABELS,
          "scoped_triggers_json": _json.dumps(scoped),
-         "scoped_count": len(scoped)},
+         "scoped_count": len(scoped),
+         "quality": quality},
 )
 
 

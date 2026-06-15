@@ -38,6 +38,14 @@
   .empty { color: #9ca3af; font-size: .9rem; padding: 2rem 0; text-align: center; }
 
   #coverage-map { height: 340px; border-radius: 10px; }
+
+  .q-pill { display: inline-flex; align-items: center; gap: .3rem;
+    padding: .18rem .55rem; border-radius: 999px; font-size: .72rem; font-weight: 700; }
+  .q-good   { background: #dcfce7; color: #15803d; }
+  .q-warn   { background: #fef9c3; color: #a16207; }
+  .q-poor   { background: #fee2e2; color: #b91c1c; }
+  .q-none   { background: #f3f4f6; color: #9ca3af; }
+  .q-meta   { font-size: .75rem; color: #6b7280; }
 </style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 {% endblock %}
@@ -102,12 +110,14 @@
           <th>Status</th>
           <th>Activations</th>
           <th>Active alerts</th>
+          <th>Quality (CSI)</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
         {% for t in triggers %}
         {% set active_count = t.activations | selectattr("status", "equalto", "active") | list | length %}
+        {% set q = quality.get(t.id, {}) %}
         <tr>
           <td style="font-weight:600;">{{ t.name }}</td>
           <td style="text-transform:capitalize;">{{ t.hazard_type }}</td>
@@ -125,7 +135,37 @@
             <span class="badge badge-alert">{{ active_count }} unacknowledged</span>
             {% else %}—{% endif %}
           </td>
-          <td><a href="/triggers/{{ t.id }}" style="font-size:.8rem;">View</a></td>
+          <td>
+            {% if q and q.total_forecasts %}
+              {% if q.csi is not none %}
+                {% if q.csi >= 50 %}
+                <span class="q-pill q-good">CSI {{ q.csi }}%</span>
+                {% elif q.csi >= 20 %}
+                <span class="q-pill q-warn">CSI {{ q.csi }}%</span>
+                {% else %}
+                <span class="q-pill q-poor">CSI {{ q.csi }}%</span>
+                {% endif %}
+              {% else %}
+                <span class="q-pill q-none">No events</span>
+              {% endif %}
+              {% if q.far is not none and q.far > 60 %}
+              <span title="High false alarm rate" style="cursor:help;">&#9888;</span>
+              {% endif %}
+              <div class="q-meta">
+                POD {{ q.pod if q.pod is not none else '—' }}%
+                &nbsp;·&nbsp; FAR {{ q.far if q.far is not none else '—' }}%
+                &nbsp;·&nbsp; {{ q.fires }} fires
+              </div>
+            {% elif t.variable in ("spi_1","spi_3","spi_6") %}
+              <span class="q-pill q-none">SPI</span>
+            {% else %}
+              <span class="q-pill q-none">No data</span>
+            {% endif %}
+          </td>
+          <td style="white-space:nowrap;">
+            <a href="/triggers/{{ t.id }}" style="font-size:.8rem;">View</a>
+            &nbsp;<a href="/triggers/{{ t.id }}/backtest" style="font-size:.78rem;color:#6b7280;">Backtest</a>
+          </td>
         </tr>
         {% endfor %}
       </tbody>

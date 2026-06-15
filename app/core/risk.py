@@ -158,4 +158,26 @@ async def compute_and_record_risk_score(db: "AsyncSession", source: str = "CHIRP
             worst_spi=risk.get("worst_spi"),
         ))
     await db.commit()
+
+    # Auto-create a bulletin draft when risk is High or Extreme (one per source per day)
+    if risk["level"] in ("High", "Extreme"):
+        from app.models.bulletin_draft import BulletinDraft
+        already = await db.scalar(
+            select(BulletinDraft).where(
+                BulletinDraft.source == source,
+                BulletinDraft.status == "pending",
+                BulletinDraft.created_at >= today_start,
+                BulletinDraft.created_at < tomorrow_start,
+            )
+        )
+        if not already:
+            db.add(BulletinDraft(
+                created_at=now,
+                source=source,
+                risk_level=risk["level"],
+                total_score=risk["total"],
+                title=f"{source} — {risk['level']} Risk Alert",
+            ))
+            await db.commit()
+
     return risk

@@ -135,6 +135,19 @@
   </div>
   {% endif %}
 
+  {% if pending_drafts > 0 %}
+  <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:12px;
+              padding:1.1rem 1.4rem;margin-bottom:1.5rem;display:flex;
+              align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+    <span style="font-weight:700;color:#a16207;font-size:.95rem;">
+      &#9888; {{ pending_drafts }} bulletin draft{{ 's' if pending_drafts != 1 }} pending review
+    </span>
+    <a href="/bulletin/drafts" style="font-size:.85rem;font-weight:600;color:#a16207;">
+      Review drafts →
+    </a>
+  </div>
+  {% endif %}
+
   {% if user.role == "admin" and stats.pending_count %}
   <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:1.1rem 1.4rem;margin-bottom:1.5rem;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
