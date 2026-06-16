@@ -12,12 +12,29 @@ Requires: cdsapi (pip install cdsapi)
 import logging
 import os
 import tempfile
+import zipfile
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
+def _maybe_unzip(path: str) -> str:
+    """If path is a zip, extract the first .nc file next to it and return its path."""
+    with open(path, "rb") as f:
+        magic = f.read(4)
+    if magic[:2] != b"PK":
+        return path
+    with zipfile.ZipFile(path) as zf:
+        nc_names = [n for n in zf.namelist() if n.endswith(".nc")]
+        if not nc_names:
+            return path
+        dest = path.replace(".nc", "_extracted.nc")
+        with zf.open(nc_names[0]) as src, open(dest, "wb") as dst:
+            dst.write(src.read())
+    return dest
 
 
 def _cdsapi_client(api_url: str, api_key: str):
@@ -232,7 +249,7 @@ async def fetch_era5(
                 "day": days,
                 "time": "00:00",
                 "area": [lat_max, lon_min, lat_min, lon_max],
-                "format": "netcdf",
+                "data_format": "netcdf",
             }
             logger.info("ERA5: requesting %d-%02d area=[%.1f,%.1f,%.1f,%.1f]",
                         year, month, lat_max, lon_min, lat_min, lon_max)
@@ -249,7 +266,8 @@ async def fetch_era5(
                 continue
 
             logger.info("ERA5: downloaded %.1f KB for %d-%02d", os.path.getsize(output) / 1024, year, month)
-            month_records = _process_era5_nc(output, lat_min, lat_max, lon_min, lon_max)
+            nc_path = _maybe_unzip(output)
+            month_records = _process_era5_nc(nc_path, lat_min, lat_max, lon_min, lon_max)
             # Filter to requested date range
             filtered = [r for r in month_records if start_date <= r["obs_date"] <= end_date]
             all_records.extend(filtered)

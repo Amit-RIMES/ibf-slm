@@ -11,10 +11,27 @@ import json
 import logging
 import os
 import tempfile
+import zipfile
 from datetime import date, datetime, timezone
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _maybe_unzip(path: str) -> str:
+    """If path is a zip, extract the first .nc file next to it and return its path."""
+    with open(path, "rb") as f:
+        magic = f.read(4)
+    if magic[:2] != b"PK":
+        return path
+    with zipfile.ZipFile(path) as zf:
+        nc_names = [n for n in zf.namelist() if n.endswith(".nc")]
+        if not nc_names:
+            return path
+        dest = path.replace(".nc", "_extracted.nc")
+        with zf.open(nc_names[0]) as src, open(dest, "wb") as dst:
+            dst.write(src.read())
+    return dest
 
 # Lead months to request (1 = next calendar month, up to 6)
 _LEAD_MONTHS = ["1", "2", "3", "4", "5", "6"]
@@ -186,7 +203,13 @@ async def fetch_seas5(
         return []
 
     if issue_date is None:
-        issue_date = datetime.now(timezone.utc).date()
+        # SEAS5 is issued on the 1st of each month with ~2 week lag.
+        # Use previous month to ensure the forecast has been published.
+        today = datetime.now(timezone.utc).date()
+        if today.month == 1:
+            issue_date = today.replace(year=today.year - 1, month=12, day=1)
+        else:
+            issue_date = today.replace(month=today.month - 1, day=1)
 
     try:
         client = _cdsapi_client(api_url, api_key)
@@ -197,14 +220,14 @@ async def fetch_seas5(
         output = os.path.join(tmpdir, "seas5.nc")
         request_params = {
             "originating_centre": "ecmwf",
-            "system": "5",
+            "system": "51",  # SEAS5.1 — operational from 2022, system 5 (original) has no recent data
             "variable": "total_precipitation",
             "product_type": "monthly_mean",
             "year": str(issue_date.year),
             "month": str(issue_date.month).zfill(2),
             "leadtime_month": _LEAD_MONTHS[:lead_months],
             "area": [lat_max, lon_min, lat_min, lon_max],
-            "format": "netcdf",
+            "data_format": "netcdf",
         }
         logger.info(
             "SEAS5: requesting issue=%s lead_months=%d area=[%.1f,%.1f,%.1f,%.1f]",
@@ -224,4 +247,5 @@ async def fetch_seas5(
             return []
 
         logger.info("SEAS5: downloaded %.1f KB, parsing...", os.path.getsize(output) / 1024)
-        return _seas5_to_seasonal_records(output, issue_date, lead_months, lat_min, lat_max, lon_min, lon_max)
+        nc_path = _maybe_unzip(output)
+        return _seas5_to_seasonal_records(nc_path, issue_date, lead_months, lat_min, lat_max, lon_min, lon_max)
