@@ -86,11 +86,18 @@ async def update_config(
     lon_max: float = Form(155.0),
     db: AsyncSession = Depends(get_db),
 ):
+    import json as _json
     user = await get_current_user(request, db)
     if not user:
         return RedirectResponse("/login", status_code=303)
     if user.role != "admin":
         return _FORBIDDEN
+
+    # Extract multi-value 'parameters' checkboxes from the already-cached form data
+    raw_form = await request.form()
+    selected_params = raw_form.getlist("parameters")
+    valid_params = {"tp", "2t", "wind10", "msl"}
+    clean_params = [p for p in selected_params if p in valid_params] or ["tp"]
 
     cfg = await _get_or_create_config(db)
     cfg.enabled = enabled == "on"
@@ -102,6 +109,7 @@ async def update_config(
     cfg.lat_max = lat_max
     cfg.lon_min = lon_min
     cfg.lon_max = lon_max
+    cfg.parameters = _json.dumps(clean_params)
     await db.commit()
 
     try:
@@ -114,7 +122,8 @@ async def update_config(
 
 
 async def _do_fetch_now(cfg_snapshot: dict):
-    """Background task: fetch latest ECMWF forecast and store it."""
+    """Background task: fetch latest ECMWF forecast for all configured parameters."""
+    import json as _json
     from app.core.database import AsyncSessionLocal
     from app.core.anomaly import compute_anomaly
     from app.core.ecmwf_opendata import fetch_ecmwf_forecast
@@ -123,45 +132,54 @@ async def _do_fetch_now(cfg_snapshot: dict):
     started_at = datetime.now(timezone.utc)
     status = "error"
     detail = ""
+    parameters = _json.loads(cfg_snapshot.get("parameters") or '["tp"]')
+
+    imported_count = 0
+    errors: list[str] = []
 
     try:
-        data = await fetch_ecmwf_forecast(
-            lat_min=cfg_snapshot["lat_min"],
-            lat_max=cfg_snapshot["lat_max"],
-            lon_min=cfg_snapshot["lon_min"],
-            lon_max=cfg_snapshot["lon_max"],
-            run_time=cfg_snapshot["run_time"],
-            use_ensemble=cfg_snapshot["use_ensemble"],
-        )
-        if data is None:
-            detail = "fetch returned None — check logs for download/parse errors"
-        else:
+        for variable in parameters:
+            data = await fetch_ecmwf_forecast(
+                lat_min=cfg_snapshot["lat_min"],
+                lat_max=cfg_snapshot["lat_max"],
+                lon_min=cfg_snapshot["lon_min"],
+                lon_max=cfg_snapshot["lon_max"],
+                run_time=cfg_snapshot["run_time"],
+                use_ensemble=cfg_snapshot["use_ensemble"],
+                variable=variable,
+            )
+            if data is None:
+                errors.append(f"{variable}: fetch returned None")
+                continue
             async with AsyncSessionLocal() as db:
-                # Skip if same filename already exists
                 existing = await db.scalar(
                     select(ForecastUpload).where(ForecastUpload.filename == data["filename"])
                 )
                 if existing:
-                    status = "skipped"
-                    detail = f"Already imported: {data['filename']}"
-                else:
-                    lead_time_stats = data.pop("lead_time_stats", None)
-                    forecast = ForecastUpload(lead_time_stats=lead_time_stats, **data)
-                    db.add(forecast)
-                    await db.commit()
-                    await db.refresh(forecast)
-                    await compute_anomaly(forecast, db)
-                    await evaluate_triggers(forecast, db)
-                    status = "ok"
-                    detail = f"Imported {forecast.filename} (mean={forecast.precip_mean} mm)"
+                    continue
+                lead_time_stats = data.pop("lead_time_stats", None)
+                forecast = ForecastUpload(lead_time_stats=lead_time_stats, **data)
+                db.add(forecast)
+                await db.commit()
+                await db.refresh(forecast)
+                await compute_anomaly(forecast, db)
+                await evaluate_triggers(forecast, db)
+                imported_count += 1
 
-            async with AsyncSessionLocal() as db:
-                cfg = await db.scalar(select(EcmwfConfig).where(EcmwfConfig.id == 1))
-                if cfg:
-                    cfg.last_run_at = datetime.now(timezone.utc)
-                    cfg.last_run_status = status
-                    cfg.last_run_detail = detail[:512]
-                    await db.commit()
+        if errors:
+            detail = "; ".join(errors)
+            status = "error" if imported_count == 0 else "partial"
+        else:
+            status = "ok"
+            detail = f"Imported {imported_count} forecast(s) for params: {parameters}"
+
+        async with AsyncSessionLocal() as db:
+            cfg = await db.scalar(select(EcmwfConfig).where(EcmwfConfig.id == 1))
+            if cfg:
+                cfg.last_run_at = datetime.now(timezone.utc)
+                cfg.last_run_status = status
+                cfg.last_run_detail = detail[:512]
+                await db.commit()
     except Exception as exc:
         detail = str(exc)[:512]
 
@@ -194,6 +212,7 @@ async def fetch_now(
         "lat_min": cfg.lat_min, "lat_max": cfg.lat_max,
         "lon_min": cfg.lon_min, "lon_max": cfg.lon_max,
         "run_time": cfg.run_time, "use_ensemble": cfg.use_ensemble,
+        "parameters": cfg.parameters or '["tp"]',
     }
     background_tasks.add_task(_do_fetch_now, cfg_snapshot)
 

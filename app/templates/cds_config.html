@@ -1,0 +1,366 @@
+{% extends "base.html" %}
+{% block title %}CDS Configuration — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; text-decoration: none; }
+  nav .nav-links a.active { color: #4f46e5; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: .25rem; }
+  .sub { color: #6b7280; font-size: .9rem; margin-bottom: 2rem; }
+
+  .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    padding: 1.5rem; margin-bottom: 1.5rem; }
+  .card-title { font-size: 1rem; font-weight: 700; color: #1f2937; margin-bottom: 1.25rem;
+    padding-bottom: .6rem; border-bottom: 1px solid #f3f4f6; }
+
+  .toggle-row { display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; }
+  .toggle { position: relative; display: inline-block; width: 44px; height: 24px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; cursor: pointer; inset: 0; background: #d1d5db;
+    border-radius: 999px; transition: .2s; }
+  .slider::before { content: ""; position: absolute; height: 18px; width: 18px;
+    left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+  input:checked + .slider { background: #4f46e5; }
+  input:checked + .slider::before { transform: translateX(20px); }
+  .toggle-label { font-size: .9rem; font-weight: 600; }
+
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: .85rem; margin-bottom: 1.2rem; }
+  .form-group label { display: block; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em; color: #9ca3af; margin-bottom: .35rem; }
+  .form-group input, .form-group select {
+    width: 100%; padding: .45rem .75rem; border: 1px solid #d1d5db;
+    border-radius: 8px; font-size: .875rem; background: #fff; box-sizing: border-box; }
+  .form-group input:focus { border-color: #4f46e5; outline: none; }
+  .form-hint { font-size: .7rem; color: #9ca3af; margin-top: .25rem; }
+
+  .btn { padding: .5rem 1.1rem; background: #4f46e5; color: #fff; border: none;
+    border-radius: 8px; font-size: .875rem; font-weight: 600; cursor: pointer; }
+  .btn:hover { opacity: .88; }
+  .btn-outline { background: #fff; color: #374151; border: 1px solid #d1d5db; text-decoration: none; display: inline-block; }
+  .btn-outline:hover { background: #f3f4f6; }
+  .btn-teal { background: #0d9488; }
+  .btn-green { background: #16a34a; }
+  .btn-sky { background: #0284c7; }
+
+  .service-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 1.25rem;
+    margin-bottom: 1.25rem; }
+  .service-header { display: flex; align-items: center; gap: .75rem;
+    margin-bottom: 1rem; }
+  .service-badge { padding: .25rem .75rem; border-radius: 999px; font-size: .75rem;
+    font-weight: 700; text-transform: uppercase; }
+  .badge-teal  { background: #ccfbf1; color: #0d9488; }
+  .badge-green { background: #dcfce7; color: #16a34a; }
+  .badge-sky   { background: #e0f2fe; color: #0284c7; }
+
+  .status-strip { display: flex; gap: .75rem; flex-wrap: wrap; align-items: center;
+    background: #f9fafb; border-radius: 8px; padding: .6rem 1rem; margin-bottom: 1rem;
+    font-size: .85rem; }
+  .status-pill { padding: .15rem .55rem; border-radius: 999px; font-size: .75rem;
+    font-weight: 700; }
+  .pill-ok      { background: #dcfce7; color: #15803d; }
+  .pill-error   { background: #fef2f2; color: #b91c1c; }
+  .pill-skipped { background: #f3f4f6; color: #6b7280; }
+  .pill-none    { background: #f3f4f6; color: #9ca3af; }
+
+  .fetching-notice { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
+    padding: .75rem 1rem; font-size: .85rem; color: #1d4ed8; margin-bottom: 1.25rem; }
+  .info-notice { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px;
+    padding: .75rem 1rem; font-size: .85rem; color: #166534; margin-bottom: 1.25rem; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+  th { text-align: left; padding: .5rem .75rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em; color: #9ca3af;
+    border-bottom: 2px solid #e5e7eb; }
+  td { padding: .6rem .75rem; border-bottom: 1px solid #f3f4f6; }
+  tr:last-child td { border-bottom: none; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/forecasts/drift">Drift</a>
+    <a href="/observed">Observed</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/ecmwf">ECMWF</a>
+    <a href="/cds" class="active">CDS</a>
+    <a href="/glofas">GloFAS</a>
+    <a href="/drought">Drought</a>
+    <a href="/risk">Risk</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/seasonal">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:.75rem;margin-bottom:1.5rem;">
+    <div>
+      <h1>Copernicus Data Store (CDS)</h1>
+      <div class="sub">ECMWF seasonal forecasts (SEAS5), ERA5 reanalysis, and GloFAS river discharge</div>
+    </div>
+    <a href="/glofas" class="btn btn-outline" style="margin-top:.25rem;">GloFAS Map →</a>
+  </div>
+
+  {% if fetching %}
+  <div class="fetching-notice">
+    Fetch started for <strong>{{ fetching }}</strong>. Refresh in a few minutes to see results.
+    Large CDS requests may take 10–30 minutes depending on queue.
+  </div>
+  {% endif %}
+
+  <div class="info-notice">
+    <strong>Free CDS account required.</strong>
+    Register at <strong>cds.climate.copernicus.eu</strong>, then copy your API key from
+    your profile page. The key looks like <code>xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</code>.
+  </div>
+
+  <!-- ── API Credentials & Shared Settings ─────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">API Credentials &amp; Shared Settings</div>
+    <form method="post" action="/cds/config">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+
+      <div class="form-grid" style="margin-bottom:1.25rem;">
+        <div class="form-group" style="grid-column:1/-1;">
+          <label>CDS API Key</label>
+          <input type="password" name="api_key"
+                 placeholder="{{ '● ● ● saved ● ● ●' if cfg.api_key else 'Paste your CDS API key here' }}"
+                 autocomplete="new-password">
+          <div class="form-hint">Leave blank to keep the existing key. Keys are stored encrypted in the database.</div>
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label>CDS API URL</label>
+          <input type="text" name="api_url" value="{{ cfg.api_url }}">
+          <div class="form-hint">Default: https://cds.climate.copernicus.eu/api/v2</div>
+        </div>
+      </div>
+
+      <div style="font-size:.85rem;font-weight:700;color:#374151;margin-bottom:.6rem;">Shared Bounding Box</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Lat Min (°)</label>
+          <input type="number" name="lat_min" value="{{ cfg.lat_min }}" step="0.5" min="-90" max="90">
+        </div>
+        <div class="form-group">
+          <label>Lat Max (°)</label>
+          <input type="number" name="lat_max" value="{{ cfg.lat_max }}" step="0.5" min="-90" max="90">
+        </div>
+        <div class="form-group">
+          <label>Lon Min (°)</label>
+          <input type="number" name="lon_min" value="{{ cfg.lon_min }}" step="0.5" min="-180" max="180">
+        </div>
+        <div class="form-group">
+          <label>Lon Max (°)</label>
+          <input type="number" name="lon_max" value="{{ cfg.lon_max }}" step="0.5" min="-180" max="180">
+        </div>
+      </div>
+
+      <!-- SEAS5 Settings -->
+      <div class="service-card">
+        <div class="service-header">
+          <span class="service-badge badge-teal">SEAS5</span>
+          <div style="font-size:.9rem;font-weight:700;">Seasonal Forecast (ECMWF SEAS5)</div>
+          <label class="toggle" style="margin-left:auto;">
+            <input type="checkbox" name="seas5_enabled" {% if cfg.seas5_enabled %}checked{% endif %}>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Sync Hour (UTC)</label>
+            <input type="number" name="seas5_sync_hour" value="{{ cfg.seas5_sync_hour }}" min="0" max="23">
+          </div>
+          <div class="form-group">
+            <label>Sync Minute</label>
+            <input type="number" name="seas5_sync_minute" value="{{ cfg.seas5_sync_minute }}" min="0" max="59">
+          </div>
+          <div class="form-group">
+            <label>Lead Months</label>
+            <input type="number" name="seas5_lead_months" value="{{ cfg.seas5_lead_months }}" min="1" max="6">
+            <div class="form-hint">1–6 months ahead</div>
+          </div>
+        </div>
+        <div class="status-strip">
+          <span><strong>Last:</strong> {{ cfg.seas5_last_run_at.strftime("%d %b %Y %H:%M UTC") if cfg.seas5_last_run_at else "Never" }}</span>
+          {% if cfg.seas5_last_run_status %}
+          <span class="status-pill pill-{{ cfg.seas5_last_run_status }}">{{ cfg.seas5_last_run_status }}</span>
+          {% endif %}
+          {% if cfg.seas5_last_run_detail %}
+          <span style="color:#6b7280;font-size:.8rem;">{{ cfg.seas5_last_run_detail }}</span>
+          {% endif %}
+        </div>
+        <form method="post" action="/cds/fetch-seas5" style="display:inline;" onsubmit="return confirm('Fetch SEAS5 seasonal forecast now?')">
+          <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+          <button type="submit" class="btn btn-teal" style="font-size:.8rem;padding:.4rem .9rem;">
+            ⬇ Fetch SEAS5 Now
+          </button>
+        </form>
+        {% if seas5_records %}
+        <div style="margin-top:1rem;font-size:.8rem;color:#6b7280;">
+          Last fetched {{ seas5_records|length }} record(s) — see <a href="/seasonal" style="color:#4f46e5;">Seasonal page</a>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- ERA5 Settings -->
+      <div class="service-card">
+        <div class="service-header">
+          <span class="service-badge badge-green">ERA5</span>
+          <div style="font-size:.9rem;font-weight:700;">Historical Reanalysis (ERA5-Land)</div>
+          <label class="toggle" style="margin-left:auto;">
+            <input type="checkbox" name="era5_enabled" {% if cfg.era5_enabled %}checked{% endif %}>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Sync Hour (UTC)</label>
+            <input type="number" name="era5_sync_hour" value="{{ cfg.era5_sync_hour }}" min="0" max="23">
+          </div>
+          <div class="form-group">
+            <label>Sync Minute</label>
+            <input type="number" name="era5_sync_minute" value="{{ cfg.era5_sync_minute }}" min="0" max="59">
+          </div>
+          <div class="form-group">
+            <label>Lookback Days</label>
+            <input type="number" name="era5_lookback_days" value="{{ cfg.era5_lookback_days }}" min="1" max="365">
+            <div class="form-hint">Days of history to fill. Note: ERA5 has ~5 day latency.</div>
+          </div>
+        </div>
+        <div class="status-strip">
+          <span><strong>Last:</strong> {{ cfg.era5_last_run_at.strftime("%d %b %Y %H:%M UTC") if cfg.era5_last_run_at else "Never" }}</span>
+          {% if cfg.era5_last_run_status %}
+          <span class="status-pill pill-{{ cfg.era5_last_run_status }}">{{ cfg.era5_last_run_status }}</span>
+          {% endif %}
+          {% if cfg.era5_last_run_detail %}
+          <span style="color:#6b7280;font-size:.8rem;">{{ cfg.era5_last_run_detail }}</span>
+          {% endif %}
+        </div>
+        <form method="post" action="/cds/fetch-era5" style="display:inline;" onsubmit="return confirm('Fetch ERA5 reanalysis now? Large date ranges may take 10+ minutes.')">
+          <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+          <button type="submit" class="btn btn-green" style="font-size:.8rem;padding:.4rem .9rem;">
+            ⬇ Fetch ERA5 Now
+          </button>
+        </form>
+        {% if era5_records %}
+        <div style="margin-top:1rem;font-size:.8rem;color:#6b7280;">
+          {{ era5_records|length }} recent record(s) in DB — see <a href="/observed" style="color:#4f46e5;">Observed page</a>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- GloFAS Settings -->
+      <div class="service-card">
+        <div class="service-header">
+          <span class="service-badge badge-sky">GloFAS</span>
+          <div style="font-size:.9rem;font-weight:700;">River Discharge Forecast (GloFAS v4)</div>
+          <label class="toggle" style="margin-left:auto;">
+            <input type="checkbox" name="glofas_enabled" {% if cfg.glofas_enabled %}checked{% endif %}>
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Sync Hour (UTC)</label>
+            <input type="number" name="glofas_sync_hour" value="{{ cfg.glofas_sync_hour }}" min="0" max="23">
+          </div>
+          <div class="form-group">
+            <label>Sync Minute</label>
+            <input type="number" name="glofas_sync_minute" value="{{ cfg.glofas_sync_minute }}" min="0" max="59">
+          </div>
+        </div>
+        <div class="status-strip">
+          <span><strong>Last:</strong> {{ cfg.glofas_last_run_at.strftime("%d %b %Y %H:%M UTC") if cfg.glofas_last_run_at else "Never" }}</span>
+          {% if cfg.glofas_last_run_status %}
+          <span class="status-pill pill-{{ cfg.glofas_last_run_status }}">{{ cfg.glofas_last_run_status }}</span>
+          {% endif %}
+          {% if cfg.glofas_last_run_detail %}
+          <span style="color:#6b7280;font-size:.8rem;">{{ cfg.glofas_last_run_detail }}</span>
+          {% endif %}
+        </div>
+        <form method="post" action="/cds/fetch-glofas" style="display:inline;" onsubmit="return confirm('Fetch GloFAS discharge forecast now?')">
+          <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+          <button type="submit" class="btn btn-sky" style="font-size:.8rem;padding:.4rem .9rem;">
+            ⬇ Fetch GloFAS Now
+          </button>
+        </form>
+        {% if glofas_records %}
+        <div style="margin-top:1rem;font-size:.8rem;color:#6b7280;">
+          Latest: <strong>{{ glofas_records[0].forecast_date }}</strong> — see <a href="/glofas" style="color:#4f46e5;">GloFAS page</a>
+        </div>
+        {% endif %}
+      </div>
+
+      <button type="submit" class="btn" style="margin-top:.5rem;">Save All Settings</button>
+    </form>
+  </div>
+
+  <!-- ── Job History ───────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">Recent CDS Job History</div>
+    {% if runs %}
+    <table>
+      <thead>
+        <tr>
+          <th>Time (UTC)</th>
+          <th>Job</th>
+          <th>Status</th>
+          <th>Detail</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in runs %}
+        <tr>
+          <td style="white-space:nowrap;color:#6b7280;font-size:.82rem;">{{ run.started_at.strftime("%Y-%m-%d %H:%M") }}</td>
+          <td style="font-size:.82rem;font-family:monospace;">{{ run.job_name }}</td>
+          <td><span class="status-pill pill-{{ run.status }}">{{ run.status }}</span></td>
+          <td style="color:#6b7280;font-size:.82rem;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            {{ run.detail or "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:#9ca3af;font-size:.9rem;">No CDS jobs run yet.</p>
+    {% endif %}
+  </div>
+
+  <!-- ── About ─────────────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">About Copernicus Data Store</div>
+    <div style="font-size:.875rem;color:#374151;line-height:1.7;">
+      <p><strong>SEAS5</strong> — ECMWF's seasonal forecast system, providing 6-month outlooks at ~0.4° resolution.
+      Data is stored in the existing Seasonal Forecasts table as tercile probability estimates.</p>
+      <p><strong>ERA5-Land</strong> — High-resolution (0.1°) reanalysis covering 1950–present.
+      Daily precipitation values are stored in the Observed Rainfall table (source=ERA5) for baseline computations
+      and trigger threshold recommendations.</p>
+      <p><strong>GloFAS v4</strong> — Global Flood Awareness System providing 10-day ensemble river discharge forecasts
+      at 0.05° resolution for the global river network. Discharge is stored in m³/s.</p>
+      <p style="color:#6b7280;font-size:.82rem;">
+        Large CDS requests are queued and may take minutes to hours. Daily syncs are designed to request small
+        incremental updates. For historical backfills, consider requesting one month at a time.
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}

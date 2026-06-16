@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}GloFAS River Discharge — IBF App{% endblock %}
+
+{% block extra_styles %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; text-decoration: none; }
+  nav .nav-links a.active { color: #4f46e5; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: .25rem; }
+  .sub { color: #6b7280; font-size: .9rem; margin-bottom: 2rem; }
+
+  .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    padding: 1.5rem; margin-bottom: 1.5rem; }
+  .section-title { font-size: .78rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: #9ca3af; margin-bottom: 1rem; }
+
+  .stat-row { display: flex; justify-content: space-between; padding: .55rem 0;
+    border-bottom: 1px solid #f3f4f6; font-size: .9rem; }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .label { color: #6b7280; font-weight: 500; }
+  .stat-row .value { font-weight: 600; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+  @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  #map { height: 480px; border-radius: 8px; }
+  .legend { margin-top: .75rem; display: flex; align-items: center; gap: .5rem;
+    font-size: .8rem; color: #6b7280; }
+  .legend-bar { flex: 1; height: 12px; border-radius: 6px;
+    background: linear-gradient(to right, #ecfdf5, #059669, #064e3b); }
+
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  th { text-align: left; padding: .5rem .75rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af;
+    border-bottom: 1px solid #e5e7eb; }
+  td { padding: .6rem .75rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f9fafb; }
+
+  .empty { color: #9ca3af; font-size: .9rem; padding: 2rem 0; text-align: center; }
+  .btn { padding: .45rem 1rem; background: #4f46e5; color: #fff; border: none;
+    border-radius: 8px; font-size: .875rem; font-weight: 600; text-decoration: none;
+    display: inline-block; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/forecasts/drift">Drift</a>
+    <a href="/observed">Observed</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/ecmwf">ECMWF</a>
+    <a href="/cds">CDS</a>
+    <a href="/glofas" class="active">GloFAS</a>
+    <a href="/drought">Drought</a>
+    <a href="/risk">Risk</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/seasonal">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:.75rem;margin-bottom:1.5rem;">
+    <div>
+      <h1>GloFAS River Discharge Forecast</h1>
+      <div class="sub">Global Flood Awareness System (GloFAS v4) — 10-day ensemble discharge (m³/s)</div>
+    </div>
+    {% if user.role == "admin" %}
+    <a href="/cds" class="btn" style="background:#0284c7;margin-top:.25rem;">⚙ CDS Settings</a>
+    {% endif %}
+  </div>
+
+  {% if not latest %}
+  <div class="card">
+    <p class="empty">No GloFAS discharge forecasts ingested yet.</p>
+    {% if user.role == "admin" %}
+    <p style="text-align:center;color:#9ca3af;font-size:.875rem;">
+      Configure your CDS API key on the <a href="/cds" style="color:#4f46e5;">CDS settings page</a>
+      and click "Fetch GloFAS Now" to import river discharge data.
+    </p>
+    {% endif %}
+  </div>
+  {% else %}
+
+  <!-- Stats row -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="section-title">Latest Forecast — {{ latest.forecast_date }}</div>
+      <div class="stat-row"><span class="label">Mean discharge</span><span class="value">{{ latest.discharge_mean }} m³/s</span></div>
+      <div class="stat-row"><span class="label">Max discharge</span><span class="value">{{ latest.discharge_max }} m³/s</span></div>
+      <div class="stat-row"><span class="label">Min discharge</span><span class="value">{{ latest.discharge_min }} m³/s</span></div>
+      <div class="stat-row"><span class="label">Lead time</span><span class="value">{{ latest.lead_days }} days</span></div>
+      <div class="stat-row"><span class="label">Source</span><span class="value">{{ latest.source }}</span></div>
+    </div>
+    <div class="card">
+      <div class="section-title">Coverage</div>
+      <div class="stat-row"><span class="label">Lat range</span><span class="value">{{ latest.lat_min }}° – {{ latest.lat_max }}°</span></div>
+      <div class="stat-row"><span class="label">Lon range</span><span class="value">{{ latest.lon_min }}° – {{ latest.lon_max }}°</span></div>
+      <div class="stat-row"><span class="label">Fetched</span><span class="value">{{ latest.uploaded_at.strftime("%Y-%m-%d %H:%M UTC") }}</span></div>
+      {% if exceedance %}
+      <div style="margin-top:.75rem;">
+        <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;margin-bottom:.5rem;">
+          Regional Mean Exceedance (approx.)
+        </div>
+        {% for k, v in exceedance.items() %}
+        <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.25rem;font-size:.82rem;">
+          <span style="width:70px;font-family:monospace;color:#374151;">{{ k }}</span>
+          <div style="background:#e5e7eb;border-radius:3px;height:8px;flex:1;overflow:hidden;">
+            <div style="background:#059669;height:100%;width:{{ [v * 100, 100]|min|int }}%;"></div>
+          </div>
+          <span style="font-weight:600;color:#059669;">{{ (v * 100)|round(0)|int }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Map -->
+  {% if latest.geojson %}
+  <div class="card">
+    <div class="section-title">River Discharge Map (ensemble mean, m³/s)</div>
+    <div id="map"></div>
+    <div class="legend">
+      <span>Low</span>
+      <div class="legend-bar"></div>
+      <span>High discharge</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- History table -->
+  <div class="card">
+    <div class="section-title">Recent GloFAS Forecasts</div>
+    {% if records %}
+    <table>
+      <thead>
+        <tr>
+          <th>Forecast Date</th>
+          <th>Source</th>
+          <th>Mean (m³/s)</th>
+          <th>Max (m³/s)</th>
+          <th>Lead Days</th>
+          <th>Ingested</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rec in records %}
+        <tr>
+          <td style="font-weight:600;">{{ rec.forecast_date }}</td>
+          <td style="font-family:monospace;font-size:.82rem;">{{ rec.source }}</td>
+          <td>{{ rec.discharge_mean }}</td>
+          <td>{{ rec.discharge_max }}</td>
+          <td>{{ rec.lead_days }}</td>
+          <td style="color:#9ca3af;font-size:.82rem;">{{ rec.uploaded_at.strftime("%Y-%m-%d %H:%M") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No records yet.</p>
+    {% endif %}
+  </div>
+
+  {% endif %}
+
+  <!-- About -->
+  <div class="card" style="background:#f9fafb;box-shadow:none;border:1px solid #e5e7eb;">
+    <div class="section-title">About GloFAS</div>
+    <div style="font-size:.875rem;color:#374151;line-height:1.7;">
+      <p>The Global Flood Awareness System (GloFAS) is operated by the Copernicus Emergency Management Service.
+      It provides river discharge forecasts for the global river network at 0.05° resolution,
+      with a 10-day lead time using an ensemble of 52 members.</p>
+      <p>Discharge values (m³/s) show where rivers are carrying high volumes of water,
+      which may indicate flood risk. Cells with discharge &lt; 1 m³/s are not shown on the map.</p>
+      <p style="color:#9ca3af;">
+        Data source: Copernicus Climate Change Service (C3S) / ECMWF GloFAS v4.0 operational forecasts.
+      </p>
+    </div>
+  </div>
+</div>
+
+{% if latest and latest.geojson %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  const geojson = {{ latest.geojson | safe }};
+
+  const map = L.map('map');
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    opacity: 0.6,
+  }).addTo(map);
+
+  function dischargeColor(intensity) {
+    // white → teal → dark green
+    const r = Math.round(236 - intensity * 220);
+    const g = Math.round(253 - intensity * 130);
+    const b = Math.round(245 - intensity * 180);
+    return `rgb(${r},${g},${b})`;
+  }
+
+  const layer = L.geoJSON(geojson, {
+    style: feature => ({
+      fillColor: dischargeColor(feature.properties.intensity),
+      fillOpacity: 0.82,
+      weight: 0,
+      color: 'transparent',
+    }),
+    onEachFeature: (feature, layer) => {
+      layer.bindTooltip(`${feature.properties.discharge} m³/s`, { sticky: true });
+    },
+  }).addTo(map);
+
+  if (layer.getLayers().length > 0) {
+    map.fitBounds(layer.getBounds(), { padding: [20, 20] });
+  } else {
+    map.setView([15, 100], 4);
+  }
+</script>
+{% endif %}
+{% endblock %}

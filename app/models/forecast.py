@@ -31,6 +31,9 @@ class ForecastUpload(Base):
     precip_max: Mapped[float] = mapped_column(Float, nullable=False)
     precip_mean: Mapped[float] = mapped_column(Float, nullable=False)
 
+    # Variable measured: "tp" (precipitation), "2t" (temperature), "wind10", "msl" (pressure)
+    variable: Mapped[Optional[str]] = mapped_column(String(16), nullable=True, default="tp")
+
     # GeoJSON grid for map rendering (stored as JSON string)
     geojson: Mapped[str] = mapped_column(Text, nullable=False)
 

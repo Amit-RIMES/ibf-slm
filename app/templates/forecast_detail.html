@@ -56,6 +56,8 @@
     <a href="/alerts">Alerts</a>
     <a href="/sync">Auto-Sync</a>
     <a href="/ecmwf">ECMWF</a>
+    <a href="/cds">CDS</a>
+    <a href="/glofas">GloFAS</a>
     <a href="/drought">Drought</a>
     <a href="/risk">Risk</a>
     <a href="/reports/operational">Report</a>
@@ -148,12 +150,16 @@
   </div>
   {% endif %}
 
+  {% set var = forecast.variable or "tp" %}
+  {% set var_label = {"tp": "Precipitation (mm)", "2t": "Temperature (°C)", "wind10": "Wind Speed (m/s)", "msl": "Pressure (hPa)"}.get(var, "Value") %}
+  {% set val_unit = {"tp": "mm", "2t": "°C", "wind10": "m/s", "msl": "hPa"}.get(var, "") %}
+
   <div class="grid-2">
     <div class="card">
-      <div class="section-title">Precipitation (mm)</div>
-      <div class="stat-row"><span class="label">Minimum</span><span class="value">{{ forecast.precip_min }}</span></div>
-      <div class="stat-row"><span class="label">Mean</span><span class="value">{{ forecast.precip_mean }}</span></div>
-      <div class="stat-row"><span class="label">Maximum</span><span class="value">{{ forecast.precip_max }}</span></div>
+      <div class="section-title">{{ var_label }}</div>
+      <div class="stat-row"><span class="label">Minimum</span><span class="value">{{ forecast.precip_min }} {{ val_unit }}</span></div>
+      <div class="stat-row"><span class="label">Mean</span><span class="value">{{ forecast.precip_mean }} {{ val_unit }}</span></div>
+      <div class="stat-row"><span class="label">Maximum</span><span class="value">{{ forecast.precip_max }} {{ val_unit }}</span></div>
       {% if forecast.ensemble_size %}
       <div class="stat-row"><span class="label">Ensemble members</span><span class="value">{{ forecast.ensemble_size }}</span></div>
       <div class="stat-row"><span class="label">P50 (median)</span><span class="value">{{ forecast.precip_p50 }}</span></div>
@@ -214,7 +220,7 @@
   {% endif %}
 
   <div class="card">
-    <div class="section-title">Precipitation Map (time-mean)</div>
+    <div class="section-title">{{ var_label }} Map (time-mean)</div>
     <div id="map"></div>
     <div class="legend">
       <span>Low</span>
@@ -252,7 +258,9 @@
       color: 'transparent',
     }),
     onEachFeature: (feature, layer) => {
-      layer.bindTooltip(`${feature.properties.precip} mm`, { sticky: true });
+      const unit = "{{ val_unit }}";
+      const prop = feature.properties.discharge ?? feature.properties.precip;
+      layer.bindTooltip(`${prop} ${unit}`, { sticky: true });
     },
   }).addTo(map);
 

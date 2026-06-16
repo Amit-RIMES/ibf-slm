@@ -94,6 +94,8 @@
     <a href="/alerts">Alerts</a>
     <a href="/sync">Auto-Sync</a>
     <a href="/ecmwf" class="active">ECMWF</a>
+    <a href="/cds">CDS</a>
+    <a href="/glofas">GloFAS</a>
     <a href="/drought">Drought</a>
     <a href="/risk">Risk</a>
     <a href="/reports/operational">Report</a>
@@ -151,6 +153,32 @@
         <span class="toggle-label" style="font-size:.875rem;font-weight:500;">
           Use ENS (51-member ensemble) instead of HRES deterministic
         </span>
+      </div>
+
+      <!-- Parameters to fetch -->
+      {% set active_params = (cfg.parameters | default('["tp"]')) | tojson if cfg.parameters else '["tp"]' %}
+      {% set param_list = cfg.parameters | default('["tp"]') %}
+      <div style="margin-bottom:1.5rem;">
+        <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;margin-bottom:.6rem;">
+          Parameters to Fetch
+        </div>
+        <div style="display:flex;gap:1.5rem;flex-wrap:wrap;">
+          {% for pval, plabel, phint in [
+            ("tp", "Precipitation (tp)", "Cumulative total, mm"),
+            ("2t", "Temperature 2m (2t)", "2-metre temp, °C"),
+            ("wind10", "Wind Speed 10m", "U+V → m/s"),
+            ("msl", "Sea Level Pressure (msl)", "Mean SLP, hPa"),
+          ] %}
+          <label style="display:flex;align-items:flex-start;gap:.5rem;cursor:pointer;font-size:.875rem;">
+            <input type="checkbox" name="parameters" value="{{ pval }}" style="margin-top:.15rem;accent-color:#4f46e5;"
+                   {% if pval in param_list %}checked{% endif %}>
+            <span>
+              <span style="font-weight:600;">{{ plabel }}</span>
+              <span style="color:#9ca3af;font-size:.78rem;display:block;">{{ phint }}</span>
+            </span>
+          </label>
+          {% endfor %}
+        </div>
       </div>
 
       <div class="form-grid">

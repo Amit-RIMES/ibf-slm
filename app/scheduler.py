@@ -9,6 +9,7 @@ from app.core.background import enqueue
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.bulletin_schedule import BulletinSchedule
+from app.models.cds_config import CdsConfig
 from app.models.ecmwf_config import EcmwfConfig
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
@@ -43,6 +44,9 @@ _CHIRPS_JOB_ID = "chirps_sync"
 _GAP_CHECK_JOB_ID = "data_gap_check"
 _BULLETIN_JOB_ID = "bulletin_email"
 _ECMWF_JOB_ID = "ecmwf_sync"
+_SEAS5_JOB_ID = "seas5_sync"
+_ERA5_JOB_ID = "era5_sync"
+_GLOFAS_JOB_ID = "glofas_sync"
 
 
 async def _run_daily_sync():
@@ -598,6 +602,176 @@ async def apply_schedule():
 
     # ECMWF Open Data IFS — schedule driven by DB config
     await apply_ecmwf_schedule()
+
+    # CDS (SEAS5 / ERA5 / GloFAS) — schedule driven by DB config
+    await apply_cds_schedules()
+
+
+# ── CDS sync jobs ──────────────────────────────────────────────────────────────
+
+async def _run_seas5_sync() -> None:
+    _started = datetime.now(timezone.utc)
+    try:
+        async with AsyncSessionLocal() as db:
+            cfg = await db.scalar(select(CdsConfig).where(CdsConfig.id == 1))
+        if not cfg or not cfg.seas5_enabled or not cfg.api_key:
+            return
+
+        from app.core.seas5 import fetch_seas5
+        from app.models.seasonal import SeasonalForecast
+
+        records = await fetch_seas5(
+            api_url=cfg.api_url, api_key=cfg.api_key,
+            lat_min=cfg.lat_min, lat_max=cfg.lat_max,
+            lon_min=cfg.lon_min, lon_max=cfg.lon_max,
+            lead_months=cfg.seas5_lead_months,
+        )
+        added = 0
+        if records:
+            async with AsyncSessionLocal() as db:
+                for rec in records:
+                    existing = await db.scalar(
+                        select(SeasonalForecast).where(
+                            SeasonalForecast.source == "SEAS5",
+                            SeasonalForecast.issue_date == rec["issue_date"],
+                            SeasonalForecast.valid_start == rec["valid_start"],
+                        )
+                    )
+                    if not existing:
+                        db.add(SeasonalForecast(**rec))
+                        added += 1
+                await db.commit()
+
+        detail = f"Imported {added}/{len(records)} SEAS5 months" if records else "No records returned"
+        await _record_job(_SEAS5_JOB_ID, "ok" if records else "error", _started, detail)
+        async with AsyncSessionLocal() as db:
+            cfg = await db.scalar(select(CdsConfig).where(CdsConfig.id == 1))
+            if cfg:
+                cfg.seas5_last_run_at = datetime.now(timezone.utc)
+                cfg.seas5_last_run_status = "ok" if records else "error"
+                cfg.seas5_last_run_detail = detail[:512]
+                await db.commit()
+    except Exception as exc:
+        await _record_job(_SEAS5_JOB_ID, "error", _started, str(exc))
+
+
+async def _run_era5_sync() -> None:
+    _started = datetime.now(timezone.utc)
+    try:
+        async with AsyncSessionLocal() as db:
+            cfg = await db.scalar(select(CdsConfig).where(CdsConfig.id == 1))
+        if not cfg or not cfg.era5_enabled or not cfg.api_key:
+            return
+
+        from app.core.era5 import fetch_era5
+        from app.models.observed_rainfall import ObservedRainfall
+
+        records = await fetch_era5(
+            api_url=cfg.api_url, api_key=cfg.api_key,
+            lat_min=cfg.lat_min, lat_max=cfg.lat_max,
+            lon_min=cfg.lon_min, lon_max=cfg.lon_max,
+            lookback_days=cfg.era5_lookback_days,
+        )
+        added = 0
+        if records:
+            async with AsyncSessionLocal() as db:
+                for rec in records:
+                    existing = await db.scalar(
+                        select(ObservedRainfall).where(
+                            ObservedRainfall.obs_date == rec["obs_date"],
+                            ObservedRainfall.source == "ERA5",
+                        )
+                    )
+                    if not existing:
+                        db.add(ObservedRainfall(**rec))
+                        added += 1
+                await db.commit()
+
+        detail = f"Imported {added}/{len(records)} ERA5 days" if records else "No records returned"
+        await _record_job(_ERA5_JOB_ID, "ok" if records else "error", _started, detail)
+        async with AsyncSessionLocal() as db:
+            cfg = await db.scalar(select(CdsConfig).where(CdsConfig.id == 1))
+            if cfg:
+                cfg.era5_last_run_at = datetime.now(timezone.utc)
+                cfg.era5_last_run_status = "ok" if records else "error"
+                cfg.era5_last_run_detail = detail[:512]
+                await db.commit()
+    except Exception as exc:
+        await _record_job(_ERA5_JOB_ID, "error", _started, str(exc))
+
+
+async def _run_glofas_sync() -> None:
+    _started = datetime.now(timezone.utc)
+    try:
+        async with AsyncSessionLocal() as db:
+            cfg = await db.scalar(select(CdsConfig).where(CdsConfig.id == 1))
+        if not cfg or not cfg.glofas_enabled or not cfg.api_key:
+            return
+
+        from app.core.glofas_fetch import fetch_glofas
+        from app.models.glofas import GlofasRecord
+
+        data = await fetch_glofas(
+            api_url=cfg.api_url, api_key=cfg.api_key,
+            lat_min=cfg.lat_min, lat_max=cfg.lat_max,
+            lon_min=cfg.lon_min, lon_max=cfg.lon_max,
+        )
+        status = "error"
+        detail = "Fetch returned None"
+        if data:
+            async with AsyncSessionLocal() as db:
+                db.add(GlofasRecord(**data))
+                await db.commit()
+            status = "ok"
+            detail = f"GloFAS: mean={data['discharge_mean']} m³/s, max={data['discharge_max']} m³/s"
+
+        await _record_job(_GLOFAS_JOB_ID, status, _started, detail)
+        async with AsyncSessionLocal() as db:
+            cfg = await db.scalar(select(CdsConfig).where(CdsConfig.id == 1))
+            if cfg:
+                cfg.glofas_last_run_at = datetime.now(timezone.utc)
+                cfg.glofas_last_run_status = status
+                cfg.glofas_last_run_detail = detail[:512]
+                await db.commit()
+    except Exception as exc:
+        await _record_job(_GLOFAS_JOB_ID, "error", _started, str(exc))
+
+
+async def apply_cds_schedules() -> None:
+    """Read CdsConfig from DB and (re)schedule SEAS5, ERA5, GloFAS jobs."""
+    async with AsyncSessionLocal() as db:
+        cfg = await db.scalar(select(CdsConfig).where(CdsConfig.id == 1))
+
+    for job_id in (_SEAS5_JOB_ID, _ERA5_JOB_ID, _GLOFAS_JOB_ID):
+        if _scheduler.get_job(job_id):
+            _scheduler.remove_job(job_id)
+
+    if not cfg:
+        return
+
+    if cfg.seas5_enabled and cfg.api_key:
+        _scheduler.add_job(
+            _run_seas5_sync, trigger="cron",
+            hour=cfg.seas5_sync_hour, minute=cfg.seas5_sync_minute,
+            id=_SEAS5_JOB_ID, replace_existing=True,
+        )
+        logger.info("SEAS5 sync scheduled at %02d:%02d UTC", cfg.seas5_sync_hour, cfg.seas5_sync_minute)
+
+    if cfg.era5_enabled and cfg.api_key:
+        _scheduler.add_job(
+            _run_era5_sync, trigger="cron",
+            hour=cfg.era5_sync_hour, minute=cfg.era5_sync_minute,
+            id=_ERA5_JOB_ID, replace_existing=True,
+        )
+        logger.info("ERA5 sync scheduled at %02d:%02d UTC", cfg.era5_sync_hour, cfg.era5_sync_minute)
+
+    if cfg.glofas_enabled and cfg.api_key:
+        _scheduler.add_job(
+            _run_glofas_sync, trigger="cron",
+            hour=cfg.glofas_sync_hour, minute=cfg.glofas_sync_minute,
+            id=_GLOFAS_JOB_ID, replace_existing=True,
+        )
+        logger.info("GloFAS sync scheduled at %02d:%02d UTC", cfg.glofas_sync_hour, cfg.glofas_sync_minute)
 
 
 def start_scheduler():

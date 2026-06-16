@@ -20,6 +20,8 @@ class EcmwfConfig(Base):
     lat_max: Mapped[float] = mapped_column(Float, default=35.0, nullable=False)
     lon_min: Mapped[float] = mapped_column(Float, default=60.0, nullable=False)
     lon_max: Mapped[float] = mapped_column(Float, default=155.0, nullable=False)
+    # JSON array of ECMWF params to fetch, e.g. '["tp","2t"]'. Default: tp only.
+    parameters: Mapped[Optional[str]] = mapped_column(String(256), nullable=True, default='["tp"]')
     last_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_run_status: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     last_run_detail: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)

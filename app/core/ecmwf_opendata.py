@@ -4,20 +4,14 @@ ECMWF Open Data (IFS) forecast ingestion.
 Downloads ECMWF IFS forecasts using the free ecmwf-opendata Python client.
 No API key or registration required.
 
-Parameter:
-  tp = total precipitation accumulation (metres, converted to mm here)
+Supported variables:
+  tp      = total precipitation accumulation (metres → mm)
+  2t      = 2-metre temperature (Kelvin → °C)
+  wind10  = 10-metre wind speed (computed from 10u + 10v, m/s)
+  msl     = mean sea level pressure (Pascal → hPa)
 
 HRES (deterministic): 0.25° resolution, 10-day horizon
 ENS  (ensemble, 51 members): 0.5° resolution, 15-day horizon
-
-`tp` is cumulative from T+0, so lead-time buckets are derived by
-differencing adjacent steps:
-  d1_5  = tp(step=120h)
-  d6_10 = tp(step=240h) - tp(step=120h)
-
-System dependency: cfgrib requires the eccodes C library.
-  Ubuntu/Debian: sudo apt-get install libeccodes-dev
-  macOS:         brew install eccodes
 """
 import json
 import logging
@@ -31,10 +25,28 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 _MM_PER_M = 1000.0  # ECMWF tp is in metres
+_K_OFFSET = 273.15  # Kelvin → Celsius
+_PA_PER_HPA = 100.0  # Pa → hPa
 
 # Steps to request (hours from forecast start)
 _HRES_STEPS = [24, 48, 72, 96, 120, 144, 168, 192, 216, 240]
 _ENS_STEPS = [24, 120, 240]
+
+# ECMWF param codes per variable
+_PARAM_MAP = {
+    "tp": "tp",
+    "2t": "2t",
+    "wind10": ["10u", "10v"],
+    "msl": "msl",
+}
+
+# Units label per variable (for filename and ForecastUpload.variable)
+_SOURCE_SUFFIX = {
+    "tp": "tp",
+    "2t": "2t",
+    "wind10": "wind10",
+    "msl": "msl",
+}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -119,13 +131,43 @@ def _open_grib(path: str):
         raise RuntimeError(f"Could not open GRIB2 file: {exc}") from exc
 
 
+def _apply_unit_conversion(da, variable: str, lat_name: str):
+    """Apply unit conversion for the given variable. Returns (da_converted, is_cumulative)."""
+    if variable == "tp":
+        return da * _MM_PER_M, True  # m → mm, cumulative
+    elif variable == "2t":
+        return da - _K_OFFSET, False  # K → °C, instantaneous
+    elif variable == "msl":
+        return da / _PA_PER_HPA, False  # Pa → hPa, instantaneous
+    else:
+        return da, False  # wind10 or unknown: already m/s, not cumulative
+
+
+def _extract_wind10(ds) -> Optional["np.ndarray"]:
+    """Compute 10m wind speed magnitude from u and v components in a multi-dataset."""
+    import cfgrib
+    import xarray as xr
+    datasets = cfgrib.open_datasets(ds if isinstance(ds, str) else ds.encoding.get("source", ""))
+    u_ds = next((d for d in datasets if "u10" in d.data_vars or "u" in d.data_vars), None)
+    v_ds = next((d for d in datasets if "v10" in d.data_vars or "v" in d.data_vars), None)
+    if u_ds is None or v_ds is None:
+        return None
+    u_name = "u10" if "u10" in u_ds.data_vars else "u"
+    v_name = "v10" if "v10" in v_ds.data_vars else "v"
+    return np.sqrt(u_ds[u_name].values ** 2 + v_ds[v_name].values ** 2)
+
+
 def _process_grib(
     path: str,
     source_label: str,
     lat_min: float, lat_max: float,
     lon_min: float, lon_max: float,
     is_ensemble: bool,
+    variable: str = "tp",
 ) -> Optional[dict]:
+    if variable == "wind10":
+        return _process_wind10_grib(path, source_label, lat_min, lat_max, lon_min, lon_max, is_ensemble)
+
     try:
         ds = _open_grib(path)
     except Exception as exc:
@@ -140,11 +182,19 @@ def _process_grib(
         ds.close()
         return None
 
-    tp_name = next((n for n in ("tp", "precipitation", "rain") if n in ds.data_vars), None)
-    if tp_name is None:
-        tp_name = list(ds.data_vars)[0]
+    # Find the relevant data variable
+    var_candidates = {
+        "tp": ("tp", "precipitation", "rain"),
+        "2t": ("t2m", "2t", "t"),
+        "msl": ("msl", "prmsl"),
+    }
+    candidates = var_candidates.get(variable, (variable,))
+    field_name = next((n for n in candidates if n in ds.data_vars), None)
+    if field_name is None:
+        field_name = list(ds.data_vars)[0]
 
-    da = ds[tp_name] * _MM_PER_M  # metres → mm
+    da_raw = ds[field_name]
+    da, is_cumulative = _apply_unit_conversion(da_raw, variable, lat_name)
 
     lats = ds[lat_name].values.flatten()
     lons = ds[lon_name].values.flatten()
@@ -183,22 +233,29 @@ def _process_grib(
             time_start = f"T+{step_hours[0]:03d}h"
             time_end = f"T+{step_hours[-1]:03d}h"
 
-            # Lead-time bucket: d1_5 = step at ~120h, d6_10 = step ~240h − step ~120h
             idx_5d = min(range(len(step_hours)), key=lambda i: abs(step_hours[i] - 120))
             idx_10d = min(range(len(step_hours)), key=lambda i: abs(step_hours[i] - 240))
             lt = {}
             arr_5d = da.isel({step_dim: idx_5d}).values
-            lt["d1_5"] = _bucket_stats(arr_5d)
-            if idx_10d != idx_5d:
-                arr_10d = da.isel({step_dim: idx_10d}).values
-                arr_6_10 = np.where(arr_10d - arr_5d >= 0, arr_10d - arr_5d, 0)
-                lt["d6_10"] = _bucket_stats(arr_6_10)
+            if is_cumulative:
+                lt["d1_5"] = _bucket_stats(arr_5d)
+                if idx_10d != idx_5d:
+                    arr_10d = da.isel({step_dim: idx_10d}).values
+                    arr_6_10 = np.where(arr_10d - arr_5d >= 0, arr_10d - arr_5d, 0)
+                    lt["d6_10"] = _bucket_stats(arr_6_10)
+            else:
+                # Instantaneous: stats per window mean
+                lt["d1_5"] = _bucket_stats(da.isel({step_dim: slice(0, idx_5d + 1)}).mean(step_dim).values)
+                if idx_10d != idx_5d:
+                    lt["d6_10"] = _bucket_stats(da.isel({step_dim: slice(idx_5d + 1, idx_10d + 1)}).mean(step_dim).values)
             lead_time_stats = json.dumps(lt)
         except Exception as exc:
             logger.warning("ECMWF lead-time stats failed: %s", exc)
 
-        # Use the final step (longest accumulation) as the total precip field
-        da_total = da.isel({step_dim: -1})
+        if is_cumulative:
+            da_total = da.isel({step_dim: -1})
+        else:
+            da_total = da.mean(dim=step_dim)
     else:
         da_total = da.squeeze()
 
@@ -230,13 +287,15 @@ def _process_grib(
     geojson = _build_geojson(lats_s, lons_s, sub)
     now = datetime.now(timezone.utc)
     suffix = "ens" if is_ensemble else "hres"
-    filename = f"ecmwf_ifs_{suffix}_{now.strftime('%Y%m%d_%H%M%S')}.grib2"
+    var_suffix = _SOURCE_SUFFIX.get(variable, variable)
+    filename = f"ecmwf_ifs_{suffix}_{var_suffix}_{now.strftime('%Y%m%d_%H%M%S')}.grib2"
 
     ds.close()
 
     return {
         "filename": filename,
         "source": source_label,
+        "variable": variable,
         "uploaded_at": now,
         "lat_min": round(float(lats_s.min()), 4),
         "lat_max": round(float(lats_s.max()), 4),
@@ -254,6 +313,103 @@ def _process_grib(
     }
 
 
+def _process_wind10_grib(
+    path: str,
+    source_label: str,
+    lat_min: float, lat_max: float,
+    lon_min: float, lon_max: float,
+    is_ensemble: bool,
+) -> Optional[dict]:
+    """Process 10m wind speed from a GRIB containing 10u and 10v."""
+    import cfgrib
+    import xarray as xr
+
+    try:
+        datasets = cfgrib.open_datasets(path)
+    except Exception as exc:
+        logger.error("ECMWF wind10 GRIB parse failed: %s", exc)
+        return None
+
+    u_ds = next((d for d in datasets if any(v in d.data_vars for v in ("u10", "u"))), None)
+    v_ds = next((d for d in datasets if any(v in d.data_vars for v in ("v10", "v"))), None)
+
+    if u_ds is None or v_ds is None:
+        logger.error("ECMWF wind10: could not find u/v datasets in GRIB")
+        return None
+
+    u_name = "u10" if "u10" in u_ds.data_vars else "u"
+    v_name = "v10" if "v10" in v_ds.data_vars else "v"
+
+    lat_name = next((n for n in ("latitude", "lat") if n in u_ds.coords), None)
+    lon_name = next((n for n in ("longitude", "lon") if n in u_ds.coords), None)
+    if lat_name is None:
+        logger.error("ECMWF wind10: cannot find lat/lon")
+        return None
+
+    u_da = u_ds[u_name]
+    v_da = v_ds[v_name]
+
+    # Average over ensemble and time
+    for dim in list(u_da.dims):
+        if dim not in (lat_name, lon_name):
+            u_da = u_da.mean(dim=dim)
+    for dim in list(v_da.dims):
+        if dim not in (lat_name, lon_name):
+            v_da = v_da.mean(dim=dim)
+
+    try:
+        speed_vals = np.sqrt(u_da.values ** 2 + v_da.values ** 2)
+    except Exception as exc:
+        logger.error("ECMWF wind10: magnitude computation failed: %s", exc)
+        return None
+
+    lats = u_ds[lat_name].values.flatten()
+    lons = u_ds[lon_name].values.flatten()
+
+    if len(lats) > 1 and lats[0] > lats[-1]:
+        lats = lats[::-1]
+        speed_vals = speed_vals[::-1, :]
+
+    sub, lats_s, lons_s = _subset_2d(speed_vals, lats, lons, lat_min, lat_max, lon_min, lon_max)
+    if sub.size == 0:
+        sub, lats_s, lons_s = speed_vals, lats, lons
+
+    flat = sub.flatten().astype(float)
+    flat = flat[~np.isnan(flat)]
+    if not len(flat):
+        return None
+
+    geojson = _build_geojson(lats_s, lons_s, sub)
+    now = datetime.now(timezone.utc)
+    suffix = "ens" if is_ensemble else "hres"
+    filename = f"ecmwf_ifs_{suffix}_wind10_{now.strftime('%Y%m%d_%H%M%S')}.grib2"
+
+    for ds in datasets:
+        try:
+            ds.close()
+        except Exception:
+            pass
+
+    return {
+        "filename": filename,
+        "source": source_label,
+        "variable": "wind10",
+        "uploaded_at": now,
+        "lat_min": round(float(lats_s.min()), 4),
+        "lat_max": round(float(lats_s.max()), 4),
+        "lon_min": round(float(lons_s.min()), 4),
+        "lon_max": round(float(lons_s.max()), 4),
+        "time_start": "T+024h",
+        "time_end": "T+240h",
+        "time_steps": 1,
+        "precip_min": round(float(flat.min()), 2),
+        "precip_max": round(float(flat.max()), 2),
+        "precip_mean": round(float(flat.mean()), 2),
+        "geojson": geojson,
+        "lead_time_stats": None,
+    }
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 async def fetch_ecmwf_forecast(
@@ -264,6 +420,7 @@ async def fetch_ecmwf_forecast(
     run_time: int = 0,
     use_ensemble: bool = False,
     target_date: Optional[str] = None,
+    variable: str = "tp",
 ) -> Optional[dict]:
     """
     Download and process the latest ECMWF IFS forecast.
@@ -275,44 +432,46 @@ async def fetch_ecmwf_forecast(
         run_time: IFS run hour (0, 6, 12, 18 UTC). Default 0 = 00z run.
         use_ensemble: Fetch 51-member ENS (pf) instead of HRES deterministic.
         target_date: "YYYYMMDD" string, or None for latest available run.
+        variable: One of "tp", "2t", "wind10", "msl". Default "tp".
     """
     try:
         from ecmwf.opendata import Client
     except ImportError:
         logger.error(
             "ecmwf-opendata not installed. "
-            "Install with: pip install ecmwf-opendata cfgrib "
-            "and ensure eccodes is available (apt install libeccodes-dev)."
+            "Install with: pip install ecmwf-opendata cfgrib"
         )
         return None
 
     try:
-        import cfgrib  # noqa: F401  — just verify it's importable
+        import cfgrib  # noqa: F401
     except ImportError:
-        logger.error(
-            "cfgrib not installed. Install with: pip install cfgrib "
-            "and ensure eccodes is available (apt install libeccodes-dev)."
-        )
+        logger.error("cfgrib not installed. Install with: pip install cfgrib")
+        return None
+
+    if variable not in _PARAM_MAP:
+        logger.error("ECMWF: unknown variable '%s'. Supported: %s", variable, list(_PARAM_MAP))
         return None
 
     is_ensemble = use_ensemble
     forecast_type = "pf" if is_ensemble else "fc"
     steps = _ENS_STEPS if is_ensemble else _HRES_STEPS
     source_label = "ECMWF-IFS-ENS" if is_ensemble else "ECMWF-IFS-HRES"
+    param = _PARAM_MAP[variable]
 
     with tempfile.TemporaryDirectory() as tmpdir:
         target = os.path.join(tmpdir, "ecmwf_forecast.grib2")
         client = Client(source="ecmwf")
 
-        kwargs: dict = dict(step=steps, type=forecast_type, param="tp", target=target)
+        kwargs: dict = dict(step=steps, type=forecast_type, param=param, target=target)
         if target_date:
             kwargs["date"] = target_date
         if run_time in (0, 6, 12, 18):
             kwargs["time"] = run_time
 
         logger.info(
-            "ECMWF Open Data: requesting %s tp steps=%s date=%s time=%sz",
-            forecast_type.upper(), steps, target_date or "latest", run_time,
+            "ECMWF Open Data: requesting %s var=%s param=%s steps=%s date=%s time=%sz",
+            forecast_type.upper(), variable, param, steps, target_date or "latest", run_time,
         )
         try:
             client.retrieve(**kwargs)
@@ -325,10 +484,10 @@ async def fetch_ecmwf_forecast(
             return None
 
         file_size_kb = os.path.getsize(target) / 1024
-        logger.info("ECMWF: downloaded %.1f KB, processing...", file_size_kb)
+        logger.info("ECMWF: downloaded %.1f KB, processing var=%s...", file_size_kb, variable)
 
         return _process_grib(
             target, source_label,
             lat_min, lat_max, lon_min, lon_max,
-            is_ensemble,
+            is_ensemble, variable,
         )
