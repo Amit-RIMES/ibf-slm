@@ -211,7 +211,10 @@ async def fetch_seas5(
             issue_date, lead_months, lat_max, lon_min, lat_min, lon_max,
         )
         try:
-            client.retrieve("seasonal-monthly-single-levels", request_params, output)
+            import asyncio
+            await asyncio.to_thread(
+                client.retrieve, "seasonal-monthly-single-levels", request_params, output
+            )
         except Exception as exc:
             logger.error("SEAS5 CDS retrieve failed: %s", exc)
             return []

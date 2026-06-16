@@ -237,7 +237,10 @@ async def fetch_era5(
             logger.info("ERA5: requesting %d-%02d area=[%.1f,%.1f,%.1f,%.1f]",
                         year, month, lat_max, lon_min, lat_min, lon_max)
             try:
-                client.retrieve("reanalysis-era5-land", request_params, output)
+                import asyncio
+                await asyncio.to_thread(
+                    client.retrieve, "reanalysis-era5-land", request_params, output
+                )
             except Exception as exc:
                 logger.error("ERA5 CDS retrieve failed for %d-%02d: %s", year, month, exc)
                 continue

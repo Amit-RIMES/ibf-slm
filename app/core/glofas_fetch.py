@@ -207,7 +207,10 @@ async def fetch_glofas(
             forecast_date, lat_max, lon_min, lat_min, lon_max,
         )
         try:
-            client.retrieve("cems-glofas-forecast", request_params, output)
+            import asyncio
+            await asyncio.to_thread(
+                client.retrieve, "cems-glofas-forecast", request_params, output
+            )
         except Exception as exc:
             logger.error("GloFAS CDS retrieve failed: %s", exc)
             return None
