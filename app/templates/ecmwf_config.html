@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+{% block title %}ECMWF Open Data — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; text-decoration: none; }
+  nav .nav-links a.active { color: #4f46e5; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: .25rem; }
+  .sub { color: #6b7280; font-size: .9rem; margin-bottom: 2rem; }
+
+  .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    padding: 1.5rem; margin-bottom: 1.5rem; }
+  .card-title { font-size: 1rem; font-weight: 700; color: #1f2937; margin-bottom: 1.25rem;
+    padding-bottom: .6rem; border-bottom: 1px solid #f3f4f6; }
+
+  /* Toggle */
+  .toggle-row { display: flex; align-items: center; gap: .75rem; margin-bottom: 1.2rem; }
+  .toggle { position: relative; display: inline-block; width: 44px; height: 24px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; cursor: pointer; inset: 0; background: #d1d5db;
+    border-radius: 999px; transition: .2s; }
+  .slider::before { content: ""; position: absolute; height: 18px; width: 18px;
+    left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .2s; }
+  input:checked + .slider { background: #4f46e5; }
+  input:checked + .slider::before { transform: translateX(20px); }
+  .toggle-label { font-size: .95rem; font-weight: 600; }
+
+  /* Form grid */
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: .85rem; margin-bottom: 1.2rem; }
+  .form-group label { display: block; font-size: .75rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em; color: #9ca3af; margin-bottom: .35rem; }
+  .form-group input, .form-group select {
+    width: 100%; padding: .5rem .75rem; border: 1px solid #d1d5db;
+    border-radius: 8px; font-size: .9rem; background: #fff; box-sizing: border-box; }
+  .form-group input:focus, .form-group select:focus { border-color: #4f46e5; outline: none; }
+  .form-hint { font-size: .72rem; color: #9ca3af; margin-top: .25rem; }
+
+  .btn { padding: .55rem 1.25rem; background: #4f46e5; color: #fff; border: none;
+    border-radius: 8px; font-size: .875rem; font-weight: 600; cursor: pointer;
+    text-decoration: none; display: inline-block; }
+  .btn:hover { opacity: .88; }
+  .btn-outline { background: #fff; color: #374151; border: 1px solid #d1d5db; }
+  .btn-outline:hover { background: #f3f4f6; }
+  .btn-amber { background: #f59e0b; }
+
+  /* Status strip */
+  .status-strip { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;
+    background: #f9fafb; border-radius: 8px; padding: .75rem 1rem; margin-bottom: 1.2rem;
+    font-size: .875rem; }
+  .status-pill { padding: .2rem .65rem; border-radius: 999px; font-size: .78rem;
+    font-weight: 700; }
+  .pill-ok     { background: #dcfce7; color: #15803d; }
+  .pill-error  { background: #fef2f2; color: #b91c1c; }
+  .pill-skipped{ background: #f3f4f6; color: #6b7280; }
+  .pill-none   { background: #f3f4f6; color: #9ca3af; }
+
+  /* Notice banner */
+  .notice { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px;
+    padding: .75rem 1rem; font-size: .85rem; color: #92400e; margin-bottom: 1.25rem; }
+  .fetching-notice { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
+    padding: .75rem 1rem; font-size: .85rem; color: #1d4ed8; margin-bottom: 1.25rem; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+  th { text-align: left; padding: .5rem .75rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .05em; color: #9ca3af;
+    border-bottom: 2px solid #e5e7eb; }
+  td { padding: .6rem .75rem; border-bottom: 1px solid #f3f4f6; }
+  tr:last-child td { border-bottom: none; }
+  .mono { font-family: monospace; font-size: .82rem; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/forecasts/drift">Drift</a>
+    <a href="/observed">Observed</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/ecmwf" class="active">ECMWF</a>
+    <a href="/drought">Drought</a>
+    <a href="/risk">Risk</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/seasonal">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:.75rem;margin-bottom:1.5rem;">
+    <div>
+      <h1>ECMWF Open Data</h1>
+      <div class="sub">Free IFS medium-range forecasts — no API key required</div>
+    </div>
+    <a href="/sync" class="btn btn-outline" style="margin-top:.25rem;">← Auto-Sync</a>
+  </div>
+
+  {% if request.query_params.get('fetching') %}
+  <div class="fetching-notice">
+    Fetch started in the background. Refresh this page in 60–120 seconds to see the result.
+  </div>
+  {% endif %}
+
+  <div class="notice">
+    <strong>System dependency:</strong> ECMWF data is in GRIB2 format and requires
+    <code>cfgrib</code> and the <code>eccodes</code> C library.
+    Install with: <code>sudo apt-get install libeccodes-dev &amp;&amp; pip install cfgrib ecmwf-opendata</code>
+  </div>
+
+  <!-- ── Configuration ───────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">Configuration</div>
+    <form method="post" action="/ecmwf/config">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+
+      <div class="toggle-row">
+        <label class="toggle">
+          <input type="checkbox" name="enabled" {% if cfg.enabled %}checked{% endif %}
+                 onchange="this.form.submit()">
+          <span class="slider"></span>
+        </label>
+        <span class="toggle-label">
+          {% if cfg.enabled %}Enabled — daily sync active{% else %}Disabled{% endif %}
+        </span>
+      </div>
+
+      <div class="toggle-row" style="margin-bottom:1.5rem;">
+        <label class="toggle">
+          <input type="checkbox" name="use_ensemble" {% if cfg.use_ensemble %}checked{% endif %}>
+          <span class="slider"></span>
+        </label>
+        <span class="toggle-label" style="font-size:.875rem;font-weight:500;">
+          Use ENS (51-member ensemble) instead of HRES deterministic
+        </span>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>IFS Run Time (UTC)</label>
+          <select name="run_time">
+            {% for h in [0, 6, 12, 18] %}
+            <option value="{{ h }}" {% if h == cfg.run_time %}selected{% endif %}>{{ "%02d"|format(h) }}z</option>
+            {% endfor %}
+          </select>
+          <div class="form-hint">00z available ~08:00 UTC, 12z ~20:00 UTC</div>
+        </div>
+        <div class="form-group">
+          <label>Sync Hour (UTC)</label>
+          <input type="number" name="sync_hour" value="{{ cfg.sync_hour }}" min="0" max="23">
+          <div class="form-hint">Hour to run the daily job</div>
+        </div>
+        <div class="form-group">
+          <label>Sync Minute</label>
+          <input type="number" name="sync_minute" value="{{ cfg.sync_minute }}" min="0" max="59">
+        </div>
+      </div>
+
+      <div style="margin-bottom:.5rem;font-size:.85rem;font-weight:700;color:#374151;">
+        Spatial Bounding Box
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Lat Min (°S)</label>
+          <input type="number" name="lat_min" value="{{ cfg.lat_min }}" step="0.5" min="-90" max="90">
+        </div>
+        <div class="form-group">
+          <label>Lat Max (°N)</label>
+          <input type="number" name="lat_max" value="{{ cfg.lat_max }}" step="0.5" min="-90" max="90">
+        </div>
+        <div class="form-group">
+          <label>Lon Min (°E)</label>
+          <input type="number" name="lon_min" value="{{ cfg.lon_min }}" step="0.5" min="-180" max="180">
+        </div>
+        <div class="form-group">
+          <label>Lon Max (°E)</label>
+          <input type="number" name="lon_max" value="{{ cfg.lon_max }}" step="0.5" min="-180" max="180">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin-top:.5rem;">
+        <button type="submit" class="btn">Save settings</button>
+        <span style="font-size:.8rem;color:#9ca3af;">
+          HRES = 0.25° resolution, 10 days &nbsp;|&nbsp; ENS = 0.5°, 51 members, 15 days
+        </span>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── Status & Manual Trigger ─────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">Status &amp; Manual Fetch</div>
+
+    <div class="status-strip">
+      <span><strong>Last run:</strong>
+        {{ cfg.last_run_at.strftime("%d %b %Y %H:%M UTC") if cfg.last_run_at else "Never" }}
+      </span>
+      {% if cfg.last_run_status %}
+      <span class="status-pill pill-{{ cfg.last_run_status }}">{{ cfg.last_run_status }}</span>
+      {% else %}
+      <span class="status-pill pill-none">—</span>
+      {% endif %}
+      {% if cfg.last_run_detail %}
+      <span style="color:#6b7280;font-size:.8rem;">{{ cfg.last_run_detail }}</span>
+      {% endif %}
+    </div>
+
+    <form method="post" action="/ecmwf/fetch-now" style="display:inline;">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+      <button type="submit" class="btn btn-amber"
+              onclick="return confirm('Start an ECMWF IFS fetch now? This runs in the background and may take 60–120 seconds.')">
+        ⬇ Fetch Latest Now
+      </button>
+    </form>
+    <span style="font-size:.8rem;color:#9ca3af;margin-left:.75rem;">
+      Downloads the most recent available {{ "ENS" if cfg.use_ensemble else "HRES" }} run
+      ({{ "%02d"|format(cfg.run_time) }}z) and stores it as a forecast.
+    </span>
+  </div>
+
+  <!-- ── Recent ECMWF Forecasts ─────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">
+      Recently Ingested ECMWF Forecasts
+      {% if recent %}
+      <a href="/forecasts?source=ECMWF-IFS-HRES" style="font-size:.8rem;font-weight:500;color:#4f46e5;margin-left:.75rem;">
+        View all →
+      </a>
+      {% endif %}
+    </div>
+    {% if recent %}
+    <table>
+      <thead>
+        <tr>
+          <th>Filename</th>
+          <th>Source</th>
+          <th>Uploaded</th>
+          <th>Mean (mm)</th>
+          <th>Max (mm)</th>
+          <th>Steps</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for fc in recent %}
+        <tr>
+          <td class="mono" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            {{ fc.filename }}
+          </td>
+          <td>
+            <span style="background:#eff6ff;color:#1d4ed8;padding:.15rem .5rem;border-radius:4px;font-size:.75rem;font-weight:700;">
+              {{ fc.source }}
+            </span>
+          </td>
+          <td>{{ fc.uploaded_at.strftime("%d %b %Y %H:%M") }}</td>
+          <td style="font-weight:600;">{{ "%.1f"|format(fc.precip_mean) }}</td>
+          <td>{{ "%.1f"|format(fc.precip_max) }}</td>
+          <td style="color:#9ca3af;">{{ fc.time_steps }}</td>
+          <td><a href="/forecasts/{{ fc.id }}" style="color:#4f46e5;font-weight:600;font-size:.82rem;">View →</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="color:#9ca3af;font-size:.9rem;padding:1.5rem 0;text-align:center;">
+      No ECMWF IFS forecasts ingested yet.
+      {% if not cfg.enabled %}Enable the sync or use <strong>Fetch Latest Now</strong> above.{% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ── Job Run History ─────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">Sync Job History</div>
+    {% if runs %}
+    <table>
+      <thead>
+        <tr>
+          <th>Started</th>
+          <th>Finished</th>
+          <th>Status</th>
+          <th>Detail</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for run in runs %}
+        <tr>
+          <td>{{ run.started_at.strftime("%d %b %Y %H:%M") }}</td>
+          <td>{{ run.finished_at.strftime("%H:%M:%S") if run.finished_at else "—" }}</td>
+          <td>
+            <span class="status-pill pill-{{ run.status }}">{{ run.status }}</span>
+          </td>
+          <td style="color:#6b7280;font-size:.82rem;max-width:360px;word-break:break-word;">
+            {{ run.detail or "—" }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="color:#9ca3af;font-size:.9rem;padding:1rem 0;">No sync jobs run yet.</div>
+    {% endif %}
+  </div>
+
+  <!-- ── About ───────────────────────────────────────────────────────────── -->
+  <div class="card" style="background:#f9fafb;">
+    <div class="card-title">About ECMWF Open Data</div>
+    <ul style="font-size:.875rem;color:#374151;line-height:1.9;margin:0;padding-left:1.25rem;">
+      <li><strong>Source:</strong> ECMWF Integrated Forecasting System (IFS), freely available at
+          <code>data.ecmwf.int</code></li>
+      <li><strong>HRES:</strong> Single deterministic run, 0.25° resolution, 10-day horizon (steps 24–240h)</li>
+      <li><strong>ENS:</strong> 51-member ensemble, 0.5° resolution, 15-day horizon — percentiles
+          (p10/p25/p50/p75/p90) stored for exceedance analysis</li>
+      <li><strong>Parameter:</strong> <code>tp</code> — total precipitation accumulation (m, converted to mm)</li>
+      <li><strong>Runs:</strong> 00z, 06z, 12z, 18z UTC — 00z available ~08:00 UTC, 12z ~20:00 UTC</li>
+      <li><strong>Triggers:</strong> Ingested forecasts are automatically evaluated against all active triggers</li>
+      <li><strong>Lead-time buckets:</strong> d1–5 (cumulative at 120h), d6–10 (120h→240h increment)</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

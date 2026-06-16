@@ -12,10 +12,10 @@
     justify-content: space-between;
   }
   nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
-  nav .user-info { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; color: #6b7280; }
-  nav .user-info a { color: #6b7280; }
-  nav .user-info a.active { color: #4f46e5; font-weight: 600; }
-  nav .user-info a.logout { color: #dc2626; font-weight: 500; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; color: #6b7280; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.active { color: #4f46e5; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
 
   .main { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
   h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: .3rem; }
@@ -118,7 +118,8 @@
 {% block body %}
 <nav>
   <span class="brand">IBF App</span>
-  <div class="user-info">
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
     <a href="/forecasts">Forecasts</a>
     <a href="/forecasts/drift">Drift</a>
     <a href="/observed">Observed</a>
@@ -126,13 +127,13 @@
     <a href="/triggers">Triggers</a>
     <a href="/alerts">Alerts</a>
     <a href="/sync" class="active">Auto-Sync</a>
+    <a href="/ecmwf">ECMWF</a>
     <a href="/drought">Drought</a>
     <a href="/risk">Risk</a>
     <a href="/reports/operational">Report</a>
     <a href="/seasonal">Seasonal</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
-    <span>{{ user.username }}</span>
     {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
     <a href="/logout" class="logout">Logout</a>
   </div>

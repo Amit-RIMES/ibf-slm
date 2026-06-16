@@ -9,6 +9,7 @@ from app.core.background import enqueue
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.bulletin_schedule import BulletinSchedule
+from app.models.ecmwf_config import EcmwfConfig
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
 from app.models.sync import SyncConfig, SyncLog
@@ -41,6 +42,7 @@ _DIGEST_JOB_ID = "weekly_digest"
 _CHIRPS_JOB_ID = "chirps_sync"
 _GAP_CHECK_JOB_ID = "data_gap_check"
 _BULLETIN_JOB_ID = "bulletin_email"
+_ECMWF_JOB_ID = "ecmwf_sync"
 
 
 async def _run_daily_sync():
@@ -426,6 +428,91 @@ async def apply_bulletin_schedule() -> None:
         )
 
 
+async def _run_ecmwf_sync() -> None:
+    _started = datetime.now(timezone.utc)
+    try:
+        from app.core.anomaly import compute_anomaly
+        from app.core.ecmwf_opendata import fetch_ecmwf_forecast
+        from app.routers.triggers import evaluate_triggers
+        from sqlalchemy import select as _sel
+
+        async with AsyncSessionLocal() as db:
+            cfg = await db.scalar(_sel(EcmwfConfig).where(EcmwfConfig.id == 1))
+            if not cfg or not cfg.enabled:
+                await _record_job(_ECMWF_JOB_ID, "skipped", _started, "not enabled")
+                return
+
+            data = await fetch_ecmwf_forecast(
+                lat_min=cfg.lat_min, lat_max=cfg.lat_max,
+                lon_min=cfg.lon_min, lon_max=cfg.lon_max,
+                run_time=cfg.run_time, use_ensemble=cfg.use_ensemble,
+            )
+
+        if data is None:
+            async with AsyncSessionLocal() as db:
+                cfg = await db.scalar(_sel(EcmwfConfig).where(EcmwfConfig.id == 1))
+                if cfg:
+                    cfg.last_run_at = datetime.now(timezone.utc)
+                    cfg.last_run_status = "error"
+                    cfg.last_run_detail = "fetch returned None — see logs"
+                    await db.commit()
+            await _record_job(_ECMWF_JOB_ID, "error", _started, "fetch returned None")
+            return
+
+        async with AsyncSessionLocal() as db:
+            existing = await db.scalar(
+                _sel(ForecastUpload).where(ForecastUpload.filename == data["filename"])
+            )
+            if existing:
+                detail = f"Already imported: {data['filename']}"
+                await _record_job(_ECMWF_JOB_ID, "skipped", _started, detail)
+                return
+
+            lead_time_stats = data.pop("lead_time_stats", None)
+            forecast = ForecastUpload(lead_time_stats=lead_time_stats, **data)
+            db.add(forecast)
+            await db.commit()
+            await db.refresh(forecast)
+            await compute_anomaly(forecast, db)
+            await evaluate_triggers(forecast, db)
+            detail = f"Imported {forecast.filename} (mean={forecast.precip_mean} mm)"
+            logger.info("ECMWF sync: %s", detail)
+
+            cfg = await db.scalar(_sel(EcmwfConfig).where(EcmwfConfig.id == 1))
+            if cfg:
+                cfg.last_run_at = datetime.now(timezone.utc)
+                cfg.last_run_status = "ok"
+                cfg.last_run_detail = detail[:512]
+                await db.commit()
+
+        await _record_job(_ECMWF_JOB_ID, "ok", _started, detail)
+    except Exception as exc:
+        await _record_job(_ECMWF_JOB_ID, "error", _started, str(exc))
+        raise
+
+
+async def apply_ecmwf_schedule() -> None:
+    """Read EcmwfConfig from DB and (re)schedule the ecmwf_sync job."""
+    async with AsyncSessionLocal() as db:
+        cfg = await db.scalar(select(EcmwfConfig).where(EcmwfConfig.id == 1))
+
+    if _scheduler.get_job(_ECMWF_JOB_ID):
+        _scheduler.remove_job(_ECMWF_JOB_ID)
+
+    if not cfg or not cfg.enabled:
+        return
+
+    _scheduler.add_job(
+        _run_ecmwf_sync,
+        trigger="cron",
+        hour=cfg.sync_hour,
+        minute=cfg.sync_minute,
+        id=_ECMWF_JOB_ID,
+        replace_existing=True,
+    )
+    logger.info("ECMWF sync scheduled at %02d:%02d UTC", cfg.sync_hour, cfg.sync_minute)
+
+
 async def _cleanup_old_forecasts(db, retention_days: int) -> int:
     if not retention_days:
         return 0
@@ -508,6 +595,9 @@ async def apply_schedule():
 
     # Bulletin email — schedule driven by DB config
     await apply_bulletin_schedule()
+
+    # ECMWF Open Data IFS — schedule driven by DB config
+    await apply_ecmwf_schedule()
 
 
 def start_scheduler():
