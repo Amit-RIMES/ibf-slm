@@ -183,6 +183,14 @@
     el.textContent = tk.label;
     tickRail.appendChild(el);
   });
+  // Always show "Today" at the right edge
+  const todayTick = document.createElement('div');
+  todayTick.className = 'tl-tick';
+  todayTick.style.left = '100%';
+  todayTick.style.color = '#ef4444';
+  todayTick.style.fontWeight = '700';
+  todayTick.textContent = 'Today';
+  tickRail.appendChild(todayTick);
 
   // ── Rows ─────────────────────────────────────────────────────────────
   const container = document.getElementById('timeline-rows');
@@ -237,8 +245,10 @@
     row.bars.forEach(bar => {
       const barEl = document.createElement('div');
       barEl.className = 'tl-bar' + (bar.status === 'active' ? ' active' : '');
-      barEl.style.left = bar.left_pct + '%';
-      barEl.style.width = bar.width_pct + '%';
+      const barLeft = Math.min(bar.left_pct, 99.6);
+      const barWidth = Math.min(bar.width_pct, 100 - barLeft);
+      barEl.style.left = barLeft + '%';
+      barEl.style.width = Math.max(barWidth, 0.4) + '%';
       barEl.style.background = bar.status === 'active' ? '#dc2626' : color;
       barEl.style.opacity = bar.status === 'active' ? '1' : '0.72';
 

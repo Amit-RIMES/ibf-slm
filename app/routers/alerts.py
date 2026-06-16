@@ -141,7 +141,7 @@ async def alert_map(
 @router.get("/alerts/timeline", response_class=HTMLResponse)
 async def alert_timeline(
     request: Request,
-    days: int = 90,
+    days: int = 30,
     hazard: str = "",
     db: AsyncSession = Depends(get_db),
 ):
