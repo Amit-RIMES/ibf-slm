@@ -712,7 +712,7 @@ async def _run_glofas_sync() -> None:
         from app.models.glofas import GlofasRecord
 
         data = await fetch_glofas(
-            api_url=cfg.api_url, api_key=cfg.api_key,
+            api_key=cfg.api_key,
             lat_min=cfg.lat_min, lat_max=cfg.lat_max,
             lon_min=cfg.lon_min, lon_max=cfg.lon_max,
         )

@@ -1,19 +1,22 @@
 """
 GloFAS (Global Flood Awareness System) river discharge forecast ingestion
-via Copernicus Data Store (CDS).
+via CEMS Early Warning Data Store (EWDS).
 
 Fetches GloFAS ensemble mean river discharge forecasts for the configured
 region and stores records in the GlofasRecord table.
 
-Dataset: cems-glofas-forecast
+Dataset: cems-glofas-forecast (on EWDS, not CDS)
+Service URL: https://ewds.climate.copernicus.eu/api
 Variable: river_discharge_in_the_last_24_hours (m³/s)
 
 Requires: cdsapi (pip install cdsapi)
+Licence:  https://ewds.climate.copernicus.eu/licences/terms-of-use-cems
 """
 import json
 import logging
 import os
 import tempfile
+import zipfile
 from datetime import date, datetime, timezone
 from typing import Optional
 
@@ -21,17 +24,36 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# GloFAS lives on CEMS EWDS, not the main CDS
+_EWDS_URL = "https://ewds.climate.copernicus.eu/api"
+
 # Lead times to request (hours)
 _LEAD_HOURS = [str(h) for h in range(24, 241, 24)]  # 24h–240h (10 days)
 
 
-def _cdsapi_client(api_url: str, api_key: str):
+def _cdsapi_client(api_key: str):
     try:
         import cdsapi
-        return cdsapi.Client(url=api_url, key=api_key, quiet=True, verify=True)
+        return cdsapi.Client(url=_EWDS_URL, key=api_key, quiet=True, verify=True)
     except ImportError:
         logger.error("cdsapi not installed. Install with: pip install cdsapi")
         raise
+
+
+def _maybe_unzip(path: str) -> str:
+    """If path is a zip, extract the first .nc inside it and return its path."""
+    with open(path, "rb") as f:
+        magic = f.read(4)
+    if magic[:2] != b"PK":
+        return path
+    with zipfile.ZipFile(path) as zf:
+        nc_names = [n for n in zf.namelist() if n.endswith(".nc")]
+        if not nc_names:
+            return path
+        dest = path.replace(".nc", "_extracted.nc")
+        with zf.open(nc_names[0]) as src, open(dest, "wb") as dst:
+            dst.write(src.read())
+    return dest
 
 
 def _build_discharge_geojson(
@@ -163,7 +185,6 @@ def _process_glofas_nc(
 
 
 async def fetch_glofas(
-    api_url: str,
     api_key: str,
     lat_min: float = 0.0,
     lat_max: float = 35.0,
@@ -184,7 +205,7 @@ async def fetch_glofas(
         forecast_date = datetime.now(timezone.utc).date()
 
     try:
-        client = _cdsapi_client(api_url, api_key)
+        client = _cdsapi_client(api_key)
     except ImportError:
         return None
 
@@ -200,7 +221,7 @@ async def fetch_glofas(
             "day": str(forecast_date.day).zfill(2),
             "leadtime_hour": _LEAD_HOURS,
             "area": [lat_max, lon_min, lat_min, lon_max],
-            "format": "netcdf",
+            "data_format": "netcdf",
         }
         logger.info(
             "GloFAS: requesting date=%s area=[%.1f,%.1f,%.1f,%.1f]",
@@ -212,7 +233,7 @@ async def fetch_glofas(
                 client.retrieve, "cems-glofas-forecast", request_params, output
             )
         except Exception as exc:
-            logger.error("GloFAS CDS retrieve failed: %s", exc)
+            logger.error("GloFAS EWDS retrieve failed: %s", exc)
             return None
 
         if not os.path.exists(output) or os.path.getsize(output) == 0:
@@ -220,4 +241,5 @@ async def fetch_glofas(
             return None
 
         logger.info("GloFAS: downloaded %.1f KB, parsing...", os.path.getsize(output) / 1024)
-        return _process_glofas_nc(output, forecast_date, lat_min, lat_max, lon_min, lon_max)
+        nc_path = _maybe_unzip(output)
+        return _process_glofas_nc(nc_path, forecast_date, lat_min, lat_max, lon_min, lon_max)

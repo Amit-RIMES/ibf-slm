@@ -253,7 +253,6 @@ async def _do_fetch_glofas(cfg_snapshot: dict):
     status, detail = "error", ""
     try:
         data = await fetch_glofas(
-            api_url=cfg_snapshot["api_url"],
             api_key=cfg_snapshot["api_key"] or "",
             lat_min=cfg_snapshot["lat_min"], lat_max=cfg_snapshot["lat_max"],
             lon_min=cfg_snapshot["lon_min"], lon_max=cfg_snapshot["lon_max"],
