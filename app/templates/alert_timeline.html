@@ -174,21 +174,27 @@
     landslide: '#10b981', heatwave: '#ef4444', cyclone: '#0ea5e9', other: '#6b7280',
   };
 
+  // Scale all positions to 92% of track width so Today label + bars
+  // don't get clipped by overflow:hidden on the wrapper.
+  const SCALE = 0.92;
+  function sc(pct) { return pct * SCALE; }
+
   // ── Ticks ────────────────────────────────────────────────────────────
   const tickRail = document.getElementById('tick-rail');
   DATA.ticks.forEach(tk => {
     const el = document.createElement('div');
     el.className = 'tl-tick';
-    el.style.left = tk.pct + '%';
+    el.style.left = sc(tk.pct) + '%';
     el.textContent = tk.label;
     tickRail.appendChild(el);
   });
-  // Always show "Today" at the right edge
+  // "Today" label sits just after the scaled 100% mark
   const todayTick = document.createElement('div');
   todayTick.className = 'tl-tick';
-  todayTick.style.left = '100%';
+  todayTick.style.left = (SCALE * 100 + 1) + '%';
   todayTick.style.color = '#ef4444';
   todayTick.style.fontWeight = '700';
+  todayTick.style.transform = 'none';
   todayTick.textContent = 'Today';
   tickRail.appendChild(todayTick);
 
@@ -236,19 +242,19 @@
     const track = document.createElement('div');
     track.className = 'tl-track';
 
-    // Today line (always at right edge = 100%)
+    // Today line at scaled 100%
     const todayLine = document.createElement('div');
     todayLine.className = 'today-line';
-    todayLine.style.left = '100%';
+    todayLine.style.left = (SCALE * 100) + '%';
     track.appendChild(todayLine);
 
     row.bars.forEach(bar => {
       const barEl = document.createElement('div');
       barEl.className = 'tl-bar' + (bar.status === 'active' ? ' active' : '');
-      const barLeft = Math.min(bar.left_pct, 99.6);
-      const barWidth = Math.min(bar.width_pct, 100 - barLeft);
+      const barLeft = sc(bar.left_pct);
+      const barWidth = Math.max(sc(bar.width_pct), 0.5);
       barEl.style.left = barLeft + '%';
-      barEl.style.width = Math.max(barWidth, 0.4) + '%';
+      barEl.style.width = barWidth + '%';
       barEl.style.background = bar.status === 'active' ? '#dc2626' : color;
       barEl.style.opacity = bar.status === 'active' ? '1' : '0.72';
 
