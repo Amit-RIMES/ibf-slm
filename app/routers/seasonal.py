@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -377,7 +378,11 @@ async def seasonal_detail(sf_id: int, request: Request, db: AsyncSession = Depen
     if not user:
         return RedirectResponse("/login", status_code=303)
 
-    result = await db.execute(select(SeasonalForecast).where(SeasonalForecast.id == sf_id))
+    result = await db.execute(
+        select(SeasonalForecast)
+        .where(SeasonalForecast.id == sf_id)
+        .options(selectinload(SeasonalForecast.uploaded_by))
+    )
     sf = result.scalar_one_or_none()
     if not sf:
         return RedirectResponse("/seasonal", status_code=303)
