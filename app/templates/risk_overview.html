@@ -52,18 +52,22 @@
 <nav>
   <span class="brand">IBF App</span>
   <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
     <a href="/forecasts">Forecasts</a>
     <a href="/forecasts/drift">Drift</a>
     <a href="/observed">Observed</a>
+    <a href="/impacts">Impacts</a>
     <a href="/triggers">Triggers</a>
     <a href="/alerts">Alerts</a>
+    <a href="/sync">Auto-Sync</a>
     <a href="/drought">Drought</a>
     <a href="/risk" class="active">Risk</a>
+    <a href="/reports/operational">Report</a>
     <a href="/seasonal">Seasonal</a>
     <a href="/bulletin">Bulletin</a>
-    <span>{{ user.username }}</span>
+    <a href="/chat">AI Assistant</a>
     {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
-    <a href="/auth/logout" class="logout">Logout</a>
+    <a href="/logout" class="logout">Logout</a>
   </div>
 </nav>
 

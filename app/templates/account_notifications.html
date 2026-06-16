@@ -68,7 +68,7 @@
 <nav>
   <span class="brand">IBF App</span>
   <div class="nav-links">
-    <a href="/dashboard">Dashboard</a>
+    <a href="/dashboard" class="active">Dashboard</a>
     <a href="/forecasts">Forecasts</a>
     <a href="/forecasts/drift">Drift</a>
     <a href="/observed">Observed</a>
@@ -83,7 +83,6 @@
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
     {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
-    <a href="/account/2fa">Two-Factor Auth</a>
     <a href="/logout" class="logout">Logout</a>
   </div>
 </nav>
