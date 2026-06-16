@@ -237,6 +237,13 @@
             {% else %}
             <span class="badge badge-acknowledged">Acknowledged</span>
             {% endif %}
+            {% if a.impact_verdict == 'yes' %}
+            <span class="badge" style="background:#dcfce7;color:#15803d;margin-left:.3rem;">Impacts ✓</span>
+            {% elif a.impact_verdict == 'partial' %}
+            <span class="badge" style="background:#fef9c3;color:#a16207;margin-left:.3rem;">Partial</span>
+            {% elif a.impact_verdict == 'no' %}
+            <span class="badge" style="background:#fee2e2;color:#b91c1c;margin-left:.3rem;">No impact</span>
+            {% endif %}
           </td>
           <td>
             {% if linked_impacts %}

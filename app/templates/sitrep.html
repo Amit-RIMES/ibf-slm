@@ -109,6 +109,24 @@
     .totals-row td { font-weight: 700; border-top: 2px solid #e5e7eb;
       background: #f9fafb; font-size: .82rem; }
 
+    /* ── Impact verification ──────────────────────────────────── */
+    .verify-form { margin-top: .75rem; padding: .85rem 1rem;
+      background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; }
+    .verify-radios { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: .65rem; }
+    .verify-radio { display: flex; align-items: center; gap: .35rem;
+      font-size: .82rem; cursor: pointer; }
+    .verify-radio input { cursor: pointer; }
+    .verdict-badge { display: inline-block; padding: .22rem .7rem; border-radius: 999px;
+      font-size: .75rem; font-weight: 700; }
+    .verdict-yes     { background: #dcfce7; color: #15803d; }
+    .verdict-partial { background: #fef9c3; color: #a16207; }
+    .verdict-no      { background: #fee2e2; color: #b91c1c; }
+    .verdict-pending { background: #f3f4f6; color: #6b7280; }
+    .verify-btn { background: #4f46e5; color: #fff; border: none; border-radius: 6px;
+      padding: .4rem 1rem; font-size: .82rem; font-weight: 600; cursor: pointer;
+      margin-top: .5rem; }
+    .verify-btn:hover { opacity: .85; }
+
     /* ── Footer ───────────────────────────────────────────────── */
     .rpt-footer {
       padding: .85rem 2rem; background: #f9fafb; font-size: .72rem; color: #9ca3af;
@@ -382,6 +400,63 @@
       <dd style="font-style:italic;">{{ activation.notes }}</dd>
       {% endif %}
     </dl>
+  </div>
+
+  <!-- Impact verification -->
+  <div class="section">
+    <div class="section-heading">Impact Verification</div>
+    <dl class="detail-grid">
+      <dt>Verdict</dt>
+      <dd>
+        {% if activation.impact_verdict == 'yes' %}
+          <span class="verdict-badge verdict-yes">Impacts confirmed</span>
+        {% elif activation.impact_verdict == 'partial' %}
+          <span class="verdict-badge verdict-partial">Partial impacts</span>
+        {% elif activation.impact_verdict == 'no' %}
+          <span class="verdict-badge verdict-no">No impacts</span>
+        {% else %}
+          <span class="verdict-badge verdict-pending">Pending</span>
+        {% endif %}
+      </dd>
+      {% if activation.verified_at %}
+      <dt>Verified at</dt>
+      <dd>{{ activation.verified_at.strftime("%d %B %Y, %H:%M UTC") }}</dd>
+      {% endif %}
+      {% if activation.impact_notes %}
+      <dt>Notes</dt>
+      <dd style="font-style:italic;">{{ activation.impact_notes }}</dd>
+      {% endif %}
+    </dl>
+    <form method="post"
+          action="/triggers/activations/{{ activation.id }}/verify"
+          class="verify-form">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+      <div style="font-size:.78rem;font-weight:600;color:#374151;margin-bottom:.5rem;">
+        Update verification
+      </div>
+      <div class="verify-radios">
+        <label class="verify-radio">
+          <input type="radio" name="verdict" value="yes"
+                 {% if activation.impact_verdict == 'yes' %}checked{% endif %}>
+          <span style="color:#15803d;font-weight:600;">Yes — impacts confirmed</span>
+        </label>
+        <label class="verify-radio">
+          <input type="radio" name="verdict" value="partial"
+                 {% if activation.impact_verdict == 'partial' %}checked{% endif %}>
+          <span style="color:#a16207;font-weight:600;">Partial — some impacts observed</span>
+        </label>
+        <label class="verify-radio">
+          <input type="radio" name="verdict" value="no"
+                 {% if activation.impact_verdict == 'no' %}checked{% endif %}>
+          <span style="color:#b91c1c;font-weight:600;">No — no impacts observed</span>
+        </label>
+      </div>
+      <textarea name="impact_notes" rows="2"
+                placeholder="Optional notes on observed impacts…"
+                style="width:100%;padding:.4rem .6rem;border:1px solid #d1d5db;
+                       border-radius:6px;font-size:.82rem;resize:vertical;">{{ activation.impact_notes or '' }}</textarea>
+      <button type="submit" class="verify-btn">Save verdict</button>
+    </form>
   </div>
 
   <!-- Footer -->

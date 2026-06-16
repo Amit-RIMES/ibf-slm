@@ -88,6 +88,10 @@ class TriggerActivation(Base):
     )
     acknowledged_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_escalated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Impact verification: did real impacts occur after this activation?
+    impact_verdict: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)  # yes|partial|no
+    impact_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     trigger: Mapped["Trigger"] = relationship("Trigger", back_populates="activations", lazy="selectin")
     forecast: Mapped["ForecastUpload"] = relationship("ForecastUpload", lazy="selectin")  # noqa: F821

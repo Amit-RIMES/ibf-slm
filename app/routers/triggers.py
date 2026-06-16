@@ -1244,6 +1244,41 @@ async def acknowledge_activation(
     return RedirectResponse("/triggers", status_code=303)
 
 
+_VALID_VERDICTS = {"yes", "partial", "no"}
+
+
+@router.post("/activations/{activation_id}/verify")
+async def verify_activation_impacts(
+    activation_id: int,
+    request: Request,
+    verdict: str = Form(...),
+    impact_notes: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
+    if verdict not in _VALID_VERDICTS:
+        return RedirectResponse(f"/triggers/activations/{activation_id}/sitrep", status_code=303)
+
+    result = await db.execute(
+        select(TriggerActivation).where(TriggerActivation.id == activation_id)
+    )
+    activation = result.scalar_one_or_none()
+    if activation:
+        activation.impact_verdict = verdict
+        activation.impact_notes = impact_notes.strip() or None
+        activation.verified_at = datetime.now(timezone.utc)
+        await db.commit()
+        await log_action(
+            db, user.id, "trigger.impact_verified",
+            f"Impact verdict '{verdict}' for activation {activation_id} ({activation.trigger.name})",
+        )
+
+    return RedirectResponse(f"/triggers/activations/{activation_id}/sitrep", status_code=303)
+
+
 @router.post("/activations/{activation_id}/comments")
 async def add_activation_comment(
     activation_id: int,
