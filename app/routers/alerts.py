@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc, select
@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.models.alert_recipient import AlertRecipient
 from app.models.trigger import Trigger, TriggerActivation
 
 _HAZARD_COLORS = {
@@ -282,3 +283,94 @@ async def public_status(request: Request, db: AsyncSession = Depends(get_db)):
             "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         },
 )
+
+
+# ── Alert Recipients (external email subscribers) ─────────────────────────────
+
+_FORBIDDEN = HTMLResponse(
+    "<h1 style='font-family:system-ui;margin:3rem auto;max-width:400px'>403 — Admin access required</h1>",
+    status_code=403,
+)
+
+
+@router.get("/alerts/recipients", response_class=HTMLResponse)
+async def alert_recipients(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if user.role != "admin":
+        return _FORBIDDEN
+
+    recipients_r = await db.execute(
+        select(AlertRecipient).order_by(AlertRecipient.created_at)
+    )
+    recipients = recipients_r.scalars().all()
+
+    active_count = sum(1 for r in recipients if r.is_active)
+
+    return templates.TemplateResponse(
+        request,
+        "alert_recipients.html",
+        {"user": user, "recipients": recipients, "active_count": active_count},
+    )
+
+
+@router.post("/alerts/recipients/add", response_class=HTMLResponse)
+async def alert_recipient_add(
+    request: Request,
+    email: str = Form(...),
+    name: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if user.role != "admin":
+        return _FORBIDDEN
+
+    email = email.strip().lower()
+    if email:
+        existing = await db.scalar(
+            select(AlertRecipient).where(AlertRecipient.email == email)
+        )
+        if not existing:
+            db.add(AlertRecipient(email=email, name=name.strip()))
+            await db.commit()
+
+    return RedirectResponse("/alerts/recipients", status_code=303)
+
+
+@router.post("/alerts/recipients/{rec_id}/toggle", response_class=HTMLResponse)
+async def alert_recipient_toggle(
+    rec_id: int, request: Request, db: AsyncSession = Depends(get_db)
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if user.role != "admin":
+        return _FORBIDDEN
+
+    rec = await db.scalar(select(AlertRecipient).where(AlertRecipient.id == rec_id))
+    if rec:
+        rec.is_active = not rec.is_active
+        await db.commit()
+
+    return RedirectResponse("/alerts/recipients", status_code=303)
+
+
+@router.post("/alerts/recipients/{rec_id}/delete", response_class=HTMLResponse)
+async def alert_recipient_delete(
+    rec_id: int, request: Request, db: AsyncSession = Depends(get_db)
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if user.role != "admin":
+        return _FORBIDDEN
+
+    rec = await db.scalar(select(AlertRecipient).where(AlertRecipient.id == rec_id))
+    if rec:
+        await db.delete(rec)
+        await db.commit()
+
+    return RedirectResponse("/alerts/recipients", status_code=303)

@@ -111,6 +111,12 @@
          border:1px solid #c7d2fe;border-radius:7px;padding:.35rem .85rem;text-decoration:none;">
         &#9645; Timeline
       </a>
+      {% if user.role == "admin" %}
+      <a href="/alerts/recipients" style="font-size:.875rem;color:#6b7280;
+         border:1px solid #e5e7eb;border-radius:7px;padding:.35rem .85rem;text-decoration:none;">
+        Recipients
+      </a>
+      {% endif %}
       <a href="/status" target="_blank" style="font-size:.8rem;color:#6b7280;">↗ Public status page</a>
       {% if activations %}
         <span style="color:#dc2626;font-weight:700;">{{ activations|length }}</span>

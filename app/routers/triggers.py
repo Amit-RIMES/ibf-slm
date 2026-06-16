@@ -20,6 +20,7 @@ from app.core.deps import get_current_user
 from app.core.ensemble import get_exceedance
 from app.models.activation_comment import ActivationComment
 from app.core.email import send_acknowledgement_emails, send_subscriber_alert_emails, send_trigger_activation_email
+from app.models.alert_recipient import AlertRecipient
 from app.core.webhook import send_webhook_notifications
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
@@ -180,12 +181,16 @@ async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
         from app.routers.api import broadcast_activation
         for t, act, _ in fired_rows:
             broadcast_activation(act.id, t.name, t.hazard_type)
-        # Email all admins
+        # Email all admins + external alert recipients
         admins_result = await db.execute(
             select(User.email).where(User.role == "admin")
         )
         admin_emails = [row[0] for row in admins_result.all()]
-        enqueue(send_trigger_activation_email(admin_emails, fired_rows))
+        ext_result = await db.execute(
+            select(AlertRecipient.email).where(AlertRecipient.is_active == True)  # noqa: E712
+        )
+        ext_emails = [row[0] for row in ext_result.all()]
+        enqueue(send_trigger_activation_email(admin_emails + ext_emails, fired_rows))
         # Fire webhooks
         webhooks_result = await db.execute(
             select(Webhook).where(Webhook.is_active == True)  # noqa: E712

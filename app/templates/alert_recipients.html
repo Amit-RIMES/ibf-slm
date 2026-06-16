@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}Alert Recipients — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; text-decoration: none; }
+  nav .nav-links a.active { color: #ef4444; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; }
+
+  .info-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px;
+    padding: .85rem 1.1rem; font-size: .83rem; color: #1d4ed8; margin-bottom: 1.5rem;
+    line-height: 1.6; }
+  .info-box strong { color: #1e40af; }
+
+  /* Add form */
+  .add-card { background: #fff; border-radius: 12px; padding: 1.25rem 1.4rem;
+    box-shadow: 0 1px 5px rgba(0,0,0,.07); margin-bottom: 1.5rem; }
+  .add-card h2 { font-size: .95rem; font-weight: 700; margin-bottom: 1rem; }
+  .add-row { display: flex; gap: .75rem; flex-wrap: wrap; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: .3rem; }
+  .field label { font-size: .78rem; font-weight: 600; color: #6b7280; }
+  .field input { padding: .45rem .75rem; border: 1px solid #d1d5db; border-radius: 7px;
+    font-size: .875rem; background: #fff; }
+  .field input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 2px #e0e7ff; }
+  .btn-add { background: #4f46e5; color: #fff; border: none; border-radius: 7px;
+    padding: .48rem 1.1rem; font-size: .875rem; font-weight: 600; cursor: pointer; align-self: flex-end; }
+  .btn-add:hover { opacity: .85; }
+
+  /* Stats strip */
+  .stats-strip { display: flex; gap: 1rem; margin-bottom: 1.25rem; }
+  .stat-chip { background: #fff; border-radius: 10px; padding: .65rem 1rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07); font-size: .82rem; color: #6b7280; }
+  .stat-chip strong { color: #111; font-size: 1.1rem; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  th { text-align: left; padding: .6rem .75rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; border-bottom: 1px solid #e5e7eb; }
+  td { padding: .7rem .75rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f9fafb; }
+
+  .status-badge { display: inline-block; padding: .2rem .65rem; border-radius: 999px;
+    font-size: .7rem; font-weight: 700; }
+  .badge-active { background: #dcfce7; color: #15803d; }
+  .badge-paused { background: #f3f4f6; color: #6b7280; }
+
+  .btn-sm { padding: .25rem .65rem; border: 1px solid #e5e7eb; border-radius: 6px;
+    font-size: .78rem; font-weight: 600; cursor: pointer; background: #fff;
+    text-decoration: none; display: inline-block; }
+  .btn-sm:hover { background: #f9fafb; }
+  .btn-danger { border-color: #fecaca; color: #dc2626; }
+  .btn-danger:hover { background: #fef2f2; }
+  .btn-toggle-on  { border-color: #bfdbfe; color: #2563eb; }
+  .btn-toggle-off { border-color: #d1d5db; color: #6b7280; }
+
+  .empty { color: #9ca3af; font-size: .9rem; padding: 2.5rem 0; text-align: center; }
+  .dim { color: #9ca3af; font-size: .8rem; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts" class="active">Alerts</a>
+    <a href="/risk">Risk</a>
+    <a href="/seasonal">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <h1>Alert Recipients</h1>
+    <a href="/alerts" style="font-size:.875rem;color:#6b7280;border:1px solid #e5e7eb;
+       border-radius:7px;padding:.4rem .85rem;text-decoration:none;">← Alerts</a>
+  </div>
+
+  <div class="info-box">
+    External email addresses added here receive a notification email whenever a trigger activation fires —
+    in addition to admin users and subscribed app users.
+    <strong>No app account required.</strong>
+    Useful for field teams, partner organizations, or on-call distribution lists.
+  </div>
+
+  <div class="add-card">
+    <h2>Add recipient</h2>
+    <form method="post" action="/alerts/recipients/add">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+      <div class="add-row">
+        <div class="field">
+          <label for="email">Email address *</label>
+          <input type="email" id="email" name="email" required placeholder="name@example.org" style="min-width:260px;">
+        </div>
+        <div class="field">
+          <label for="name">Display name</label>
+          <input type="text" id="name" name="name" placeholder="e.g. Field Team BD" style="min-width:200px;">
+        </div>
+        <button type="submit" class="btn-add">Add recipient</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="stats-strip">
+    <div class="stat-chip"><strong>{{ recipients | length }}</strong> total</div>
+    <div class="stat-chip"><strong>{{ active_count }}</strong> active</div>
+  </div>
+
+  <div class="card" style="padding:0;overflow:hidden;">
+    {% if recipients %}
+    <table>
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Name</th>
+          <th>Status</th>
+          <th>Added</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in recipients %}
+        <tr>
+          <td style="font-weight:500;">{{ r.email }}</td>
+          <td class="dim">{{ r.name or "—" }}</td>
+          <td>
+            <span class="status-badge {% if r.is_active %}badge-active{% else %}badge-paused{% endif %}">
+              {{ "Active" if r.is_active else "Paused" }}
+            </span>
+          </td>
+          <td class="dim">{{ r.created_at.strftime("%b %d, %Y") }}</td>
+          <td style="display:flex;gap:.4rem;">
+            <form method="post" action="/alerts/recipients/{{ r.id }}/toggle" style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+              <button type="submit"
+                class="btn-sm {% if r.is_active %}btn-toggle-on{% else %}btn-toggle-off{% endif %}">
+                {{ "Pause" if r.is_active else "Resume" }}
+              </button>
+            </form>
+            <form method="post" action="/alerts/recipients/{{ r.id }}/delete" style="display:inline;"
+                  onsubmit="return confirm('Remove {{ r.email }} from alert recipients?');">
+              <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+              <button type="submit" class="btn-sm btn-danger">Remove</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">
+      No external recipients yet. Add an email address above to start receiving activation alerts.
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
