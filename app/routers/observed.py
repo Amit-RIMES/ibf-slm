@@ -87,6 +87,143 @@ async def observed_list(
     )
 
 
+# ── Data completeness calendar ────────────────────────────────────────────────
+
+@router.get("/calendar", response_class=HTMLResponse)
+async def observed_calendar(
+    request: Request,
+    year: int = 0,
+    source: str = "CHIRPS",
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
+    today = date.today()
+    if not year:
+        year = today.year
+
+    # All obs for the selected year and source
+    rows_r = await db.execute(
+        select(
+            ObservedRainfall.obs_date,
+            ObservedRainfall.is_preliminary,
+            ObservedRainfall.precip_mean,
+        )
+        .where(
+            ObservedRainfall.obs_date >= date(year, 1, 1),
+            ObservedRainfall.obs_date <= date(year, 12, 31),
+            ObservedRainfall.source == source,
+        )
+    )
+    obs_map: dict[date, dict] = {
+        r.obs_date: {"preliminary": r.is_preliminary, "precip": r.precip_mean}
+        for r in rows_r.all()
+    }
+
+    # Build calendar grid: list of months, each with a grid of week-rows
+    months = []
+    total_days = 0
+    present_final = 0
+    present_prelim = 0
+    gaps = 0
+
+    for month_num in range(1, 13):
+        _, days_in_month = calendar.monthrange(year, month_num)
+        first_weekday = date(year, month_num, 1).weekday()  # 0=Mon
+
+        cells = []
+        # leading empty cells
+        cells.extend([None] * first_weekday)
+        for day in range(1, days_in_month + 1):
+            d = date(year, month_num, day)
+            if d > today:
+                cells.append({"date": d, "status": "future", "precip": None})
+            elif d in obs_map:
+                rec = obs_map[d]
+                status = "prelim" if rec["preliminary"] else "ok"
+                cells.append({"date": d, "status": status, "precip": round(rec["precip"], 1)})
+                if rec["preliminary"]:
+                    present_prelim += 1
+                else:
+                    present_final += 1
+                total_days += 1
+            else:
+                cells.append({"date": d, "status": "gap", "precip": None})
+                gaps += 1
+                total_days += 1
+
+        # Chunk into weeks
+        weeks = [cells[i:i + 7] for i in range(0, len(cells), 7)]
+        months.append({
+            "name": calendar.month_name[month_num],
+            "num": month_num,
+            "weeks": weeks,
+        })
+
+    # Find longest gap
+    all_past = sorted(
+        d for d in (date(year, m, day) for m in range(1, 13)
+                    for day in range(1, calendar.monthrange(year, m)[1] + 1)
+                    if date(year, m, day) <= today)
+    )
+    max_gap = 0
+    cur_gap = 0
+    last_gap_end = None
+    for d in all_past:
+        if d in obs_map:
+            if cur_gap > max_gap:
+                max_gap = cur_gap
+            cur_gap = 0
+        else:
+            cur_gap += 1
+            last_gap_end = d
+    if cur_gap > max_gap:
+        max_gap = cur_gap
+
+    # Recent gap dates (last 14 missing days) for the gap list
+    recent_gaps = [d for d in reversed(all_past) if d not in obs_map][:14]
+
+    # Available sources for the filter
+    src_r = await db.execute(select(ObservedRainfall.source).distinct())
+    available_sources = sorted(r[0] for r in src_r.all()) or ["CHIRPS"]
+
+    # Year range: first year with data → current year
+    yr_range_r = await db.execute(
+        select(
+            func.min(ObservedRainfall.obs_date),
+            func.max(ObservedRainfall.obs_date),
+        ).where(ObservedRainfall.source == source)
+    )
+    yr_row = yr_range_r.one()
+    first_yr = yr_row[0].year if yr_row[0] else today.year
+    last_yr = today.year
+    year_range = list(range(first_yr, last_yr + 1))
+
+    coverage_pct = round(present_final / total_days * 100) if total_days else 0
+
+    return templates.TemplateResponse(
+        request, "observed_calendar.html",
+        {
+            "user": user,
+            "year": year,
+            "source": source,
+            "months": months,
+            "total_days": total_days,
+            "present_final": present_final,
+            "present_prelim": present_prelim,
+            "gaps": gaps,
+            "coverage_pct": coverage_pct,
+            "max_gap": max_gap,
+            "recent_gaps": recent_gaps,
+            "available_sources": available_sources,
+            "year_range": year_range,
+            "today": today,
+        },
+    )
+
+
 # ── Detail ────────────────────────────────────────────────────────────────────
 
 @router.get("/{obs_id}", response_class=HTMLResponse)

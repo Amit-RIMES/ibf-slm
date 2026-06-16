@@ -88,6 +88,7 @@
       <div class="sub">CHIRPS v2.0 daily observed precipitation — SE Asia / South Asia region</div>
     </div>
     <div style="display:flex; gap:.6rem; flex-wrap:wrap; align-items:center;">
+      <a href="/observed/calendar" class="btn btn-outline">Calendar view</a>
       <a href="/observed/verify/dashboard" class="btn btn-outline">Verification dashboard →</a>
       {% if user.role == "admin" %}
       <form method="post" action="/observed/sync" class="sync-form">

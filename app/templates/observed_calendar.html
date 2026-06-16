@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}Data Completeness Calendar — IBF App{% endblock %}
+{% block extra_styles %}
+<style>
+  nav { background:#fff; border-bottom:1px solid #e5e7eb; padding:.85rem 2rem;
+        display:flex; align-items:center; justify-content:space-between; }
+  nav .brand { font-weight:700; font-size:1.1rem; color:#4f46e5; }
+  nav .nav-links { display:flex; align-items:center; gap:1.5rem; font-size:.875rem; }
+  nav .nav-links a { color:#6b7280; }
+  nav .nav-links a.active { color:#4f46e5; font-weight:600; }
+  nav .nav-links a.logout { color:#dc2626; font-weight:500; }
+
+  .main { max-width:1100px; margin:2rem auto; padding:0 1rem; }
+  h1 { font-size:1.4rem; font-weight:700; margin-bottom:.25rem; }
+  .sub { color:#6b7280; font-size:.875rem; margin-bottom:1.5rem; }
+
+  .filter-bar { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07);
+    padding:.9rem 1.2rem; margin-bottom:1.25rem; display:flex; gap:.75rem; align-items:flex-end; flex-wrap:wrap; }
+  .filter-bar label { font-size:.75rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; color:#9ca3af; display:block; margin-bottom:.3rem; }
+  .filter-bar select { padding:.45rem .75rem; border:1px solid #d1d5db; border-radius:7px;
+    font-size:.875rem; background:#fff; }
+  .btn { padding:.5rem 1.1rem; background:#4f46e5; color:#fff; border:none; border-radius:8px;
+    font-size:.875rem; font-weight:600; cursor:pointer; text-decoration:none; display:inline-block; }
+  .btn-outline { background:#fff; color:#374151; border:1px solid #d1d5db; }
+  .btn-outline:hover { background:#f3f4f6; }
+
+  /* Stats strip */
+  .stats-strip { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr));
+    gap:1rem; margin-bottom:1.5rem; }
+  .stat-card { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07);
+    padding:1rem 1.25rem; text-align:center; }
+  .stat-card .val { font-size:1.8rem; font-weight:800; line-height:1; margin-bottom:.25rem; }
+  .stat-card .lbl { font-size:.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:.06em; color:#9ca3af; }
+  .stat-ok   { color:#16a34a; }
+  .stat-prelim { color:#d97706; }
+  .stat-gap  { color:#dc2626; }
+  .stat-cov  { color:#4f46e5; }
+
+  /* Legend */
+  .legend { display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap;
+    font-size:.8rem; color:#6b7280; margin-bottom:1.25rem; }
+  .legend-dot { width:14px; height:14px; border-radius:3px; display:inline-block; flex-shrink:0; }
+  .legend-item { display:flex; align-items:center; gap:.4rem; }
+
+  /* Calendar grid */
+  .cal-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));
+    gap:1.25rem; margin-bottom:1.5rem; }
+  .month-card { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07);
+    padding:1rem; }
+  .month-name { font-size:.85rem; font-weight:700; color:#374151; margin-bottom:.6rem; text-align:center; }
+  .dow-row { display:grid; grid-template-columns:repeat(7, 1fr); gap:2px; margin-bottom:2px; }
+  .dow-hdr { font-size:.62rem; font-weight:700; text-transform:uppercase; color:#9ca3af;
+    text-align:center; padding:.15rem 0; }
+  .week-row { display:grid; grid-template-columns:repeat(7, 1fr); gap:2px; margin-bottom:2px; }
+  .day-cell { aspect-ratio:1; border-radius:3px; cursor:default; position:relative; }
+  .day-cell.empty  { background:transparent; }
+  .day-cell.ok     { background:#bbf7d0; }
+  .day-cell.prelim { background:#fde68a; }
+  .day-cell.gap    { background:#fecaca; }
+  .day-cell.future { background:#f3f4f6; }
+  .day-cell:hover .tooltip { display:block; }
+  .tooltip { display:none; position:absolute; bottom:calc(100% + 4px); left:50%;
+    transform:translateX(-50%); background:#1f2937; color:#fff;
+    font-size:.72rem; padding:.3rem .55rem; border-radius:5px; white-space:nowrap;
+    z-index:10; pointer-events:none; }
+  .tooltip::after { content:""; position:absolute; top:100%; left:50%;
+    transform:translateX(-50%); border:5px solid transparent;
+    border-top-color:#1f2937; }
+
+  /* Recent gaps list */
+  .gaps-card { background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,.07);
+    padding:1.25rem; margin-bottom:1.5rem; }
+  .gaps-card h3 { font-size:.9rem; font-weight:700; color:#374151; margin-bottom:.75rem; }
+  .gap-pill { display:inline-block; background:#fef2f2; color:#b91c1c;
+    font-size:.78rem; font-weight:600; padding:.2rem .55rem;
+    border-radius:5px; margin:.2rem; }
+  .no-gaps { color:#16a34a; font-size:.875rem; font-weight:600; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/forecasts/drift">Drift</a>
+    <a href="/observed" class="active">Observed</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/drought">Drought</a>
+    <a href="/risk">Risk</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/seasonal">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:.75rem; margin-bottom:1.25rem;">
+    <div>
+      <h1>Data Completeness Calendar</h1>
+      <div class="sub">Daily coverage for {{ source }} — {{ year }}</div>
+    </div>
+    <a href="/observed" class="btn btn-outline">← Observed list</a>
+  </div>
+
+  <!-- Filters -->
+  <form method="get" action="/observed/calendar" class="filter-bar">
+    <div>
+      <label>Year</label>
+      <select name="year">
+        {% for y in year_range %}
+        <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% if available_sources | length > 1 %}
+    <div>
+      <label>Source</label>
+      <select name="source">
+        {% for s in available_sources %}
+        <option value="{{ s }}" {% if s == source %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <button type="submit" class="btn">Apply</button>
+  </form>
+
+  <!-- Stats strip -->
+  <div class="stats-strip">
+    <div class="stat-card">
+      <div class="val stat-cov">{{ coverage_pct }}%</div>
+      <div class="lbl">Final coverage</div>
+    </div>
+    <div class="stat-card">
+      <div class="val stat-ok">{{ present_final }}</div>
+      <div class="lbl">Final days</div>
+    </div>
+    <div class="stat-card">
+      <div class="val stat-prelim">{{ present_prelim }}</div>
+      <div class="lbl">Preliminary days</div>
+    </div>
+    <div class="stat-card">
+      <div class="val stat-gap">{{ gaps }}</div>
+      <div class="lbl">Missing days</div>
+    </div>
+    <div class="stat-card">
+      <div class="val" style="color:#6b7280;">{{ max_gap }}</div>
+      <div class="lbl">Longest gap (days)</div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <span class="legend-item"><span class="legend-dot" style="background:#bbf7d0;"></span> Final</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#fde68a;"></span> Preliminary</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#fecaca;"></span> Missing</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#f3f4f6;"></span> Future</span>
+  </div>
+
+  <!-- Calendar grid -->
+  <div class="cal-grid">
+    {% for month in months %}
+    <div class="month-card">
+      <div class="month-name">{{ month.name }}</div>
+      <div class="dow-row">
+        <div class="dow-hdr">Mo</div>
+        <div class="dow-hdr">Tu</div>
+        <div class="dow-hdr">We</div>
+        <div class="dow-hdr">Th</div>
+        <div class="dow-hdr">Fr</div>
+        <div class="dow-hdr">Sa</div>
+        <div class="dow-hdr">Su</div>
+      </div>
+      {% for week in month.weeks %}
+      <div class="week-row">
+        {% for cell in week %}
+        {% if cell is none %}
+        <div class="day-cell empty"></div>
+        {% else %}
+        <div class="day-cell {{ cell.status }}">
+          <div class="tooltip">
+            {{ cell.date.strftime("%d %b") }}{% if cell.status == "ok" %} — {{ cell.precip }} mm{% elif cell.status == "prelim" %} — {{ cell.precip }} mm (prelim){% elif cell.status == "gap" %} — missing{% else %} — future{% endif %}
+          </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Recent gaps -->
+  <div class="gaps-card">
+    <h3>Recent missing days (last 14)</h3>
+    {% if recent_gaps %}
+    <div>
+      {% for d in recent_gaps %}
+      <span class="gap-pill">{{ d.strftime("%d %b %Y") }}</span>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="no-gaps">No gaps in recent data.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
