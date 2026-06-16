@@ -90,6 +90,7 @@
   <span class="brand">IBF App</span>
   <div class="nav-links">
     <a href="/dashboard">Dashboard</a>
+    <a href="/observed">Observed</a>
     <a href="/triggers" class="active">Triggers</a>
     <a href="/alerts">Alerts</a>
     <a href="/sync">Auto-Sync</a>
@@ -109,8 +110,10 @@
   <div class="page-header">
     <div>
       <div style="font-size:.82rem; color:#9ca3af; margin-bottom:.4rem;">
-        <a href="/triggers" style="color:#9ca3af;">Triggers</a> &rsaquo;
-        <a href="/triggers/{{ trigger.id }}" style="color:#9ca3af;">{{ trigger.name }}</a> &rsaquo;
+        <a href="/observed">Observed</a>
+    <a href="/triggers" style="color:#9ca3af;">Triggers</a> &rsaquo;
+        <a href="/observed">Observed</a>
+    <a href="/triggers/{{ trigger.id }}" style="color:#9ca3af;">{{ trigger.name }}</a> &rsaquo;
         Backtest
       </div>
       <h1>Backtest — {{ trigger.name }}</h1>
@@ -120,6 +123,7 @@
         {% if trigger.hazard_type %}({{ trigger.hazard_type }} only){% endif %}?
       </div>
     </div>
+    <a href="/observed">Observed</a>
     <a href="/triggers/{{ trigger.id }}"
        style="font-size:.85rem; color:#6b7280; border:1px solid #d1d5db; border-radius:8px;
               padding:.45rem .9rem; text-decoration:none; font-weight:600; white-space:nowrap;">

@@ -58,6 +58,7 @@
   <div class="nav-links">
     <a href="/dashboard">Dashboard</a>
     <a href="/impacts" class="active">Impact Records</a>
+    <a href="/observed">Observed</a>
     <a href="/triggers">Triggers</a>
     <a href="/alerts">Alerts</a>
     <a href="/impacts/new">+ New</a>
@@ -146,7 +147,8 @@
   {% set act = impact.trigger_activation %}
   <div class="card" style="border-left: 3px solid #4f46e5;">
     <div class="section-title">Validates Trigger Activation</div>
-    <div class="stat-row"><span class="label">Trigger</span><span class="value"><a href="/triggers/{{ act.trigger_id }}">{{ act.trigger.name }}</a></span></div>
+    <div class="stat-row"><span class="label">Trigger</span><span class="value"><a href="/observed">Observed</a>
+    <a href="/triggers/{{ act.trigger_id }}">{{ act.trigger.name }}</a></span></div>
     <div class="stat-row"><span class="label">Hazard type</span><span class="value">{{ act.trigger.hazard_type | capitalize }}</span></div>
     <div class="stat-row"><span class="label">Observed value</span><span class="value" style="font-family:monospace;">{{ act.value }} mm</span></div>
     <div class="stat-row"><span class="label">Triggered at</span><span class="value">{{ act.triggered_at.strftime("%Y-%m-%d %H:%M UTC") }}</span></div>
