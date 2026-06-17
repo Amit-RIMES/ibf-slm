@@ -20,7 +20,9 @@ from app.core.deps import get_current_user
 from app.core.ensemble import get_exceedance
 from app.models.activation_comment import ActivationComment
 from app.core.email import send_acknowledgement_emails, send_subscriber_alert_emails, send_trigger_activation_email
+from app.core.sms import send_trigger_activation_sms
 from app.models.alert_recipient import AlertRecipient
+from app.models.sms_config import SMSConfig
 from app.core.webhook import send_webhook_notifications
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
@@ -187,10 +189,31 @@ async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
         )
         admin_emails = [row[0] for row in admins_result.all()]
         ext_result = await db.execute(
-            select(AlertRecipient.email).where(AlertRecipient.is_active == True)  # noqa: E712
+            select(AlertRecipient).where(AlertRecipient.is_active == True)  # noqa: E712
         )
-        ext_emails = [row[0] for row in ext_result.all()]
+        ext_recipients = ext_result.scalars().all()
+        ext_emails = [r.email for r in ext_recipients]
         enqueue(send_trigger_activation_email(admin_emails + ext_emails, fired_rows))
+        # SMS / WhatsApp
+        sms_cfg_row = await db.scalar(select(SMSConfig).where(SMSConfig.id == 1))
+        if sms_cfg_row and sms_cfg_row.enabled:
+            sms_phones = [r.phone for r in ext_recipients if r.phone]
+            wa_phones = [
+                r.phone for r in ext_recipients
+                if r.phone and r.whatsapp_enabled and sms_cfg_row.whatsapp_enabled
+            ]
+            if sms_phones or wa_phones:
+                cfg_dict = {
+                    "provider": sms_cfg_row.provider,
+                    "enabled": sms_cfg_row.enabled,
+                    "account_sid": sms_cfg_row.account_sid,
+                    "auth_token": sms_cfg_row.auth_token,
+                    "from_number": sms_cfg_row.from_number,
+                    "whatsapp_enabled": sms_cfg_row.whatsapp_enabled,
+                    "whatsapp_from": sms_cfg_row.whatsapp_from,
+                    "webhook_url": sms_cfg_row.webhook_url,
+                }
+                enqueue(send_trigger_activation_sms(sms_phones, wa_phones, fired_rows, cfg_dict))
         # Fire webhooks
         webhooks_result = await db.execute(
             select(Webhook).where(Webhook.is_active == True)  # noqa: E712

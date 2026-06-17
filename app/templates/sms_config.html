@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+{% block title %}SMS / WhatsApp Config — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; text-decoration: none; }
+  nav .nav-links a.active { color: #7c3aed; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 780px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+
+  .flash { padding: .8rem 1.1rem; border-radius: 8px; margin-bottom: 1.25rem; font-size: .875rem; }
+  .flash-ok  { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+  .flash-err { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+
+  .card { background: #fff; border-radius: 12px; padding: 1.4rem 1.5rem;
+    box-shadow: 0 1px 5px rgba(0,0,0,.07); margin-bottom: 1.5rem; }
+  .card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 1.1rem; color: #111; }
+
+  .field-group { display: grid; grid-template-columns: 1fr 1fr; gap: .85rem; }
+  .field { display: flex; flex-direction: column; gap: .3rem; }
+  .field.full { grid-column: 1 / -1; }
+  label { font-size: .78rem; font-weight: 600; color: #6b7280; }
+  input[type=text], input[type=url], select {
+    padding: .45rem .75rem; border: 1px solid #d1d5db; border-radius: 7px;
+    font-size: .875rem; background: #fff; width: 100%; box-sizing: border-box;
+  }
+  input:focus, select:focus { outline: none; border-color: #7c3aed; box-shadow: 0 0 0 2px #ede9fe; }
+
+  .toggle-row { display: flex; align-items: center; gap: .75rem; margin: .5rem 0; }
+  .toggle-row label { font-size: .875rem; font-weight: 500; color: #374151; margin: 0; cursor: pointer; }
+  input[type=checkbox] { width: 1.1rem; height: 1.1rem; accent-color: #7c3aed; cursor: pointer; }
+
+  .hint { font-size: .75rem; color: #9ca3af; margin-top: .2rem; line-height: 1.4; }
+
+  .provider-section { display: none; }
+  .provider-section.active { display: block; }
+
+  .btn { padding: .5rem 1.25rem; border: none; border-radius: 7px; font-size: .875rem;
+    font-weight: 600; cursor: pointer; }
+  .btn-primary { background: #7c3aed; color: #fff; }
+  .btn-primary:hover { opacity: .85; }
+  .btn-secondary { background: #fff; color: #374151; border: 1px solid #d1d5db; }
+  .btn-secondary:hover { background: #f9fafb; }
+  .btn-row { display: flex; gap: .75rem; margin-top: 1.25rem; }
+
+  .recipients-table { width: 100%; border-collapse: collapse; font-size: .875rem; margin-top: .75rem; }
+  .recipients-table th { text-align: left; padding: .5rem .65rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; border-bottom: 1px solid #e5e7eb; }
+  .recipients-table td { padding: .6rem .65rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  .recipients-table tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: .15rem .55rem; border-radius: 999px; font-size: .7rem; font-weight: 700; }
+  .badge-wa  { background: #dcfce7; color: #15803d; }
+  .badge-sms { background: #eff6ff; color: #1d4ed8; }
+
+  .stat-chips { display: flex; gap: .75rem; margin-bottom: 1.25rem; }
+  .stat-chip { background: #fff; border-radius: 10px; padding: .6rem 1rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07); font-size: .82rem; color: #6b7280; }
+  .stat-chip strong { color: #111; font-size: 1.1rem; }
+
+  .enabled-indicator { display: inline-flex; align-items: center; gap: .4rem;
+    font-size: .78rem; font-weight: 700; padding: .25rem .65rem; border-radius: 999px; }
+  .enabled-on  { background: #dcfce7; color: #15803d; }
+  .enabled-off { background: #f3f4f6; color: #9ca3af; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/observed">Observed</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/ecmwf">ECMWF</a>
+    <a href="/cds">CDS</a>
+    <a href="/glofas">GloFAS</a>
+    <a href="/drought">Drought</a>
+    <a href="/risk">Risk</a>
+    <a href="/ibf">IBF Matrix</a>
+    <a href="/map">Map</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/seasonal">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    {% if user.role == "admin" %}<a href="/admin/sms" class="active" style="color:#7c3aed;font-weight:600">SMS</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <div style="display:flex;align-items:center;gap:1rem;">
+      <h1>SMS / WhatsApp Alerts</h1>
+      <span class="enabled-indicator {% if cfg.enabled %}enabled-on{% else %}enabled-off{% endif %}">
+        {{ "● Enabled" if cfg.enabled else "○ Disabled" }}
+      </span>
+    </div>
+    <a href="/alerts/recipients" style="font-size:.875rem;color:#6b7280;border:1px solid #e5e7eb;
+       border-radius:7px;padding:.4rem .85rem;text-decoration:none;">Manage recipients →</a>
+  </div>
+
+  {% if saved == "1" %}
+  <div class="flash flash-ok">Configuration saved successfully.</div>
+  {% elif saved == "test" %}
+  <div class="flash flash-ok">Test SMS sent successfully.</div>
+  {% elif error %}
+  <div class="flash flash-err">{{ error | replace("+", " ") }}</div>
+  {% endif %}
+
+  <div class="stat-chips">
+    <div class="stat-chip"><strong>{{ phone_recipients | length }}</strong> recipients with phone</div>
+    <div class="stat-chip"><strong>{{ phone_recipients | selectattr("whatsapp_enabled") | list | length }}</strong> WhatsApp-enabled</div>
+    <div class="stat-chip">Provider: <strong>{{ cfg.provider | title }}</strong></div>
+  </div>
+
+  <!-- Config form -->
+  <div class="card">
+    <h2>Provider Configuration</h2>
+    <form method="post" action="/admin/sms/config">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+
+      <div class="field-group">
+        <div class="field">
+          <label for="provider">Provider</label>
+          <select id="provider" name="provider" onchange="showProvider(this.value)">
+            <option value="twilio" {% if cfg.provider == "twilio" %}selected{% endif %}>Twilio (SMS + WhatsApp)</option>
+            <option value="africastalking" {% if cfg.provider == "africastalking" %}selected{% endif %}>Africa's Talking</option>
+            <option value="webhook" {% if cfg.provider == "webhook" %}selected{% endif %}>Generic HTTP Webhook</option>
+          </select>
+        </div>
+        <div class="field" style="justify-content:flex-end;">
+          <div class="toggle-row">
+            <input type="checkbox" id="enabled" name="enabled" value="1" {% if cfg.enabled %}checked{% endif %}>
+            <label for="enabled">Enable SMS sending</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Twilio / Africa's Talking fields -->
+      <div id="sec-credentials" class="provider-section {% if cfg.provider != 'webhook' %}active{% endif %}"
+           style="margin-top:1rem;">
+        <div class="field-group">
+          <div class="field">
+            <label id="lbl-sid" for="account_sid">
+              {% if cfg.provider == "africastalking" %}AT Username{% else %}Account SID{% endif %}
+            </label>
+            <input type="text" id="account_sid" name="account_sid"
+                   value="{{ cfg.account_sid or '' }}"
+                   placeholder="{% if cfg.provider == 'africastalking' %}sandbox{% else %}ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx{% endif %}">
+          </div>
+          <div class="field">
+            <label id="lbl-token" for="auth_token">
+              {% if cfg.provider == "africastalking" %}API Key{% else %}Auth Token{% endif %}
+            </label>
+            <input type="text" id="auth_token" name="auth_token"
+                   value="{{ cfg.auth_token or '' }}"
+                   placeholder="{% if cfg.provider == 'africastalking' %}atsk_...{% else %}your_auth_token{% endif %}">
+            <span class="hint">Stored in the database. Keep this confidential.</span>
+          </div>
+          <div class="field">
+            <label for="from_number">From number / Sender ID</label>
+            <input type="text" id="from_number" name="from_number"
+                   value="{{ cfg.from_number or '' }}"
+                   placeholder="+14155552222">
+            <span class="hint">E.164 format for Twilio. Shortcode or alphanumeric ID for AT.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Webhook-only fields -->
+      <div id="sec-webhook" class="provider-section {% if cfg.provider == 'webhook' %}active{% endif %}"
+           style="margin-top:1rem;">
+        <div class="field full">
+          <label for="webhook_url">Webhook URL</label>
+          <input type="url" id="webhook_url" name="webhook_url"
+                 value="{{ cfg.webhook_url or '' }}"
+                 placeholder="https://your-gateway.example.com/send">
+          <span class="hint">
+            IBF App will POST JSON: <code>{"to": ["+123…"], "message": "…", "type": "sms"}</code>
+          </span>
+        </div>
+      </div>
+
+      <!-- WhatsApp (Twilio only) -->
+      <div id="sec-whatsapp" class="provider-section {% if cfg.provider == 'twilio' %}active{% endif %}"
+           style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid #f3f4f6;">
+        <div class="toggle-row" style="margin-bottom:.75rem;">
+          <input type="checkbox" id="whatsapp_enabled" name="whatsapp_enabled" value="1"
+                 {% if cfg.whatsapp_enabled %}checked{% endif %}>
+          <label for="whatsapp_enabled">Also send via WhatsApp (Twilio only)</label>
+        </div>
+        <div class="field" style="max-width:340px;">
+          <label for="whatsapp_from">WhatsApp sender number</label>
+          <input type="text" id="whatsapp_from" name="whatsapp_from"
+                 value="{{ cfg.whatsapp_from or '' }}"
+                 placeholder="whatsapp:+14155238886">
+          <span class="hint">Use the Twilio WhatsApp sandbox number or your approved sender.</span>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button type="submit" class="btn btn-primary">Save configuration</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Test send -->
+  <div class="card">
+    <h2>Send test message</h2>
+    <form method="post" action="/admin/sms/test" style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+      <div class="field">
+        <label for="test_phone">Phone number</label>
+        <input type="text" id="test_phone" name="test_phone" placeholder="+6612345678"
+               style="min-width:220px;">
+      </div>
+      <button type="submit" class="btn btn-secondary"
+              {% if not cfg.enabled %}disabled title="Enable SMS first"{% endif %}>
+        Send test SMS
+      </button>
+    </form>
+  </div>
+
+  <!-- Recipients with phone -->
+  <div class="card">
+    <h2>Recipients with phone numbers</h2>
+    {% if phone_recipients %}
+    <table class="recipients-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Channels</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in phone_recipients %}
+        <tr>
+          <td style="font-weight:500;">{{ r.name or "—" }}</td>
+          <td style="color:#6b7280;font-size:.85rem;">{{ r.email }}</td>
+          <td style="font-family:monospace;font-size:.85rem;">{{ r.phone }}</td>
+          <td>
+            <span class="badge badge-sms">SMS</span>
+            {% if r.whatsapp_enabled %}<span class="badge badge-wa" style="margin-left:.3rem;">WhatsApp</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:#9ca3af;font-size:.875rem;margin:.5rem 0;">
+      No recipients have phone numbers yet.
+      <a href="/alerts/recipients" style="color:#7c3aed;">Add phone numbers to recipients →</a>
+    </p>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+function showProvider(val) {
+  document.getElementById('sec-credentials').classList.toggle('active', val !== 'webhook');
+  document.getElementById('sec-webhook').classList.toggle('active', val === 'webhook');
+  document.getElementById('sec-whatsapp').classList.toggle('active', val === 'twilio');
+  var sidLabel = document.getElementById('lbl-sid');
+  var tokenLabel = document.getElementById('lbl-token');
+  if (val === 'africastalking') {
+    sidLabel.textContent = 'AT Username';
+    tokenLabel.textContent = 'API Key';
+    document.getElementById('account_sid').placeholder = 'sandbox';
+    document.getElementById('auth_token').placeholder = 'atsk_...';
+  } else {
+    sidLabel.textContent = 'Account SID';
+    tokenLabel.textContent = 'Auth Token';
+    document.getElementById('account_sid').placeholder = 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
+    document.getElementById('auth_token').placeholder = 'your_auth_token';
+  }
+}
+</script>
+{% endblock %}
+
+{% block extra_scripts %}{% include '_wmo_badge.html' %}{% endblock %}

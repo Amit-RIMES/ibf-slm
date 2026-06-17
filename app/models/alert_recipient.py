@@ -16,3 +16,6 @@ class AlertRecipient(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    # SMS / WhatsApp — E.164 format, e.g. +6612345678
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True, default=None)
+    whatsapp_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

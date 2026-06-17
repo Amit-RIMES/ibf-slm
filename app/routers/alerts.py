@@ -320,6 +320,8 @@ async def alert_recipient_add(
     request: Request,
     email: str = Form(...),
     name: str = Form(""),
+    phone: str = Form(""),
+    whatsapp_enabled: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     user = await get_current_user(request, db)
@@ -334,8 +336,36 @@ async def alert_recipient_add(
             select(AlertRecipient).where(AlertRecipient.email == email)
         )
         if not existing:
-            db.add(AlertRecipient(email=email, name=name.strip()))
+            db.add(AlertRecipient(
+                email=email,
+                name=name.strip(),
+                phone=phone.strip() or None,
+                whatsapp_enabled=bool(whatsapp_enabled),
+            ))
             await db.commit()
+
+    return RedirectResponse("/alerts/recipients", status_code=303)
+
+
+@router.post("/alerts/recipients/{rec_id}/phone", response_class=HTMLResponse)
+async def alert_recipient_update_phone(
+    rec_id: int,
+    request: Request,
+    phone: str = Form(""),
+    whatsapp_enabled: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+    if user.role != "admin":
+        return _FORBIDDEN
+
+    rec = await db.scalar(select(AlertRecipient).where(AlertRecipient.id == rec_id))
+    if rec:
+        rec.phone = phone.strip() or None
+        rec.whatsapp_enabled = bool(whatsapp_enabled)
+        await db.commit()
 
     return RedirectResponse("/alerts/recipients", status_code=303)
 

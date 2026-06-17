@@ -91,7 +91,7 @@
     <a href="/seasonal">Seasonal</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
-    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}{% if user.role == "admin" %}<a href="/admin/sms" style="color:#7c3aed;font-weight:600">SMS</a>{% endif %}
     <a href="/logout" class="logout">Logout</a>
   </div>
 </nav>
@@ -104,10 +104,11 @@
   </div>
 
   <div class="info-box">
-    External email addresses added here receive a notification email whenever a trigger activation fires —
+    External recipients added here receive a notification whenever a trigger activation fires —
     in addition to admin users and subscribed app users.
     <strong>No app account required.</strong>
-    Useful for field teams, partner organizations, or on-call distribution lists.
+    Add a phone number to also receive <strong>SMS and/or WhatsApp</strong> alerts.
+    <a href="/admin/sms" style="color:#1d4ed8;font-weight:600;">Configure SMS provider →</a>
   </div>
 
   <div class="add-card">
@@ -117,13 +118,23 @@
       <div class="add-row">
         <div class="field">
           <label for="email">Email address *</label>
-          <input type="email" id="email" name="email" required placeholder="name@example.org" style="min-width:260px;">
+          <input type="email" id="email" name="email" required placeholder="name@example.org" style="min-width:240px;">
         </div>
         <div class="field">
           <label for="name">Display name</label>
-          <input type="text" id="name" name="name" placeholder="e.g. Field Team BD" style="min-width:200px;">
+          <input type="text" id="name" name="name" placeholder="e.g. Field Team BD" style="min-width:180px;">
         </div>
-        <button type="submit" class="btn-add">Add recipient</button>
+        <div class="field">
+          <label for="phone">Phone (E.164)</label>
+          <input type="text" id="phone" name="phone" placeholder="+6612345678" style="min-width:140px;">
+        </div>
+        <div class="field" style="justify-content:flex-end;">
+          <label style="display:flex;align-items:center;gap:.4rem;font-size:.8rem;cursor:pointer;padding-bottom:.1rem;">
+            <input type="checkbox" name="whatsapp_enabled" value="1" style="accent-color:#16a34a;">
+            WhatsApp
+          </label>
+        </div>
+        <button type="submit" class="btn-add">Add</button>
       </div>
     </form>
   </div>
@@ -140,6 +151,7 @@
         <tr>
           <th>Email</th>
           <th>Name</th>
+          <th>Phone / SMS</th>
           <th>Status</th>
           <th>Added</th>
           <th></th>
@@ -151,12 +163,27 @@
           <td style="font-weight:500;">{{ r.email }}</td>
           <td class="dim">{{ r.name or "—" }}</td>
           <td>
+            {% if r.phone %}
+              <span style="font-family:monospace;font-size:.82rem;">{{ r.phone }}</span>
+              {% if r.whatsapp_enabled %}
+                <span class="status-badge" style="background:#dcfce7;color:#15803d;margin-left:.35rem;">WA</span>
+              {% else %}
+                <span class="status-badge" style="background:#eff6ff;color:#1d4ed8;margin-left:.35rem;">SMS</span>
+              {% endif %}
+            {% else %}
+              <button class="btn-sm" onclick="openPhoneEdit({{ r.id }})" style="font-size:.73rem;">+ Phone</button>
+            {% endif %}
+          </td>
+          <td>
             <span class="status-badge {% if r.is_active %}badge-active{% else %}badge-paused{% endif %}">
               {{ "Active" if r.is_active else "Paused" }}
             </span>
           </td>
           <td class="dim">{{ r.created_at.strftime("%b %d, %Y") }}</td>
-          <td style="display:flex;gap:.4rem;">
+          <td style="display:flex;gap:.4rem;flex-wrap:wrap;">
+            {% if r.phone %}
+            <button class="btn-sm" onclick="openPhoneEdit({{ r.id }})" style="font-size:.73rem;">Edit phone</button>
+            {% endif %}
             <form method="post" action="/alerts/recipients/{{ r.id }}/toggle" style="display:inline;">
               <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
               <button type="submit"
@@ -168,6 +195,32 @@
                   onsubmit="return confirm('Remove {{ r.email }} from alert recipients?');">
               <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
               <button type="submit" class="btn-sm btn-danger">Remove</button>
+            </form>
+          </td>
+        </tr>
+        <!-- Phone edit row (hidden by default) -->
+        <tr id="phone-row-{{ r.id }}" style="display:none;background:#f9fafb;">
+          <td colspan="6" style="padding:.75rem 1rem;">
+            <form method="post" action="/alerts/recipients/{{ r.id }}/phone"
+                  style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;">
+              <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+              <div style="display:flex;flex-direction:column;gap:.25rem;">
+                <label style="font-size:.75rem;font-weight:600;color:#6b7280;">Phone (E.164)</label>
+                <input type="text" name="phone" value="{{ r.phone or '' }}"
+                       placeholder="+6612345678"
+                       style="padding:.4rem .7rem;border:1px solid #d1d5db;border-radius:6px;font-size:.875rem;min-width:160px;">
+              </div>
+              <label style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;cursor:pointer;padding-bottom:.15rem;">
+                <input type="checkbox" name="whatsapp_enabled" value="1"
+                       {% if r.whatsapp_enabled %}checked{% endif %}
+                       style="accent-color:#16a34a;">
+                Also WhatsApp
+              </label>
+              <button type="submit" style="padding:.4rem .9rem;background:#4f46e5;color:#fff;border:none;
+                border-radius:6px;font-size:.82rem;font-weight:600;cursor:pointer;">Save</button>
+              <button type="button" onclick="closePhoneEdit({{ r.id }})"
+                      style="padding:.4rem .75rem;background:#fff;border:1px solid #d1d5db;
+                      border-radius:6px;font-size:.82rem;cursor:pointer;">Cancel</button>
             </form>
           </td>
         </tr>
@@ -183,4 +236,14 @@
 </div>
 {% endblock %}
 
-{% block extra_scripts %}{% include '_wmo_badge.html' %}{% endblock %}
+{% block extra_scripts %}
+{% include '_wmo_badge.html' %}
+<script>
+function openPhoneEdit(id) {
+  document.getElementById('phone-row-' + id).style.display = 'table-row';
+}
+function closePhoneEdit(id) {
+  document.getElementById('phone-row-' + id).style.display = 'none';
+}
+</script>
+{% endblock %}
