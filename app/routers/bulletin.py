@@ -199,6 +199,64 @@ async def bulletin_generate(
     return templates.TemplateResponse(request, "bulletin.html", ctx)
 
 
+# ── Print / PDF export ────────────────────────────────────────────────────────
+
+@router.get("/print", response_class=HTMLResponse)
+async def bulletin_print(
+    request: Request,
+    source: str = "",
+    days: int = 7,
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
+    # Build the same context as bulletin_generate but return a print view
+    ctx = await _build_bulletin_context(db, source or "CHIRPS", days)
+    bulletin_html = _render_bulletin_html(ctx)
+
+    # Wrap in a print-optimized page
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    print_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>IBF Bulletin — {now_str}</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: system-ui, Arial, sans-serif; background: #fff; color: #111; font-size: 12pt; }}
+
+  .print-header {{
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 2px solid #4f46e5; padding: .75rem 1rem; margin-bottom: 1rem;
+  }}
+  .print-header .brand {{ font-size: 1.1rem; font-weight: 700; color: #4f46e5; }}
+  .print-header .meta {{ font-size: .8rem; color: #6b7280; }}
+
+  .no-print {{ display: block; background: #4f46e5; color: #fff; text-align: center;
+    padding: .75rem; font-size: .9rem; font-weight: 600; cursor: pointer;
+    border: none; width: 100%; margin-bottom: 1rem; }}
+
+  @media print {{
+    .no-print {{ display: none !important; }}
+    body {{ margin: 0; }}
+    @page {{ margin: 1.5cm; }}
+  }}
+</style>
+</head>
+<body>
+<div class="print-header">
+  <span class="brand">IBF Early Warning System — Bulletin</span>
+  <span class="meta">Generated: {now_str} &nbsp;|&nbsp; Source: {source or "CHIRPS"} &nbsp;|&nbsp; Window: {days} days</span>
+</div>
+<button class="no-print" onclick="window.print()">🖨 Print / Save as PDF &nbsp;(then close this tab)</button>
+{bulletin_html}
+</body>
+</html>"""
+    return HTMLResponse(print_html)
+
+
 # ── Schedule admin page ───────────────────────────────────────────────────────
 
 async def _get_or_create_schedule(db: AsyncSession) -> BulletinSchedule:
