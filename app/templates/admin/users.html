@@ -55,6 +55,10 @@
   .sub-nav a { font-size: .875rem; color: #6b7280; padding: .35rem .85rem; border-radius: 6px; border: 1px solid transparent; text-decoration: none; }
   .sub-nav a:hover { background: #f9fafb; }
   .sub-nav a.active { background: #f5f3ff; color: #7c3aed; border-color: #c4b5fd; font-weight: 600; }
+  .profile-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  .profile-table td { padding: .65rem .5rem; border-bottom: 1px solid #f3f4f6; }
+  .profile-table td:first-child { color: #6b7280; width: 140px; font-weight: 500; }
+  .badge-green { background: #dcfce7; color: #16a34a; }
 </style>
 {% endblock %}
 
@@ -193,5 +197,26 @@
       {% endfor %}
     </tbody>
   </table>
+
+  <div class="section-title" style="margin-top:2rem;">My Profile</div>
+  <div style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:hidden;margin-bottom:1.5rem;">
+    <table class="profile-table">
+      <tr><td>Username</td><td>{{ user.username }}</td></tr>
+      <tr><td>Email</td><td>{{ user.email }}</td></tr>
+      <tr><td>User ID</td><td>#{{ user.id }}</td></tr>
+      <tr><td>Role</td><td>
+        {% if user.role == "admin" %}
+          <span class="badge badge-admin">Admin</span>
+        {% else %}
+          <span class="badge badge-user">User</span>
+        {% endif %}
+      </td></tr>
+      <tr><td>Member Since</td><td>{{ user.created_at.strftime("%B %d, %Y") }}</td></tr>
+      <tr><td>Status</td><td><span class="badge badge-green">Active</span></td></tr>
+      <tr><td>Password</td><td><a href="/account/password" style="font-size:.875rem;">Change password</a></td></tr>
+      <tr><td>Profile</td><td><a href="/account/profile" style="font-size:.875rem;">Edit profile</a></td></tr>
+      <tr><td>Two-Factor Auth</td><td><a href="/account/2fa" style="font-size:.875rem;">Manage 2FA</a></td></tr>
+    </table>
+  </div>
 </div>
 {% endblock %}
