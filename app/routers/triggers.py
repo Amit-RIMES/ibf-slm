@@ -980,6 +980,38 @@ async def trigger_detail(trigger_id: int, request: Request, db: AsyncSession = D
         for c in comments_result.scalars().all():
             comments_by_activation[c.activation_id].append(c)
 
+    # Lead-time evolution: for all activations, get forecast uploaded_at and time_start to compute lead time
+    act_with_fc = await db.execute(
+        select(TriggerActivation, ForecastUpload)
+        .join(ForecastUpload, TriggerActivation.forecast_id == ForecastUpload.id)
+        .where(TriggerActivation.trigger_id == trigger.id)
+        .order_by(ForecastUpload.uploaded_at)
+    )
+    lead_time_data = []
+    for act, fc in act_with_fc.all():
+        try:
+            if hasattr(fc.time_start, 'date'):
+                event_start = fc.time_start
+            else:
+                event_start = datetime.fromisoformat(str(fc.time_start).replace('Z', '+00:00'))
+            uploaded = fc.uploaded_at
+            if uploaded.tzinfo is None:
+                uploaded = uploaded.replace(tzinfo=timezone.utc)
+            if hasattr(event_start, 'tzinfo') and event_start.tzinfo is None:
+                event_start = event_start.replace(tzinfo=timezone.utc)
+            lead_days = (event_start - uploaded).days
+            lead_time_data.append({
+                "label": fc.uploaded_at.strftime("%b %d"),
+                "lead_days": lead_days,
+                "value": round(act.value or 0, 2),
+                "status": act.status,
+                "probability": round((act.probability or 0) * 100, 1) if act.probability else None,
+            })
+        except Exception:
+            continue
+
+    lead_time_json = json.dumps(lead_time_data)
+
     return templates.TemplateResponse(
     request,
     "trigger_detail.html",
@@ -988,7 +1020,9 @@ async def trigger_detail(trigger_id: int, request: Request, db: AsyncSession = D
          "VARIABLE_LABELS": VARIABLE_LABELS,
          "impacts_by_activation": impacts_by_activation,
          "validated_count": validated_count,
-         "comments_by_activation": comments_by_activation},
+         "comments_by_activation": comments_by_activation,
+         "lead_time_json": lead_time_json,
+         "lead_time_data_exists": len(lead_time_data) > 0},
 )
 
 
