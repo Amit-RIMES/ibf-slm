@@ -263,6 +263,59 @@ async def dashboard(
         for r in dash_hist
     ])
 
+    # ── Section Overview queries ──────────────────────────────────────────────
+    from app.models.observed_rainfall import ObservedRainfall
+    from app.models.glofas import GlofasRecord
+    from app.models.alert_recipient import AlertRecipient
+    from app.models.sync import SyncConfig, SyncLog
+    from app.models.bulletin_schedule import BulletinSubscriber
+
+    # Observed rainfall
+    obs_count = await db.scalar(select(func.count()).select_from(ObservedRainfall))
+    obs_latest_r = await db.execute(select(ObservedRainfall).order_by(desc(ObservedRainfall.obs_date)).limit(1))
+    obs_latest = obs_latest_r.scalar_one_or_none()
+
+    # GloFAS
+    glofas_count = await db.scalar(select(func.count()).select_from(GlofasRecord))
+    glofas_latest_r = await db.execute(select(GlofasRecord).order_by(desc(GlofasRecord.forecast_date)).limit(1))
+    glofas_latest = glofas_latest_r.scalar_one_or_none()
+
+    # Alert recipients
+    alert_recipients_count = await db.scalar(select(func.count()).select_from(AlertRecipient))
+
+    # Auto-Sync config (singleton row id=1)
+    sync_cfg_r = await db.execute(select(SyncConfig).limit(1))
+    sync_cfg = sync_cfg_r.scalar_one_or_none()
+
+    # Latest sync log entry per source
+    _sync_sources = ["chirps", "ecmwf", "seas5", "era5", "glofas"]
+    sync_latest: dict = {}
+    for _src in _sync_sources:
+        _r = await db.execute(
+            select(SyncLog).where(SyncLog.source == _src).order_by(desc(SyncLog.run_at)).limit(1)
+        )
+        sync_latest[_src] = _r.scalar_one_or_none()
+
+    # ECMWF forecasts count + latest
+    ecmwf_count = await db.scalar(
+        select(func.count()).select_from(ForecastUpload).where(ForecastUpload.source == "ECMWF-IFS-HRES")
+    )
+    ecmwf_latest_r = await db.execute(
+        select(ForecastUpload).where(ForecastUpload.source == "ECMWF-IFS-HRES")
+        .order_by(desc(ForecastUpload.uploaded_at)).limit(1)
+    )
+    ecmwf_latest = ecmwf_latest_r.scalar_one_or_none()
+
+    # CDS: count SEAS5 seasonal forecasts and SPI (ERA5-derived) records
+    seasonal_count = await db.scalar(select(func.count()).select_from(SeasonalForecast))
+    spi_count = await db.scalar(select(func.count()).select_from(SPIRecord))
+
+    # Triggers total count
+    total_triggers = await db.scalar(select(func.count()).select_from(Trigger))
+
+    # Bulletin subscribers
+    bulletin_subs = await db.scalar(select(func.count()).select_from(BulletinSubscriber))
+
     return templates.TemplateResponse(
     request,
     "dashboard.html",
@@ -297,5 +350,22 @@ async def dashboard(
             "risk": risk,
             "risk_sparkline": risk_sparkline,
             "pending_drafts": pending_drafts,
+            "dash_spi_current": dash_spi_current,
+            "latest_seasonal_dash": latest_seasonal_dash,
+            "section_overview": {
+                "obs_count": obs_count or 0,
+                "obs_latest": obs_latest,
+                "glofas_count": glofas_count or 0,
+                "glofas_latest": glofas_latest,
+                "alert_recipients_count": alert_recipients_count or 0,
+                "sync_cfg": sync_cfg,
+                "sync_latest": sync_latest,
+                "ecmwf_count": ecmwf_count or 0,
+                "ecmwf_latest": ecmwf_latest,
+                "seasonal_count": seasonal_count or 0,
+                "spi_count": spi_count or 0,
+                "total_triggers": total_triggers or 0,
+                "bulletin_subs": bulletin_subs or 0,
+            },
         },
 )

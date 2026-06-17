@@ -465,6 +465,192 @@
       <tr><td>Two-Factor Auth</td><td><a href="/account/2fa" style="font-size:.875rem;">Manage 2FA</a></td></tr>
     </table>
   </div>
+
+  <!-- ── Section Overview ──────────────────────────────────────────────────── -->
+  <div style="margin-top:2.5rem;">
+    <div class="section-title" style="margin-bottom:1rem;">Section Overview</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.85rem;">
+
+      {# Forecasts #}
+      <div class="stat-card" style="cursor:pointer;" onclick="location.href='/forecasts'">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#4f46e5;margin-bottom:.5rem;">📊 Forecasts</div>
+        <div class="stat-value">{{ stats.total_forecasts }}</div>
+        <div class="stat-label">total uploads</div>
+        {% if recent_forecasts %}
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">Latest: {{ recent_forecasts[0].uploaded_at.strftime("%d %b") }}</div>
+        {% endif %}
+        <a href="/forecasts" style="font-size:.78rem;font-weight:600;color:#4f46e5;margin-top:.5rem;display:block;">View →</a>
+      </div>
+
+      {# Observed #}
+      <div class="stat-card" style="cursor:pointer;" onclick="location.href='/observed'">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0891b2;margin-bottom:.5rem;">🌧 Observed</div>
+        <div class="stat-value">{{ section_overview.obs_count }}</div>
+        <div class="stat-label">rainfall records</div>
+        {% if section_overview.obs_latest %}
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">Latest: {{ section_overview.obs_latest.obs_date.strftime("%d %b %Y") }}</div>
+        {% else %}
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">No data yet</div>
+        {% endif %}
+        <a href="/observed" style="font-size:.78rem;font-weight:600;color:#0891b2;margin-top:.5rem;display:block;">View →</a>
+      </div>
+
+      {# Impacts #}
+      <div class="stat-card" style="cursor:pointer;" onclick="location.href='/impacts'">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#dc2626;margin-bottom:.5rem;">⚠ Impacts</div>
+        <div class="stat-value">{{ stats.total_impacts_unfiltered }}</div>
+        <div class="stat-label">impact records</div>
+        {% if recent_impacts %}
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">Latest: {{ recent_impacts[0].event_date.strftime("%d %b %Y") }}</div>
+        {% endif %}
+        <a href="/impacts" style="font-size:.78rem;font-weight:600;color:#dc2626;margin-top:.5rem;display:block;">View →</a>
+      </div>
+
+      {# Triggers #}
+      <div class="stat-card" style="cursor:pointer;" onclick="location.href='/triggers'">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7c3aed;margin-bottom:.5rem;">⚡ Triggers</div>
+        <div class="stat-value">{{ section_overview.total_triggers }}</div>
+        <div class="stat-label">configured triggers</div>
+        <div style="font-size:.75rem;color:{% if active_activations %}#dc2626{% else %}#9ca3af{% endif %};margin-top:.35rem;">
+          {{ active_activations|length }} active activation{{ 's' if active_activations|length != 1 else '' }}
+        </div>
+        <a href="/triggers" style="font-size:.78rem;font-weight:600;color:#7c3aed;margin-top:.5rem;display:block;">View →</a>
+      </div>
+
+      {# Alerts #}
+      <div class="stat-card" style="cursor:pointer;" onclick="location.href='/alerts'">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#ea580c;margin-bottom:.5rem;">🔔 Alerts</div>
+        <div class="stat-value">{{ active_activations|length }}</div>
+        <div class="stat-label">active alerts</div>
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">{{ section_overview.alert_recipients_count }} recipient{{ 's' if section_overview.alert_recipients_count != 1 else '' }}</div>
+        <a href="/alerts" style="font-size:.78rem;font-weight:600;color:#ea580c;margin-top:.5rem;display:block;">View →</a>
+      </div>
+
+      {# Auto-Sync #}
+      <div class="stat-card" style="cursor:pointer;" onclick="location.href='/sync'">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#059669;margin-bottom:.5rem;">🔄 Auto-Sync</div>
+        {% if section_overview.sync_cfg and section_overview.sync_cfg.enabled %}
+          <div class="stat-value" style="color:#059669">On</div>
+          <div class="stat-label">sync enabled</div>
+          {% if section_overview.sync_cfg.last_run_at %}
+          <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">
+            Last: {{ section_overview.sync_cfg.last_run_at.strftime("%d %b %H:%M") }}
+            <span style="color:{% if section_overview.sync_cfg.last_run_status == 'ok' %}#059669{% else %}#dc2626{% endif %}">
+              · {{ section_overview.sync_cfg.last_run_status or '—' }}
+            </span>
+          </div>
+          {% endif %}
+        {% else %}
+          <div class="stat-value" style="color:#9ca3af">Off</div>
+          <div class="stat-label">sync disabled</div>
+        {% endif %}
+        <a href="/sync" style="font-size:.78rem;font-weight:600;color:#059669;margin-top:.5rem;display:block;">Configure →</a>
+      </div>
+
+      {# ECMWF #}
+      <div class="stat-card" style="cursor:pointer;" onclick="location.href='/ecmwf'">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#2563eb;margin-bottom:.5rem;">🌍 ECMWF</div>
+        <div class="stat-value">{{ section_overview.ecmwf_count }}</div>
+        <div class="stat-label">IFS HRES records</div>
+        {% if section_overview.ecmwf_latest %}
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">Latest: {{ section_overview.ecmwf_latest.uploaded_at.strftime("%d %b %Y") }}</div>
+        {% else %}
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">No data yet</div>
+        {% endif %}
+        <a href="/ecmwf" style="font-size:.78rem;font-weight:600;color:#2563eb;margin-top:.5rem;display:block;">View →</a>
+      </div>
+
+      {# CDS #}
+      <div class="stat-card" style="cursor:pointer;" onclick="location.href='/cds'">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0284c7;margin-bottom:.5rem;">☁ CDS</div>
+        <div class="stat-value">{{ section_overview.seasonal_count }}</div>
+        <div class="stat-label">SEAS5 forecasts</div>
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">{{ section_overview.spi_count }} ERA5/SPI records</div>
+        <a href="/cds" style="font-size:.78rem;font-weight:600;color:#0284c7;margin-top:.5rem;display:block;">View →</a>
+      </div>
+
+      {# GloFAS #}
+      <div class="stat-card" style="cursor:pointer;" onclick="location.href='/glofas'">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0369a1;margin-bottom:.5rem;">🌊 GloFAS</div>
+        <div class="stat-value">{{ section_overview.glofas_count }}</div>
+        <div class="stat-label">discharge records</div>
+        {% if section_overview.glofas_latest %}
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">Latest: {{ section_overview.glofas_latest.forecast_date.strftime("%d %b %Y") }}</div>
+        {% else %}
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">No data yet</div>
+        {% endif %}
+        <a href="/glofas" style="font-size:.78rem;font-weight:600;color:#0369a1;margin-top:.5rem;display:block;">View →</a>
+      </div>
+
+      {# Drought #}
+      <div class="stat-card" style="cursor:pointer;" onclick="location.href='/drought'">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#b45309;margin-bottom:.5rem;">🏜 Drought</div>
+        {% if dash_spi_current %}
+          {% set spi3 = dash_spi_current.get(3) %}
+          {% if spi3 %}
+            <div class="stat-value" style="color:{{ spi3.colour }}">{{ spi3.spi }}</div>
+            <div class="stat-label">SPI-3 · {{ spi3.label }}</div>
+            <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">{{ spi3.month_name }} {{ spi3.year }}</div>
+          {% else %}
+            <div class="stat-value" style="color:#9ca3af">—</div>
+            <div class="stat-label">no SPI data</div>
+          {% endif %}
+        {% else %}
+          <div class="stat-value" style="color:#9ca3af">—</div>
+          <div class="stat-label">no SPI data</div>
+        {% endif %}
+        <a href="/drought" style="font-size:.78rem;font-weight:600;color:#b45309;margin-top:.5rem;display:block;">View →</a>
+      </div>
+
+      {# Risk #}
+      <div class="stat-card" style="cursor:pointer;" onclick="location.href='/risk'">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9333ea;margin-bottom:.5rem;">🎯 Risk</div>
+        <div class="stat-value" style="color:{{ risk.colour }}">{{ risk.total }}/100</div>
+        <div class="stat-label">composite score · {{ risk.label }}</div>
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">SPI: {{ risk.spi_pts }} · Seasonal: {{ risk.seasonal_pts }} · Triggers: {{ risk.trigger_pts }}</div>
+        <a href="/risk" style="font-size:.78rem;font-weight:600;color:#9333ea;margin-top:.5rem;display:block;">View →</a>
+      </div>
+
+      {# Seasonal #}
+      <div class="stat-card" style="cursor:pointer;" onclick="location.href='/seasonal'">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0d9488;margin-bottom:.5rem;">📅 Seasonal</div>
+        <div class="stat-value">{{ section_overview.seasonal_count }}</div>
+        <div class="stat-label">seasonal forecasts</div>
+        {% if latest_seasonal_dash %}
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">Latest: {{ latest_seasonal_dash.issue_date.strftime("%b %Y") }}</div>
+        {% else %}
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">No data yet</div>
+        {% endif %}
+        <a href="/seasonal" style="font-size:.78rem;font-weight:600;color:#0d9488;margin-top:.5rem;display:block;">View →</a>
+      </div>
+
+      {# Bulletin #}
+      <div class="stat-card" style="cursor:pointer;" onclick="location.href='/bulletin'">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6d28d9;margin-bottom:.5rem;">📋 Bulletin</div>
+        <div class="stat-value">{{ pending_drafts }}</div>
+        <div class="stat-label">pending draft{{ 's' if pending_drafts != 1 else '' }}</div>
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">{{ section_overview.bulletin_subs }} subscriber{{ 's' if section_overview.bulletin_subs != 1 else '' }}</div>
+        <a href="/bulletin" style="font-size:.78rem;font-weight:600;color:#6d28d9;margin-top:.5rem;display:block;">View →</a>
+      </div>
+
+      {# Report #}
+      <div class="stat-card" style="cursor:pointer;" onclick="location.href='/reports/operational'">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#475569;margin-bottom:.5rem;">📄 Report</div>
+        <div class="stat-value" style="font-size:1rem;padding-top:.2rem;">Operational</div>
+        <div class="stat-label">situation report</div>
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">Auto-generated from live data</div>
+        <a href="/reports/operational" style="font-size:.78rem;font-weight:600;color:#475569;margin-top:.5rem;display:block;">Generate →</a>
+      </div>
+
+      {# AI Assistant #}
+      <div class="stat-card" style="cursor:pointer;" onclick="location.href='/chat'">
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#4f46e5;margin-bottom:.5rem;">🤖 AI Assistant</div>
+        <div style="font-size:.85rem;color:#374151;margin-top:.25rem;line-height:1.4;">Ask questions about forecasts, triggers, or risk in plain English.</div>
+        <a href="/chat" style="font-size:.78rem;font-weight:600;color:#4f46e5;margin-top:.75rem;display:block;">Open chat →</a>
+      </div>
+
+    </div>
+  </div>
 </div>
 
 <script src="/static/chart.umd.min.js"></script>
