@@ -83,6 +83,10 @@
 
   code { font-size: .78rem; background: #f3f4f6; padding: .1rem .35rem;
     border-radius: 4px; color: #374151; }
+  .sub-nav { display: flex; gap: 1rem; margin-bottom: 1.75rem; flex-wrap: wrap; }
+  .sub-nav a { font-size: .875rem; color: #6b7280; padding: .35rem .85rem; border-radius: 6px; border: 1px solid transparent; text-decoration: none; }
+  .sub-nav a:hover { background: #f9fafb; }
+  .sub-nav a.active { background: #f5f3ff; color: #7c3aed; border-color: #c4b5fd; font-weight: 600; }
 </style>
 {% endblock %}
 
@@ -102,15 +106,18 @@
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
     <a href="/admin/users">Admin</a>
-    <a href="/admin/audit">Audit Log</a>
-    <a href="/admin/api-keys">API Keys</a>
-    <a href="/admin/webhooks">Webhooks</a>
-    <a href="/admin/health" class="active">Health</a>
     <a href="/logout" class="logout">Logout</a>
   </div>
 </nav>
 
 <div class="main">
+  <div class="sub-nav">
+    <a href="/admin/users">Users</a>
+    <a href="/admin/audit">Audit Log</a>
+    <a href="/admin/api-keys">API Keys</a>
+    <a href="/admin/webhooks">Webhooks</a>
+    <a href="/admin/health" class="active">Health</a>
+  </div>
   <div class="page-header">
     <h1>System Health</h1>
     <div style="display:flex;align-items:center;gap:.85rem;">
