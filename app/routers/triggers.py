@@ -21,7 +21,9 @@ from app.core.ensemble import get_exceedance
 from app.models.activation_comment import ActivationComment
 from app.core.email import send_acknowledgement_emails, send_subscriber_alert_emails, send_trigger_activation_email
 from app.core.sms import send_trigger_activation_sms
+from app.core.return_period import return_period_for_value, rp_label, rp_color
 from app.models.alert_recipient import AlertRecipient
+from app.models.return_level import ReturnLevel
 from app.models.sms_config import SMSConfig
 from app.core.webhook import send_webhook_notifications
 from app.models.forecast import ForecastUpload
@@ -1038,6 +1040,31 @@ async def trigger_detail(trigger_id: int, request: Request, db: AsyncSession = D
 
     lead_time_json = json.dumps(lead_time_data)
 
+    # Return period context from CHIRPS historical data
+    threshold_rp: float | None = None
+    threshold_rp_label: str = ""
+    threshold_rp_color: str = "#6b7280"
+    activation_rps: dict[int, dict] = {}
+    rl_row = await db.scalar(
+        select(ReturnLevel).where(ReturnLevel.variable == trigger.variable)
+    )
+    if rl_row and rl_row.gev_shape is not None:
+        rp = return_period_for_value(
+            rl_row.gev_shape, rl_row.gev_loc, rl_row.gev_scale, trigger.threshold
+        )
+        threshold_rp = rp
+        threshold_rp_label = rp_label(rp)
+        threshold_rp_color = rp_color(rp)
+        for a in activations:
+            if a.value is not None:
+                arp = return_period_for_value(
+                    rl_row.gev_shape, rl_row.gev_loc, rl_row.gev_scale, a.value
+                )
+                activation_rps[a.id] = {
+                    "label": rp_label(arp),
+                    "color": rp_color(arp),
+                }
+
     return templates.TemplateResponse(
     request,
     "trigger_detail.html",
@@ -1048,7 +1075,10 @@ async def trigger_detail(trigger_id: int, request: Request, db: AsyncSession = D
          "validated_count": validated_count,
          "comments_by_activation": comments_by_activation,
          "lead_time_json": lead_time_json,
-         "lead_time_data_exists": len(lead_time_data) > 0},
+         "lead_time_data_exists": len(lead_time_data) > 0,
+         "threshold_rp_label": threshold_rp_label,
+         "threshold_rp_color": threshold_rp_color,
+         "activation_rps": activation_rps},
 )
 
 

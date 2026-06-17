@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block title %}Return Period Analysis — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; text-decoration: none; }
+  nav .nav-links a.active { color: #2563eb; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+
+  .flash-ok { background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;
+    padding:.8rem 1.1rem;border-radius:8px;font-size:.875rem;margin-bottom:1.25rem; }
+
+  .info-box { background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;
+    padding:.85rem 1.1rem;font-size:.83rem;color:#1d4ed8;margin-bottom:1.5rem;line-height:1.6; }
+
+  .stat-chips { display:flex;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap; }
+  .stat-chip { background:#fff;border-radius:10px;padding:.6rem 1rem;
+    box-shadow:0 1px 4px rgba(0,0,0,.07);font-size:.82rem;color:#6b7280; }
+  .stat-chip strong { color:#111;font-size:1.1rem; }
+
+  .card { background:#fff;border-radius:12px;padding:1.4rem 1.5rem;
+    box-shadow:0 1px 5px rgba(0,0,0,.07);margin-bottom:1.5rem;overflow:hidden; }
+  .card h2 { font-size:1rem;font-weight:700;margin-bottom:1.1rem;color:#111; }
+
+  table { width:100%;border-collapse:collapse;font-size:.875rem; }
+  th { text-align:left;padding:.55rem .7rem;font-size:.72rem;font-weight:700;
+    text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;border-bottom:1px solid #e5e7eb; }
+  td { padding:.65rem .7rem;border-bottom:1px solid #f3f4f6;vertical-align:middle; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:#f9fafb; }
+
+  .rp-chip { display:inline-block;padding:.2rem .6rem;border-radius:999px;
+    font-size:.72rem;font-weight:700;color:#fff; }
+  .gev-params { font-family:monospace;font-size:.78rem;color:#6b7280; }
+
+  .no-data { color:#9ca3af;font-size:.875rem; }
+
+  .btn { padding:.5rem 1.25rem;border:none;border-radius:7px;font-size:.875rem;font-weight:600;cursor:pointer; }
+  .btn-primary { background:#4f46e5;color:#fff; }
+  .btn-primary:hover { opacity:.85; }
+
+  .rp-table th, .rp-table td { text-align:center; }
+  .rp-table td:first-child, .rp-table th:first-child { text-align:left; }
+
+  .badge-2yr  { background:#6b7280; }
+  .badge-5yr  { background:#ca8a04; }
+  .badge-10yr { background:#d97706; }
+  .badge-25yr { background:#ea580c; }
+  .badge-50yr { background:#dc2626; }
+  .badge-100yr { background:#991b1b; }
+
+  .lookup-box { display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:1rem; }
+  .lookup-box input, .lookup-box select {
+    padding:.45rem .75rem;border:1px solid #d1d5db;border-radius:7px;font-size:.875rem; }
+  .lookup-result { margin-top:.75rem;font-size:.9rem; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/observed">Observed</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/ecmwf">ECMWF</a>
+    <a href="/cds">CDS</a>
+    <a href="/glofas">GloFAS</a>
+    <a href="/drought">Drought</a>
+    <a href="/risk">Risk</a>
+    <a href="/ibf">IBF Matrix</a>
+    <a href="/map">Map</a>
+    <a href="/return-period" class="active">Return Periods</a>
+    <a href="/return-period">Return Periods</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/seasonal">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}{% if user.role == "admin" %}<a href="/admin/sms" style="color:#7c3aed;font-weight:600">SMS</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <h1>Return Period Analysis</h1>
+    {% if user.role == "admin" %}
+    <form method="post" action="/return-period/compute">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+      <button type="submit" class="btn btn-primary">
+        ↺ Recompute from CHIRPS
+      </button>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if computed %}
+  <div class="flash-ok">Return levels recomputed from {{ obs_count }} CHIRPS observations.</div>
+  {% endif %}
+
+  <div class="info-box">
+    Return periods are estimated by fitting a <strong>GEV (Generalised Extreme Value)</strong> distribution
+    to annual maxima extracted from the CHIRPS observed rainfall archive.
+    A <strong>5-year return level</strong> means the annual maximum is expected to exceed that value
+    once every 5 years (20% annual probability).
+    Trigger thresholds marked with return period chips on trigger pages use these values.
+  </div>
+
+  <div class="stat-chips">
+    <div class="stat-chip"><strong>{{ obs_count }}</strong> daily CHIRPS records</div>
+    {% for rl in return_levels %}
+    <div class="stat-chip"><strong>{{ rl.n_years }}</strong> years for {{ var_labels[rl.variable] }}</div>
+    {% endfor %}
+  </div>
+
+  {% if return_levels %}
+  <div class="card">
+    <h2>Return Level Table</h2>
+    <table class="rp-table">
+      <thead>
+        <tr>
+          <th>Variable</th>
+          <th>2-yr</th>
+          <th>5-yr</th>
+          <th>10-yr</th>
+          <th>25-yr</th>
+          <th>50-yr</th>
+          <th>100-yr</th>
+          <th>GEV Parameters</th>
+          <th>Updated</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rl in return_levels %}
+        <tr>
+          <td style="font-weight:600;">{{ var_labels.get(rl.variable, rl.variable) }}</td>
+          {% if rl.rl_2 is not none %}
+          <td><span class="rp-chip badge-2yr">{{ rl.rl_2 | round(1) }} mm</span></td>
+          <td><span class="rp-chip badge-5yr">{{ rl.rl_5 | round(1) }} mm</span></td>
+          <td><span class="rp-chip badge-10yr">{{ rl.rl_10 | round(1) }} mm</span></td>
+          <td><span class="rp-chip badge-25yr">{{ rl.rl_25 | round(1) }} mm</span></td>
+          <td><span class="rp-chip badge-50yr">{{ rl.rl_50 | round(1) }} mm</span></td>
+          <td><span class="rp-chip badge-100yr">{{ rl.rl_100 | round(1) }} mm</span></td>
+          <td class="gev-params">
+            ξ={{ rl.gev_shape | round(3) }},
+            μ={{ rl.gev_loc | round(1) }},
+            σ={{ rl.gev_scale | round(2) }}
+          </td>
+          {% else %}
+          <td colspan="7" class="no-data">Insufficient data ({{ rl.n_years }} years, need ≥5)</td>
+          {% endif %}
+          <td class="no-data" style="font-size:.78rem;">{{ rl.computed_at.strftime("%b %d %H:%M") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Interactive lookup -->
+  <div class="card">
+    <h2>Return Period Lookup</h2>
+    <p style="font-size:.875rem;color:#6b7280;margin-bottom:.75rem;">
+      Enter a precipitation value to find its return period based on the fitted distribution.
+    </p>
+    <div class="lookup-box">
+      <div>
+        <label style="display:block;font-size:.78rem;font-weight:600;color:#6b7280;margin-bottom:.3rem;">Variable</label>
+        <select id="lookup-var">
+          {% for rl in return_levels %}
+          {% if rl.gev_shape is not none %}
+          <option value="{{ rl.variable }}"
+                  data-shape="{{ rl.gev_shape }}"
+                  data-loc="{{ rl.gev_loc }}"
+                  data-scale="{{ rl.gev_scale }}">
+            {{ var_labels.get(rl.variable, rl.variable) }}
+          </option>
+          {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label style="display:block;font-size:.78rem;font-weight:600;color:#6b7280;margin-bottom:.3rem;">Value (mm)</label>
+        <input type="number" id="lookup-value" placeholder="e.g. 200" min="0" step="0.1" style="min-width:120px;">
+      </div>
+      <button class="btn btn-primary" onclick="doLookup()">Look up</button>
+    </div>
+    <div id="lookup-result" class="lookup-result" style="display:none;"></div>
+  </div>
+  {% else %}
+  <div class="card">
+    <div style="text-align:center;padding:2rem 0;color:#9ca3af;">
+      <p style="font-size:1rem;margin-bottom:.75rem;">No return levels computed yet.</p>
+      {% if user.role == "admin" %}
+      <p style="font-size:.875rem;">Click <strong>Recompute from CHIRPS</strong> above to run the analysis.</p>
+      <p style="font-size:.82rem;margin-top:.5rem;">Requires at least 5 years of CHIRPS data in the Observed Rainfall archive.</p>
+      {% else %}
+      <p style="font-size:.875rem;">An administrator can compute return levels from the CHIRPS data archive.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function doLookup() {
+  var sel = document.getElementById('lookup-var');
+  var opt = sel.options[sel.selectedIndex];
+  var val = parseFloat(document.getElementById('lookup-value').value);
+  if (isNaN(val)) { alert('Enter a valid number'); return; }
+
+  var shape = parseFloat(opt.dataset.shape);
+  var loc   = parseFloat(opt.dataset.loc);
+  var scale = parseFloat(opt.dataset.scale);
+
+  // Compute via API to avoid JS GEV implementation
+  fetch('/api/v1/return-period?value=' + val + '&variable=' + sel.value)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var div = document.getElementById('lookup-result');
+      div.style.display = 'block';
+      if (d.error) {
+        div.innerHTML = '<span style="color:#dc2626;">' + d.error + '</span>';
+      } else {
+        div.innerHTML =
+          '<strong>' + val.toFixed(1) + ' mm</strong> corresponds to a ' +
+          '<span style="background:' + d.color + ';color:#fff;padding:.2rem .6rem;border-radius:999px;' +
+          'font-size:.85rem;font-weight:700;margin:0 .3rem;">' + d.label + '</span> event ' +
+          '(' + (d.return_period_years ? 'P(exceed/yr) = ' + (100/d.return_period_years).toFixed(1) + '%' : 'extremely rare') + ')';
+      }
+    })
+    .catch(function() {
+      document.getElementById('lookup-result').innerHTML = '<span style="color:#dc2626;">Lookup failed</span>';
+    });
+}
+
+document.getElementById('lookup-value').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') doLookup();
+});
+</script>
+{% endblock %}
+
+{% block extra_scripts %}{% include '_wmo_badge.html' %}{% endblock %}

@@ -100,6 +100,7 @@
     <a href="/risk">Risk</a>
     <a href="/ibf">IBF Matrix</a>
     <a href="/map">Map</a>
+    <a href="/return-period">Return Periods</a>
     <a href="/reports/operational">Report</a>
     <a href="/seasonal">Seasonal</a>
     <a href="/bulletin">Bulletin</a>
@@ -153,6 +154,11 @@
     &nbsp;≥&nbsp; <strong>{{ (trigger.probability_threshold * 100) | round(0) | int }}%</strong>
     {% else %}
     Fire when <strong>{{ VARIABLE_LABELS[trigger.variable] }} {{ OPERATOR_SYMBOLS[trigger.operator] }} {{ trigger.threshold }} mm</strong>
+    {% if threshold_rp_label %}
+    <span style="background:{{ threshold_rp_color }};color:#fff;padding:.2rem .55rem;border-radius:999px;
+                 font-size:.72rem;font-weight:700;margin-left:.5rem;white-space:nowrap;"
+          title="Climatological return period from CHIRPS data">{{ threshold_rp_label }} event</span>
+    {% endif %}
     {% if trigger.condition_2_variable %}
     &nbsp;<span style="font-size:.85rem;font-weight:700;color:#6d28d9">{{ trigger.logic_op | upper }}</span>&nbsp;
     <strong>{{ VARIABLE_LABELS.get(trigger.condition_2_variable, trigger.condition_2_variable) }}
@@ -240,6 +246,12 @@
               padding:.1rem .4rem;border-radius:4px;font-size:.72rem;font-weight:700;">
               P={{ (a.probability * 100) | round(1) }}%
             </span>
+            {% endif %}
+            {% set arp = activation_rps.get(a.id) %}
+            {% if arp %}
+            <span style="display:inline-block;margin-left:.35rem;background:{{ arp.color }};color:#fff;
+              padding:.1rem .4rem;border-radius:4px;font-size:.72rem;font-weight:700;"
+              title="Climatological return period">{{ arp.label }}</span>
             {% endif %}
           </td>
           <td style="font-size:.82rem; color:#6b7280;">{{ a.triggered_at.strftime("%Y-%m-%d %H:%M UTC") }}</td>
