@@ -1,0 +1,24 @@
+<script>
+(function() {
+  fetch('/api/v1/warning-level')
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(data) {
+      if (!data) return;
+      document.querySelectorAll('nav').forEach(function(nav) {
+        if (nav.querySelector('.wl-badge')) return;
+        var links = nav.querySelector('.nav-links, .user-info');
+        if (!links) return;
+        var badge = document.createElement('span');
+        badge.className = 'wl-badge';
+        badge.title = data.description;
+        badge.style.cssText = 'background:' + data.hex + ';color:#fff;padding:.2rem .65rem;' +
+          'border-radius:999px;font-size:.72rem;font-weight:700;letter-spacing:.04em;' +
+          'white-space:nowrap;cursor:default;flex-shrink:0;';
+        badge.textContent = '⚑ ' + data.wmo_name.toUpperCase();
+        var logout = links.querySelector('a.logout');
+        logout ? links.insertBefore(badge, logout) : links.appendChild(badge);
+      });
+    })
+    .catch(function() {});
+})();
+</script>

@@ -16,6 +16,8 @@ from app.routers import sync as sync_router
 from app.routers import ecmwf as ecmwf_router
 from app.routers import cds as cds_router
 from app.routers import glofas as glofas_router
+from app.routers import ibf_matrix as ibf_matrix_router
+from app.routers import map_view as map_view_router
 from app.scheduler import apply_schedule, start_scheduler, stop_scheduler
 
 
@@ -138,6 +140,8 @@ app.include_router(risk_overview_router.router)
 app.include_router(ecmwf_router.router)
 app.include_router(cds_router.router)
 app.include_router(glofas_router.router)
+app.include_router(ibf_matrix_router.router)
+app.include_router(map_view_router.router)
 
 
 @app.get("/")

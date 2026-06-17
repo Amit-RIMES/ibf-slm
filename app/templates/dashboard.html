@@ -52,6 +52,8 @@
     <a href="/glofas">GloFAS</a>
     <a href="/drought">Drought</a>
     <a href="/risk">Risk</a>
+    <a href="/ibf">IBF Matrix</a>
+    <a href="/map">Map</a>
     <a href="/reports/operational">Report</a>
     <a href="/seasonal">Seasonal</a>
     <a href="/bulletin">Bulletin</a>
@@ -163,37 +165,6 @@
 
   <div class="greeting">Hello, {{ user.username }} 👋</div>
   <div class="sub">Here's what's going on today.</div>
-
-  <!-- ── WMO Warning Level Banner ──────────────────────────────────────────── -->
-  <div style="background:{{ risk.wmo_bg }};border:2px solid {{ risk.wmo_hex }};border-radius:12px;
-              padding:1rem 1.5rem;margin-bottom:1.75rem;display:flex;align-items:center;
-              justify-content:space-between;flex-wrap:wrap;gap:.75rem;">
-    <div style="display:flex;align-items:center;gap:1rem;">
-      <div style="background:{{ risk.wmo_hex }};color:#fff;border-radius:8px;
-                  padding:.5rem 1.1rem;font-size:.95rem;font-weight:800;letter-spacing:.05em;
-                  text-transform:uppercase;white-space:nowrap;">
-        ⚑ {{ risk.wmo_name }}
-      </div>
-      <div>
-        <div style="font-weight:700;color:{{ risk.wmo_text }};font-size:1rem;">
-          {{ risk.level }} Risk — {{ risk.total }}/100
-        </div>
-        <div style="font-size:.82rem;color:{{ risk.wmo_text }};opacity:.85;margin-top:.15rem;">
-          {{ risk.wmo_description }}
-        </div>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;gap:.75rem;flex-shrink:0;">
-      <div style="text-align:right;font-size:.78rem;color:{{ risk.wmo_text }};opacity:.75;">
-        SPI {{ risk.spi_pts }}/40 · Seasonal {{ risk.seasonal_pts }}/30 · Triggers {{ risk.trigger_pts }}/30
-      </div>
-      <a href="/risk" style="font-size:.82rem;font-weight:700;color:{{ risk.wmo_text }};
-                              border:1px solid {{ risk.wmo_hex }};border-radius:6px;
-                              padding:.35rem .85rem;white-space:nowrap;text-decoration:none;">
-        Full analysis →
-      </a>
-    </div>
-  </div>
 
   <!-- ── Section Overview ──────────────────────────────────────────────────── -->
   <div style="margin-bottom:2rem;">

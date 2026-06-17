@@ -10,45 +10,116 @@
   nav .nav-links a.active { color:#4f46e5; font-weight:600; }
   nav .nav-links a.logout { color:#dc2626; font-weight:500; }
 
-  .main { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
-  .page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem; }
+  .main { max-width: 1050px; margin: 2rem auto; padding: 0 1rem; }
+  .page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; }
   h1 { font-size:1.4rem; font-weight:700; }
 
   .sub-nav { display:flex; gap:.75rem; margin-bottom:1.5rem; }
   .sub-nav a { font-size:.875rem; color:#6b7280; padding:.3rem .85rem;
     border-radius:6px; border:1px solid #e5e7eb; text-decoration:none; }
   .sub-nav a:hover { background:#f9fafb; }
-  .sub-nav a.active { background:#eff6ff; color:#4f46e5; border-color:#bfdbfe; font-weight:600; }
+  .sub-nav a.active { background:#ede9fe; color:#4f46e5; border-color:#c4b5fd; font-weight:600; }
 
-  .banner { background:#fef9c3; border:1px solid #fde68a; border-radius:10px;
-    padding:.85rem 1.1rem; margin-bottom:1.25rem; font-size:.875rem; color:#a16207; display:flex;
-    align-items:center; gap:.6rem; }
+  /* ── Flash banners ─────────────────────────────────────────── */
+  .banner { border-radius:8px; padding:.75rem 1rem; font-size:.875rem; margin-bottom:1.25rem;
+    border:1px solid; }
+  .banner-green  { background:#dcfce7; border-color:#86efac; color:#166534; }
+  .banner-red    { background:#fee2e2; border-color:#fca5a5; color:#991b1b; }
+  .banner-yellow { background:#fef9c3; border-color:#fde68a; color:#a16207; }
+  .banner-blue   { background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
 
-  table { width:100%; border-collapse:collapse; font-size:.875rem; }
-  th { text-align:left; padding:.6rem .75rem; font-size:.72rem; font-weight:700;
-    text-transform:uppercase; letter-spacing:.06em; color:#9ca3af; border-bottom:1px solid #e5e7eb; }
-  td { padding:.75rem .75rem; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
+  /* ── Pipeline ──────────────────────────────────────────────── */
+  .pipeline {
+    display: flex;
+    align-items: stretch;
+    margin-bottom: 1.75rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .pipeline-stage {
+    flex: 1;
+    padding: .75rem 1rem;
+    text-align: center;
+    background: #f9fafb;
+    border-right: 1px solid #e5e7eb;
+    cursor: pointer;
+    transition: background .12s;
+    position: relative;
+  }
+  .pipeline-stage:last-child { border-right: none; }
+  .pipeline-stage:hover { background: #f3f4f6; }
+  .pipeline-stage.active-filter { background: #ede9fe; }
+  .pipeline-stage.active-filter .stage-label { color: #4f46e5; }
+  .stage-count {
+    font-size: 1.4rem; font-weight: 800;
+    line-height: 1.2;
+  }
+  .stage-label { font-size: .72rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .06em; color: #9ca3af; margin-top: .1rem; }
+  .stage-arrow {
+    position: absolute; right: -10px; top: 50%; transform: translateY(-50%);
+    width: 0; height: 0;
+    border-top: 10px solid transparent;
+    border-bottom: 10px solid transparent;
+    border-left: 10px solid #e5e7eb;
+    z-index: 1;
+  }
+
+  /* ── Table ─────────────────────────────────────────────────── */
+  .card { background:#fff; border-radius:10px; border:1px solid #e5e7eb; overflow:hidden; }
+  table { width:100%; border-collapse:collapse; font-size:.84rem; }
+  th { padding:.65rem .85rem; background:#f9fafb; border-bottom:2px solid #e5e7eb;
+    font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+    color:#6b7280; text-align:left; white-space:nowrap; }
+  td { padding:.65rem .85rem; border-bottom:1px solid #f3f4f6; vertical-align:top; }
   tr:last-child td { border-bottom:none; }
-  tr:hover td { background:#f9fafb; }
+  tr.hidden-row { display:none; }
 
-  .badge { display:inline-block; padding:.2rem .65rem; border-radius:999px;
-    font-size:.72rem; font-weight:700; text-transform:uppercase; }
-  .badge-pending  { background:#fef9c3; color:#a16207; }
-  .badge-sent     { background:#dcfce7; color:#16a34a; }
-  .badge-dismissed { background:#f3f4f6; color:#9ca3af; }
+  /* ── Status badges ─────────────────────────────────────────── */
+  .badge { display:inline-block; padding:.2rem .6rem; border-radius:999px;
+    font-size:.68rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+  .badge-pending    { background:#f3f4f6; color:#374151; }
+  .badge-submitted  { background:#eff6ff; color:#1d4ed8; }
+  .badge-approved   { background:#dcfce7; color:#16a34a; }
+  .badge-sent       { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+  .badge-dismissed  { background:#fef2f2; color:#dc2626; }
 
   .level-extreme { color:#dc2626; font-weight:700; }
   .level-high    { color:#ea580c; font-weight:700; }
+  .level-medium  { color:#ca8a04; font-weight:600; }
+  .level-low     { color:#16a34a; font-weight:600; }
 
-  .btn-sm { font-size:.78rem; padding:.3rem .75rem; border-radius:6px;
-    border:1px solid #d1d5db; cursor:pointer; background:#fff; font-weight:500;
-    text-decoration:none; display:inline-block; }
-  .btn-send    { color:#4f46e5; border-color:#a5b4fc; }
-  .btn-dismiss { color:#9ca3af; }
-  .btn-preview { color:#6b7280; }
-  .btn-sm:hover { background:#f9fafb; }
+  /* ── Action buttons ────────────────────────────────────────── */
+  .btn-sm { padding:.28rem .65rem; border-radius:6px; font-size:.72rem;
+    font-weight:600; cursor:pointer; border:none; text-decoration:none;
+    display:inline-block; white-space:nowrap; font-family:inherit; }
+  .btn-preview  { background:#f3f4f6; color:#374151; }
+  .btn-submit   { background:#eff6ff; color:#1d4ed8; }
+  .btn-approve  { background:#dcfce7; color:#15803d; }
+  .btn-reject   { background:#fef9c3; color:#92400e; }
+  .btn-send     { background:#4f46e5; color:#fff; }
+  .btn-dismiss  { background:#fee2e2; color:#b91c1c; }
 
-  .empty { color:#9ca3af; font-size:.9rem; padding:2.5rem 0; text-align:center; }
+  .actions { display:flex; gap:.3rem; flex-wrap:wrap; align-items:center; }
+
+  .meta-line { font-size:.72rem; color:#9ca3af; margin-top:.2rem; }
+  .meta-line strong { color:#6b7280; }
+
+  .empty { padding:2.5rem 1rem; text-align:center; color:#9ca3af; }
+
+  /* ── Reject / Approve modal ────────────────────────────────── */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45);
+    z-index:5000; align-items:center; justify-content:center; }
+  .modal-overlay.open { display:flex; }
+  .modal-box { background:#fff; border-radius:12px; padding:1.5rem;
+    max-width:420px; width:90%; box-shadow:0 8px 40px rgba(0,0,0,.2); }
+  .modal-title { font-weight:700; font-size:1rem; margin-bottom:1rem; }
+  .modal-label { font-size:.78rem; font-weight:600; color:#374151; margin-bottom:.35rem; display:block; }
+  .modal-textarea { width:100%; box-sizing:border-box; padding:.55rem .75rem;
+    border:1px solid #d1d5db; border-radius:6px; font-size:.82rem; font-family:inherit;
+    resize:vertical; min-height:80px; outline:none; }
+  .modal-footer { display:flex; justify-content:flex-end; gap:.5rem; margin-top:1rem; }
 </style>
 {% endblock %}
 
@@ -68,6 +139,8 @@
     <a href="/glofas">GloFAS</a>
     <a href="/drought">Drought</a>
     <a href="/risk">Risk</a>
+    <a href="/ibf">IBF Matrix</a>
+    <a href="/map">Map</a>
     <a href="/reports/operational">Report</a>
     <a href="/seasonal">Seasonal</a>
     <a href="/bulletin" class="active">Bulletin</a>
@@ -79,32 +152,63 @@
 
 <div class="main">
   <div class="page-header">
-    <h1>Bulletin Drafts</h1>
+    <h1>Bulletin Workflow</h1>
+    <a href="/bulletin" class="btn-sm btn-preview" style="font-size:.82rem;">+ New Bulletin</a>
   </div>
 
   <div class="sub-nav">
     <a href="/bulletin">Generate</a>
-    <a href="/bulletin/drafts" class="active">Auto-Drafts</a>
+    <a href="/bulletin/drafts" class="active">Drafts &amp; Approval</a>
     {% if user.role == "admin" %}<a href="/bulletin/schedule">Schedule</a>{% endif %}
   </div>
 
-  {% if request.query_params.get("sent") %}
-  <div class="banner" style="background:#dcfce7;border-color:#86efac;color:#166534;">
-    &#10003; Bulletin sent to {{ request.query_params.get("sent") }} recipient(s).
-  </div>
+  <!-- Flash messages -->
+  {% if flash_submitted %}
+  <div class="banner banner-blue">&#10003; Bulletin submitted for approval. Admins have been notified.</div>
   {% endif %}
-  {% if request.query_params.get("error") %}
-  <div class="banner" style="background:#fee2e2;border-color:#fca5a5;color:#991b1b;">
-    &#9888; {{ request.query_params.get("error") | replace("+", " ") }}
-  </div>
+  {% if flash_approved %}
+  <div class="banner banner-green">&#10003; Bulletin approved. It is now ready to send.</div>
+  {% endif %}
+  {% if flash_rejected %}
+  <div class="banner banner-yellow">&#9888; Bulletin returned to draft for revision.</div>
+  {% endif %}
+  {% if flash_sent %}
+  <div class="banner banner-green">&#10003; Bulletin sent to {{ flash_sent }} recipient(s).</div>
+  {% endif %}
+  {% if flash_error %}
+  <div class="banner banner-red">&#9888; {{ flash_error | replace("+", " ") }}</div>
   {% endif %}
 
-  {% if pending_count > 0 %}
-  <div class="banner">
-    &#9888; <strong>{{ pending_count }} draft{{ 's' if pending_count != 1 }}</strong> pending operator review.
-    These were auto-generated when the risk level reached High or Extreme.
+  <!-- Pipeline -->
+  <div class="pipeline">
+    <div class="pipeline-stage" id="filter-all" onclick="filterDrafts('all')" style="flex:0 0 auto;padding:.75rem 1.25rem;">
+      <div class="stage-count">{{ drafts | length }}</div>
+      <div class="stage-label">All</div>
+    </div>
+    <div class="pipeline-stage" onclick="filterDrafts('pending')">
+      <div class="stage-count" style="color:#374151;">{{ counts.pending }}</div>
+      <div class="stage-label">Draft</div>
+      <div class="stage-arrow"></div>
+    </div>
+    <div class="pipeline-stage" onclick="filterDrafts('submitted')">
+      <div class="stage-count" style="color:#1d4ed8;">{{ counts.submitted }}</div>
+      <div class="stage-label">Submitted</div>
+      <div class="stage-arrow"></div>
+    </div>
+    <div class="pipeline-stage" onclick="filterDrafts('approved')">
+      <div class="stage-count" style="color:#16a34a;">{{ counts.approved }}</div>
+      <div class="stage-label">Approved</div>
+      <div class="stage-arrow"></div>
+    </div>
+    <div class="pipeline-stage" onclick="filterDrafts('sent')">
+      <div class="stage-count" style="color:#15803d;">{{ counts.sent }}</div>
+      <div class="stage-label">Sent</div>
+    </div>
+    <div class="pipeline-stage" onclick="filterDrafts('dismissed')" style="flex:0 0 auto;padding:.75rem 1.25rem;border-left:1px solid #e5e7eb;">
+      <div class="stage-count" style="color:#dc2626;">{{ counts.dismissed }}</div>
+      <div class="stage-label">Dismissed</div>
+    </div>
   </div>
-  {% endif %}
 
   <div class="card">
     {% if drafts %}
@@ -113,41 +217,91 @@
         <tr>
           <th>Created</th>
           <th>Source</th>
-          <th>Level</th>
-          <th>Score</th>
-          <th>Title</th>
+          <th>Risk</th>
+          <th>Title / Note</th>
           <th>Status</th>
-          <th></th>
+          <th>Workflow</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
         {% for d in drafts %}
-        <tr>
-          <td style="font-size:.8rem;color:#6b7280;white-space:nowrap;">
-            {{ d.created_at.strftime("%b %d %H:%M") }}
+        <tr class="draft-row" data-status="{{ d.status }}">
+          <td style="white-space:nowrap;color:#6b7280;font-size:.78rem;">
+            {{ d.created_at.strftime("%b %d") }}<br>
+            <span style="font-size:.7rem;">{{ d.created_at.strftime("%H:%M UTC") }}</span>
           </td>
           <td style="font-weight:600;">{{ d.source }}</td>
           <td>
             <span class="level-{{ d.risk_level | lower }}">{{ d.risk_level }}</span>
+            <div style="font-size:.7rem;color:#9ca3af;">{{ d.total_score }}/100</div>
           </td>
-          <td>{{ d.total_score }}</td>
-          <td style="font-size:.82rem;">{{ d.title }}</td>
+          <td style="max-width:200px;">
+            <div style="font-size:.82rem;font-weight:600;color:#1a1a2e;">
+              {{ d.title or ("IBF-SLM " + d.risk_level + " Bulletin") }}
+            </div>
+            {% if d.note %}
+            <div class="meta-line">{{ d.note }}</div>
+            {% endif %}
+            {% if d.approval_notes %}
+            <div class="meta-line" style="color:#92400e;">
+              <strong>Note:</strong> {{ d.approval_notes }}
+            </div>
+            {% endif %}
+          </td>
+          <td><span class="badge badge-{{ d.status }}">{{ d.status }}</span></td>
+          <td style="font-size:.75rem;color:#6b7280;min-width:130px;">
+            {% if d.submitted_by_id %}
+            <div>Submitted by <strong>{{ users_by_id.get(d.submitted_by_id, "user #" ~ d.submitted_by_id) }}</strong></div>
+            {% if d.submitted_at %}
+            <div style="color:#9ca3af;">{{ d.submitted_at.strftime("%b %d %H:%M") }}</div>
+            {% endif %}
+            {% endif %}
+            {% if d.approved_by_id %}
+            <div style="margin-top:.25rem;">Approved by <strong>{{ users_by_id.get(d.approved_by_id, "user #" ~ d.approved_by_id) }}</strong></div>
+            {% if d.approved_at %}
+            <div style="color:#9ca3af;">{{ d.approved_at.strftime("%b %d %H:%M") }}</div>
+            {% endif %}
+            {% endif %}
+            {% if d.sent_at %}
+            <div style="margin-top:.25rem;color:#15803d;">Sent {{ d.sent_at.strftime("%b %d %H:%M") }}</div>
+            {% endif %}
+          </td>
           <td>
-            <span class="badge badge-{{ d.status }}">{{ d.status }}</span>
-          </td>
-          <td style="white-space:nowrap;">
-            <a href="/bulletin/generate?source={{ d.source }}&title={{ d.title | urlencode }}"
-               class="btn-sm btn-preview" target="_blank">Preview</a>
-            {% if d.status == "pending" %}
-            {% if user.role == "admin" %}
-            <form method="post" action="/bulletin/drafts/{{ d.id }}/send" style="display:inline;">
-              <button type="submit" class="btn-sm btn-send">Send</button>
-            </form>
-            {% endif %}
-            <form method="post" action="/bulletin/drafts/{{ d.id }}/dismiss" style="display:inline;">
-              <button type="submit" class="btn-sm btn-dismiss">Dismiss</button>
-            </form>
-            {% endif %}
+            <div class="actions">
+              <a href="/bulletin/generate?source={{ d.source }}&title={{ d.title | urlencode }}"
+                 class="btn-sm btn-preview" target="_blank">Preview ↗</a>
+
+              {% if d.status == "pending" %}
+                <form method="post" action="/bulletin/drafts/{{ d.id }}/submit" style="display:inline;">
+                  <button type="submit" class="btn-sm btn-submit">Submit for Approval</button>
+                </form>
+                <form method="post" action="/bulletin/drafts/{{ d.id }}/dismiss" style="display:inline;">
+                  <button type="submit" class="btn-sm btn-dismiss">Dismiss</button>
+                </form>
+
+              {% elif d.status == "submitted" %}
+                {% if user.role == "admin" %}
+                  <button class="btn-sm btn-approve"
+                          onclick="openApprove({{ d.id }}, '{{ d.title | e }}')">Approve</button>
+                  <button class="btn-sm btn-reject"
+                          onclick="openReject({{ d.id }}, '{{ d.title | e }}')">Return</button>
+                {% endif %}
+                <form method="post" action="/bulletin/drafts/{{ d.id }}/dismiss" style="display:inline;">
+                  <button type="submit" class="btn-sm btn-dismiss">Dismiss</button>
+                </form>
+
+              {% elif d.status == "approved" %}
+                {% if user.role == "admin" %}
+                  <form method="post" action="/bulletin/drafts/{{ d.id }}/send" style="display:inline;">
+                    <button type="submit" class="btn-sm btn-send">Send Now</button>
+                  </form>
+                  <form method="post" action="/bulletin/drafts/{{ d.id }}/dismiss" style="display:inline;">
+                    <button type="submit" class="btn-sm btn-dismiss">Dismiss</button>
+                  </form>
+                {% endif %}
+              {% endif %}
+            </div>
           </td>
         </tr>
         {% endfor %}
@@ -156,11 +310,97 @@
     {% else %}
     <div class="empty">
       No bulletin drafts yet.<br>
-      <span style="font-size:.82rem;color:#9ca3af;">
-        Drafts are created automatically when the composite risk score reaches High or Extreme.
+      <span style="font-size:.82rem;">
+        Drafts are created automatically when the composite risk score reaches High or Extreme,
+        or you can <a href="/bulletin">generate one manually</a>.
       </span>
     </div>
     {% endif %}
   </div>
 </div>
+
+<!-- Approve modal -->
+<div id="approve-modal" class="modal-overlay" onclick="if(event.target===this)closeModals()">
+  <div class="modal-box">
+    <div class="modal-title">✓ Approve Bulletin</div>
+    <p style="font-size:.85rem;color:#6b7280;margin-bottom:1rem;">
+      Approving <strong id="approve-title"></strong> marks it ready to send to subscribers.
+    </p>
+    <form id="approve-form" method="post">
+      <label class="modal-label">Approval note (optional)</label>
+      <textarea name="notes" class="modal-textarea" placeholder="Add any guidance for the sender…"></textarea>
+      <div class="modal-footer">
+        <button type="button" class="btn-sm btn-preview" onclick="closeModals()">Cancel</button>
+        <button type="submit" class="btn-sm btn-approve" style="padding:.4rem 1rem;">Approve →</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Reject modal -->
+<div id="reject-modal" class="modal-overlay" onclick="if(event.target===this)closeModals()">
+  <div class="modal-box">
+    <div class="modal-title">↩ Return for Revision</div>
+    <p style="font-size:.85rem;color:#6b7280;margin-bottom:1rem;">
+      Returning <strong id="reject-title"></strong> to draft. The submitter will be notified.
+    </p>
+    <form id="reject-form" method="post">
+      <label class="modal-label">Reason for returning <span style="color:#dc2626;">*</span></label>
+      <textarea name="notes" class="modal-textarea" placeholder="Explain what needs to be revised…" required></textarea>
+      <div class="modal-footer">
+        <button type="button" class="btn-sm btn-preview" onclick="closeModals()">Cancel</button>
+        <button type="submit" class="btn-sm btn-reject" style="padding:.4rem 1rem;">Return →</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openApprove(id, title) {
+  document.getElementById('approve-title').textContent = title || 'bulletin #' + id;
+  document.getElementById('approve-form').action = '/bulletin/drafts/' + id + '/approve';
+  document.getElementById('approve-modal').classList.add('open');
+}
+
+function openReject(id, title) {
+  document.getElementById('reject-title').textContent = title || 'bulletin #' + id;
+  document.getElementById('reject-form').action = '/bulletin/drafts/' + id + '/reject';
+  document.getElementById('reject-modal').classList.add('open');
+}
+
+function closeModals() {
+  document.getElementById('approve-modal').classList.remove('open');
+  document.getElementById('reject-modal').classList.remove('open');
+}
+
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModals(); });
+
+// Pipeline filter
+var currentFilter = 'all';
+function filterDrafts(status) {
+  currentFilter = status;
+  document.querySelectorAll('.pipeline-stage').forEach(function(el) {
+    el.classList.remove('active-filter');
+  });
+  event.currentTarget.classList.add('active-filter');
+
+  document.querySelectorAll('.draft-row').forEach(function(row) {
+    if (status === 'all' || row.dataset.status === status) {
+      row.classList.remove('hidden-row');
+    } else {
+      row.classList.add('hidden-row');
+    }
+  });
+}
+
+// Highlight submitted drafts needing attention
+{% if counts.submitted > 0 and user.role == "admin" %}
+(function() {
+  var stage = document.querySelector('.pipeline-stage:nth-child(3)');
+  if (stage) stage.style.background = '#eff6ff';
+})();
+{% endif %}
+</script>
 {% endblock %}
+
+{% block extra_scripts %}{% include '_wmo_badge.html' %}{% endblock %}

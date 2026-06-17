@@ -188,13 +188,6 @@
 </head>
 <body>
   <meta name="csrf-token" content="{{ request.state.csrf_token if request.state.csrf_token is defined else '' }}">
-  <!-- WMO warning level top banner (hidden until JS populates it) -->
-  <div id="wl-banner" style="display:none;padding:.5rem 1.5rem;font-size:.82rem;font-weight:600;text-align:center;position:sticky;top:0;z-index:10000;border-bottom:3px solid transparent;">
-    <span class="wl-banner-text"></span>
-    <a href="/risk" id="wl-banner-link" style="margin-left:.75rem;font-size:.78rem;font-weight:600;text-decoration:underline;">View risk →</a>
-    <button onclick="document.getElementById('wl-banner').style.display='none'" style="margin-left:1rem;background:none;border:none;cursor:pointer;font-size:.9rem;opacity:.6;vertical-align:middle;">✕</button>
-  </div>
-
   {% block body %}{% endblock %}
   <button class="dark-toggle" id="dark-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
 
@@ -346,51 +339,7 @@
     } catch(e) {}
   })();
   </script>
-  <!-- WMO Warning Level: inject nav badge + top banner -->
-  <script>
-  (function() {
-    fetch('/api/v1/warning-level')
-      .then(function(r) { return r.ok ? r.json() : null; })
-      .then(function(data) {
-        if (!data) return;
-
-        // ── Nav badge (every page) ───────────────────────────────────────────
-        document.querySelectorAll('nav').forEach(function(nav) {
-          if (nav.querySelector('.wl-badge')) return;
-          var links = nav.querySelector('.nav-links, .user-info');
-          if (!links) return;
-          var badge = document.createElement('span');
-          badge.className = 'wl-badge';
-          badge.title = data.description;
-          badge.style.cssText = 'background:' + data.hex + ';color:#fff;padding:.2rem .65rem;' +
-            'border-radius:999px;font-size:.72rem;font-weight:700;letter-spacing:.04em;' +
-            'white-space:nowrap;cursor:default;flex-shrink:0;';
-          badge.textContent = '⚑ ' + data.wmo_name.toUpperCase();
-          var logout = links.querySelector('a.logout');
-          logout ? links.insertBefore(badge, logout) : links.appendChild(badge);
-        });
-
-        // ── Sticky top banner for Orange / Red ──────────────────────────────
-        if (data.wmo_name === 'Orange' || data.wmo_name === 'Red') {
-          var banner = document.getElementById('wl-banner');
-          if (!banner) return;
-          banner.style.background = data.bg;
-          banner.style.borderBottomColor = data.hex;
-          var txt = banner.querySelector('.wl-banner-text');
-          if (txt) {
-            txt.style.color = data.text;
-            txt.textContent = '⚠ ' + data.wmo_name.toUpperCase() +
-              ' WARNING — ' + data.level + ' risk (' + data.score + '/100). ' + data.description;
-          }
-          var link = document.getElementById('wl-banner-link');
-          if (link) link.style.color = data.text;
-          banner.style.display = 'block';
-        }
-      })
-      .catch(function() {});
-  })();
-  </script>
-
+  {% block extra_scripts %}{% endblock %}
   <script>
   (function () {
     // Auto-inject CSRF hidden field into all state-changing forms

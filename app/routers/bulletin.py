@@ -434,10 +434,36 @@ def _format_subject(template: str, now: datetime) -> str:
 
 # ── Bulletin drafts ───────────────────────────────────────────────────────────
 
+async def _notify_admins(db: AsyncSession, subject: str, body: str) -> None:
+    """Email all active admins a plain notification (fire-and-forget)."""
+    from app.core.email import _send_sync
+    from app.models.user import User
+    import asyncio
+    admins = (await db.execute(
+        select(User).where(User.role == "admin").where(User.is_active == True)  # noqa: E712
+    )).scalars().all()
+    html = f"<p>{body}</p><p><a href='/bulletin/drafts'>View drafts →</a></p>"
+    for admin in admins:
+        if admin.email:
+            await asyncio.to_thread(_send_sync, admin.email, subject, html)
+
+
+async def _notify_user(db: AsyncSession, user_id: int, subject: str, body: str) -> None:
+    """Email a specific user a plain notification (fire-and-forget)."""
+    from app.core.email import _send_sync
+    from app.models.user import User
+    import asyncio
+    u = (await db.execute(select(User).where(User.id == user_id))).scalars().first()
+    if u and u.email:
+        html = f"<p>{body}</p><p><a href='/bulletin/drafts'>View drafts →</a></p>"
+        await asyncio.to_thread(_send_sync, u.email, subject, html)
+
+
 @router.get("/drafts", response_class=HTMLResponse)
 async def bulletin_drafts_list(request: Request, db: AsyncSession = Depends(get_db)):
     from sqlalchemy import desc as _desc
     from app.models.bulletin_draft import BulletinDraft
+    from app.models.user import User
 
     user = await get_current_user(request, db)
     if not user:
@@ -446,16 +472,126 @@ async def bulletin_drafts_list(request: Request, db: AsyncSession = Depends(get_
     drafts_r = await db.execute(
         select(BulletinDraft)
         .order_by(_desc(BulletinDraft.created_at))
-        .limit(50)
+        .limit(100)
     )
     drafts = drafts_r.scalars().all()
 
-    pending_count = sum(1 for d in drafts if d.status == "pending")
+    # Resolve user names for submitted_by / approved_by
+    user_ids = {d.submitted_by_id for d in drafts if d.submitted_by_id} | \
+               {d.approved_by_id for d in drafts if d.approved_by_id}
+    users_by_id: dict = {}
+    if user_ids:
+        ur = await db.execute(select(User).where(User.id.in_(user_ids)))
+        users_by_id = {u.id: u.username for u in ur.scalars().all()}
+
+    counts = {s: sum(1 for d in drafts if d.status == s)
+              for s in ("pending", "submitted", "approved", "sent", "dismissed")}
 
     return templates.TemplateResponse(
         request, "bulletin_drafts.html",
-        {"user": user, "drafts": drafts, "pending_count": pending_count},
+        {
+            "user": user,
+            "drafts": drafts,
+            "users_by_id": users_by_id,
+            "counts": counts,
+            "flash_submitted": request.query_params.get("submitted"),
+            "flash_approved": request.query_params.get("approved"),
+            "flash_rejected": request.query_params.get("rejected"),
+            "flash_sent": request.query_params.get("sent"),
+            "flash_error": request.query_params.get("error"),
+        },
     )
+
+
+@router.post("/drafts/{draft_id}/submit", response_class=HTMLResponse)
+async def bulletin_draft_submit(
+    draft_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.bulletin_draft import BulletinDraft
+    from app.core.background import enqueue
+
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
+    draft = await db.scalar(select(BulletinDraft).where(BulletinDraft.id == draft_id))
+    if draft and draft.status == "pending":
+        draft.status = "submitted"
+        draft.submitted_by_id = user.id
+        draft.submitted_at = datetime.now(timezone.utc)
+        await db.commit()
+        enqueue(_notify_admins(
+            db,
+            f"Bulletin #{draft_id} submitted for approval",
+            f"{user.username} has submitted bulletin <strong>#{draft_id}: {draft.title or draft.source}</strong> "
+            f"({draft.risk_level} risk) for your approval.",
+        ))
+
+    return RedirectResponse("/bulletin/drafts?submitted=1", status_code=303)
+
+
+@router.post("/drafts/{draft_id}/approve", response_class=HTMLResponse)
+async def bulletin_draft_approve(
+    draft_id: int,
+    request: Request,
+    notes: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.bulletin_draft import BulletinDraft
+    from app.core.background import enqueue
+
+    user = await get_current_user(request, db)
+    if not user or user.role != "admin":
+        return RedirectResponse("/login", status_code=303)
+
+    draft = await db.scalar(select(BulletinDraft).where(BulletinDraft.id == draft_id))
+    if draft and draft.status == "submitted":
+        draft.status = "approved"
+        draft.approved_by_id = user.id
+        draft.approved_at = datetime.now(timezone.utc)
+        draft.approval_notes = notes.strip() or None
+        await db.commit()
+        if draft.submitted_by_id:
+            msg = (f"Your bulletin <strong>#{draft_id}: {draft.title or draft.source}</strong> "
+                   f"has been approved by {user.username} and is ready to send.")
+            if notes:
+                msg += f"<br>Note: {notes}"
+            enqueue(_notify_user(db, draft.submitted_by_id,
+                                 f"Bulletin #{draft_id} approved", msg))
+
+    return RedirectResponse("/bulletin/drafts?approved=1", status_code=303)
+
+
+@router.post("/drafts/{draft_id}/reject", response_class=HTMLResponse)
+async def bulletin_draft_reject(
+    draft_id: int,
+    request: Request,
+    notes: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.bulletin_draft import BulletinDraft
+    from app.core.background import enqueue
+
+    user = await get_current_user(request, db)
+    if not user or user.role != "admin":
+        return RedirectResponse("/login", status_code=303)
+
+    draft = await db.scalar(select(BulletinDraft).where(BulletinDraft.id == draft_id))
+    if draft and draft.status == "submitted":
+        draft.status = "pending"  # return to draft for revision
+        draft.approval_notes = notes.strip()
+        await db.commit()
+        if draft.submitted_by_id:
+            enqueue(_notify_user(
+                db, draft.submitted_by_id,
+                f"Bulletin #{draft_id} returned for revision",
+                f"Your bulletin <strong>#{draft_id}: {draft.title or draft.source}</strong> "
+                f"has been returned for revision by {user.username}.<br>Reason: {notes}",
+            ))
+
+    return RedirectResponse("/bulletin/drafts?rejected=1", status_code=303)
 
 
 @router.post("/drafts/{draft_id}/dismiss", response_class=HTMLResponse)
@@ -471,7 +607,7 @@ async def bulletin_draft_dismiss(
         return RedirectResponse("/login", status_code=303)
 
     draft = await db.scalar(select(BulletinDraft).where(BulletinDraft.id == draft_id))
-    if draft and draft.status == "pending":
+    if draft and draft.status not in ("sent", "dismissed"):
         draft.status = "dismissed"
         await db.commit()
 
@@ -491,7 +627,7 @@ async def bulletin_draft_send(
         return RedirectResponse("/login", status_code=303)
 
     draft = await db.scalar(select(BulletinDraft).where(BulletinDraft.id == draft_id))
-    if not draft or draft.status != "pending":
+    if not draft or draft.status not in ("approved", "pending"):
         return RedirectResponse("/bulletin/drafts", status_code=303)
 
     cfg_r = await db.execute(select(BulletinSchedule).where(BulletinSchedule.id == 1))
@@ -513,6 +649,7 @@ async def bulletin_draft_send(
     sent = await send_bulletin_email(recipients, subject, html)
 
     draft.status = "sent"
+    draft.sent_at = datetime.now(timezone.utc)
     await db.commit()
 
     return RedirectResponse(f"/bulletin/drafts?sent={sent}", status_code=303)

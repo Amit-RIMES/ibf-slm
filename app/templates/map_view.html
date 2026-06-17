@@ -1,0 +1,672 @@
+{% extends "base.html" %}
+{% block title %}Operational Map — IBF App{% endblock %}
+
+{% block extra_styles %}
+<link rel="stylesheet" href="/static/leaflet.css" />
+<style>
+  nav {
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    z-index: 1000;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.25rem; font-size: .875rem; color: #6b7280; }
+  nav .nav-links a { color: #6b7280; text-decoration: none; }
+  nav .nav-links a.active { color: #4f46e5; font-weight: 700; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  body { margin: 0; overflow: hidden; }
+
+  #map {
+    position: absolute;
+    top: 52px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 0;
+  }
+
+  /* ── Layer control panel ──────────────────────────────────── */
+  #layer-panel {
+    position: absolute;
+    top: 68px;
+    left: 12px;
+    z-index: 800;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.15);
+    width: 210px;
+    overflow: hidden;
+    transition: height .2s;
+  }
+  #layer-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .65rem .9rem;
+    background: #1a1a2e;
+    color: #fff;
+    font-size: .8rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    cursor: pointer;
+    user-select: none;
+  }
+  #layer-panel-header svg { flex-shrink: 0; }
+  #layer-panel-body { padding: .5rem 0; }
+
+  .layer-row {
+    display: flex;
+    align-items: center;
+    padding: .42rem .9rem;
+    gap: .6rem;
+    cursor: pointer;
+    transition: background .1s;
+    font-size: .8rem;
+    color: #374151;
+  }
+  .layer-row:hover { background: #f9fafb; }
+  .layer-toggle {
+    width: 32px;
+    height: 17px;
+    border-radius: 999px;
+    background: #e5e7eb;
+    position: relative;
+    flex-shrink: 0;
+    transition: background .18s;
+    cursor: pointer;
+  }
+  .layer-toggle.on { background: #4f46e5; }
+  .layer-toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    background: #fff;
+    transition: left .18s;
+    box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  }
+  .layer-toggle.on::after { left: 17px; }
+  .layer-dot {
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .layer-label { flex: 1; }
+  .layer-count {
+    font-size: .7rem;
+    color: #9ca3af;
+    background: #f3f4f6;
+    border-radius: 999px;
+    padding: .1rem .45rem;
+  }
+  .layer-spinner {
+    width: 12px; height: 12px;
+    border: 2px solid #e5e7eb;
+    border-top-color: #4f46e5;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Stats bar ────────────────────────────────────────────── */
+  #stats-bar {
+    position: absolute;
+    top: 68px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 800;
+    display: flex;
+    gap: .5rem;
+    pointer-events: none;
+  }
+  .stat-chip {
+    background: #fff;
+    border-radius: 999px;
+    padding: .3rem .85rem;
+    font-size: .75rem;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+    white-space: nowrap;
+    pointer-events: auto;
+  }
+  .stat-chip.alert { background: #fee2e2; color: #dc2626; }
+  .stat-chip.neutral { color: #374151; }
+
+  /* ── Info panel ───────────────────────────────────────────── */
+  #info-panel {
+    position: absolute;
+    top: 52px;
+    right: 0;
+    width: 300px;
+    height: calc(100vh - 52px);
+    background: #fff;
+    z-index: 900;
+    box-shadow: -4px 0 20px rgba(0,0,0,.12);
+    transform: translateX(100%);
+    transition: transform .22s ease;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #info-panel.open { transform: translateX(0); }
+  #info-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .9rem 1rem;
+    border-bottom: 1px solid #f3f4f6;
+    flex-shrink: 0;
+  }
+  #info-title { font-weight: 700; font-size: .95rem; color: #1a1a2e; flex: 1; margin-right: .5rem; }
+  #info-close {
+    background: none;
+    border: none;
+    font-size: 1.1rem;
+    cursor: pointer;
+    color: #9ca3af;
+    flex-shrink: 0;
+    padding: 0;
+    line-height: 1;
+  }
+  #info-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: .9rem 1rem;
+  }
+  .info-row { margin-bottom: .75rem; }
+  .info-label {
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: #9ca3af;
+    margin-bottom: .2rem;
+  }
+  .info-val { font-size: .85rem; color: #374151; }
+  .info-badge {
+    display: inline-block;
+    padding: .2rem .65rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 700;
+    color: #fff;
+  }
+  .info-alert-banner {
+    background: #fee2e2;
+    border: 1px solid #fca5a5;
+    border-radius: 7px;
+    padding: .55rem .8rem;
+    font-size: .8rem;
+    font-weight: 700;
+    color: #dc2626;
+    margin-bottom: .9rem;
+  }
+  #info-footer {
+    padding: .75rem 1rem;
+    border-top: 1px solid #f3f4f6;
+    display: flex;
+    gap: .5rem;
+    flex-shrink: 0;
+  }
+  .btn-sm {
+    padding: .38rem .85rem;
+    border-radius: 7px;
+    font-size: .78rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .btn-primary { background: #4f46e5; color: #fff; }
+  .btn-ghost { background: #f3f4f6; color: #374151; }
+
+  /* ── Legend ───────────────────────────────────────────────── */
+  #legend {
+    position: absolute;
+    bottom: 28px;
+    left: 12px;
+    z-index: 800;
+    background: rgba(255,255,255,.92);
+    border-radius: 8px;
+    padding: .5rem .75rem;
+    font-size: .72rem;
+    color: #374151;
+    box-shadow: 0 1px 6px rgba(0,0,0,.1);
+    pointer-events: none;
+  }
+  .legend-row { display: flex; align-items: center; gap: .45rem; margin-bottom: .2rem; }
+  .legend-row:last-child { margin-bottom: 0; }
+  .legend-swatch { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/forecasts">Forecasts</a>
+    <a href="/observed">Observed</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/ecmwf">ECMWF</a>
+    <a href="/cds">CDS</a>
+    <a href="/glofas">GloFAS</a>
+    <a href="/drought">Drought</a>
+    <a href="/risk">Risk</a>
+    <a href="/ibf">IBF Matrix</a>
+    <a href="/map" class="active">Map</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/seasonal">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div id="map"></div>
+
+<!-- Layer control -->
+<div id="layer-panel">
+  <div id="layer-panel-header" onclick="togglePanel()">
+    <span>🗺 Layers</span>
+    <svg id="panel-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <path d="M3 5l4 4 4-4" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>
+    </svg>
+  </div>
+  <div id="layer-panel-body">
+    <div class="layer-row" onclick="toggleLayer('triggers')">
+      <div class="layer-dot" style="background:#4f46e5;border:1px solid #c7d2fe;"></div>
+      <span class="layer-label">Trigger Zones</span>
+      <span class="layer-count" id="count-triggers">—</span>
+      <div class="layer-spinner" id="spin-triggers"></div>
+      <div class="layer-toggle on" id="toggle-triggers"></div>
+    </div>
+    <div class="layer-row" onclick="toggleLayer('rainfall')">
+      <div class="layer-dot" style="background:#3b82f6;"></div>
+      <span class="layer-label">Forecast Rainfall</span>
+      <span class="layer-count" id="count-rainfall">{% if latest_fc_date %}{{ latest_fc_date }}{% else %}none{% endif %}</span>
+      <div class="layer-spinner" id="spin-rainfall"></div>
+      <div class="layer-toggle on" id="toggle-rainfall"></div>
+    </div>
+    <div class="layer-row" onclick="toggleLayer('glofas')">
+      <div class="layer-dot" style="background:#0d9488;"></div>
+      <span class="layer-label">River Discharge</span>
+      <span class="layer-count" id="count-glofas">{% if glofas_date %}{{ glofas_date }}{% else %}none{% endif %}</span>
+      <div class="layer-spinner" id="spin-glofas" style="display:none;"></div>
+      <div class="layer-toggle" id="toggle-glofas"></div>
+    </div>
+    <div class="layer-row" onclick="toggleLayer('impacts')">
+      <div class="layer-dot" style="background:#f59e0b;"></div>
+      <span class="layer-label">Impacts</span>
+      <span class="layer-count" id="count-impacts">{% if impact_count %}{{ impact_count }}{% else %}—{% endif %}</span>
+      <div class="layer-spinner" id="spin-impacts" style="display:none;"></div>
+      <div class="layer-toggle" id="toggle-impacts"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Stats bar -->
+<div id="stats-bar">
+  {% if active_count > 0 %}
+  <div class="stat-chip alert">⚡ {{ active_count }} active alert{{ 's' if active_count != 1 }}</div>
+  {% else %}
+  <div class="stat-chip neutral">✓ No active alerts</div>
+  {% endif %}
+  {% if latest_fc_source %}
+  <div class="stat-chip neutral">📡 {{ latest_fc_source }} · {{ latest_fc_date }}</div>
+  {% endif %}
+</div>
+
+<!-- Info panel -->
+<div id="info-panel">
+  <div id="info-header">
+    <div id="info-title">Feature details</div>
+    <button id="info-close" onclick="closeInfo()">✕</button>
+  </div>
+  <div id="info-body"></div>
+  <div id="info-footer"></div>
+</div>
+
+<!-- Legend -->
+<div id="legend">
+  <div class="legend-row"><div class="legend-swatch" style="background:#dc2626;"></div> Active alert</div>
+  <div class="legend-row"><div class="legend-swatch" style="background:#3b82f6;"></div> Flood</div>
+  <div class="legend-row"><div class="legend-swatch" style="background:#8b5cf6;"></div> Storm</div>
+  <div class="legend-row"><div class="legend-swatch" style="background:#f59e0b;"></div> Drought / Impact</div>
+  <div class="legend-row"><div class="legend-swatch" style="background:#06b6d4;"></div> Cyclone</div>
+  <div class="legend-row"><div class="legend-swatch" style="background:#0d9488;opacity:.6;"></div> River discharge</div>
+</div>
+
+<script src="/static/leaflet.js"></script>
+<script>
+// ── Map init ──────────────────────────────────────────────────────────────────
+var map = L.map('map', {
+  center: [15, 100],
+  zoom: 4,
+  zoomControl: true,
+  attributionControl: true,
+});
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom: 18,
+}).addTo(map);
+
+// ── Layer groups ──────────────────────────────────────────────────────────────
+var layers = {
+  triggers: L.layerGroup().addTo(map),
+  rainfall: L.layerGroup().addTo(map),
+  glofas: L.layerGroup(),      // off by default
+  impacts: L.layerGroup(),     // off by default
+};
+
+var layerVisible = { triggers: true, rainfall: true, glofas: false, impacts: false };
+var layerLoaded = { triggers: false, rainfall: false, glofas: false, impacts: false };
+
+// ── Color helpers ─────────────────────────────────────────────────────────────
+function rainfallColor(intensity) {
+  if (intensity > 0.8) return '#1e3a8a';
+  if (intensity > 0.55) return '#2563eb';
+  if (intensity > 0.3) return '#60a5fa';
+  return '#bfdbfe';
+}
+
+function glofasColor(intensity) {
+  if (intensity > 0.8) return '#065f46';
+  if (intensity > 0.55) return '#0d9488';
+  if (intensity > 0.3) return '#34d399';
+  return '#d1fae5';
+}
+
+function fmt(n) {
+  if (n === null || n === undefined) return '—';
+  return Number(n).toLocaleString();
+}
+
+// ── Info panel ────────────────────────────────────────────────────────────────
+function openInfo(title, bodyHtml, footerHtml) {
+  document.getElementById('info-title').textContent = title;
+  document.getElementById('info-body').innerHTML = bodyHtml;
+  document.getElementById('info-footer').innerHTML = footerHtml || '';
+  document.getElementById('info-panel').classList.add('open');
+}
+
+function closeInfo() {
+  document.getElementById('info-panel').classList.remove('open');
+}
+
+// ── Spinner helpers ───────────────────────────────────────────────────────────
+function spinStart(name) { document.getElementById('spin-' + name).style.display = 'block'; }
+function spinStop(name)  { document.getElementById('spin-' + name).style.display = 'none'; }
+function setCount(name, val) { document.getElementById('count-' + name).textContent = val; }
+
+// ── Load triggers ─────────────────────────────────────────────────────────────
+async function loadTriggers() {
+  spinStart('triggers');
+  try {
+    var r = await fetch('/map/layers/triggers');
+    var fc = await r.json();
+    var count = 0;
+    fc.features.forEach(function(f) {
+      var p = f.properties;
+      var isAlert = p.is_alert;
+      var color = isAlert ? '#dc2626' : p.color;
+      var poly = L.geoJSON(f, {
+        style: function() {
+          return {
+            color: color,
+            weight: isAlert ? 2.5 : 1.5,
+            opacity: 0.9,
+            fillColor: color,
+            fillOpacity: isAlert ? 0.25 : 0.1,
+            dashArray: isAlert ? null : '5,4',
+          };
+        },
+      });
+      poly.on('click', function() { showTriggerInfo(p); });
+      poly.addTo(layers.triggers);
+      count++;
+    });
+    setCount('triggers', count + ' zone' + (count !== 1 ? 's' : ''));
+    layerLoaded.triggers = true;
+  } catch(e) {
+    setCount('triggers', 'err');
+  }
+  spinStop('triggers');
+}
+
+function showTriggerInfo(p) {
+  var title = (p.is_alert ? '⚡ ' : '📍 ') + p.name;
+  var icon = {flood:'🌊',storm:'⛈',drought:'🌵',cyclone:'🌀'}[p.hazard_type] || '⚠';
+
+  var body = '';
+  if (p.is_alert) {
+    body += '<div class="info-alert-banner">● ACTIVE ALERT — unacknowledged</div>';
+  }
+  body += '<div class="info-row"><div class="info-label">Hazard Type</div>';
+  body += '<div class="info-val">' + icon + ' ' + p.hazard_type.charAt(0).toUpperCase() + p.hazard_type.slice(1) + '</div></div>';
+
+  body += '<div class="info-row"><div class="info-label">Trigger</div>';
+  body += '<div class="info-val">' + p.variable + ' <strong>' + (p.threshold !== null ? '> ' + p.threshold + ' mm' : '') + '</strong></div></div>';
+
+  if (p.is_alert && p.value !== null) {
+    body += '<div class="info-row"><div class="info-label">Observed Value</div>';
+    body += '<div class="info-val" style="color:#dc2626;font-weight:700;">' + Number(p.value).toFixed(1) + ' mm</div></div>';
+    body += '<div class="info-row"><div class="info-label">Triggered</div>';
+    body += '<div class="info-val">' + (p.triggered_at ? p.triggered_at.substring(0,16).replace('T',' ') : '—') + '</div></div>';
+  }
+
+  if (p.response_plan) {
+    body += '<div class="info-row"><div class="info-label">Response Plan</div>';
+    body += '<div class="info-val" style="font-size:.78rem;color:#6b7280;white-space:pre-wrap;">' + p.response_plan + '</div></div>';
+  }
+
+  var footer = '<a href="/triggers/' + p.id + '" class="btn-sm btn-primary">View trigger →</a>';
+  if (p.is_alert) {
+    footer += ' <a href="/triggers" class="btn-sm btn-ghost">All alerts</a>';
+  }
+  openInfo(title, body, footer);
+}
+
+// ── Load rainfall ─────────────────────────────────────────────────────────────
+async function loadRainfall() {
+  spinStart('rainfall');
+  try {
+    var r = await fetch('/map/layers/rainfall');
+    var fc = await r.json();
+    if (fc.features && fc.features.length > 0) {
+      fc.features.forEach(function(f) {
+        var intensity = (f.properties && f.properties.intensity) || 0;
+        var precip = (f.properties && (f.properties.precip || f.properties.discharge)) || 0;
+        var color = rainfallColor(intensity);
+
+        if (f.geometry && f.geometry.type === 'Point') {
+          var coords = f.geometry.coordinates;
+          L.circleMarker([coords[1], coords[0]], {
+            radius: 4,
+            color: color,
+            weight: 0,
+            fillColor: color,
+            fillOpacity: intensity * 0.7 + 0.15,
+          })
+          .bindTooltip(Number(precip).toFixed(1) + ' mm', {sticky: true})
+          .addTo(layers.rainfall);
+        } else {
+          L.geoJSON(f, {
+            style: function() {
+              return {color: color, weight: 0, fillColor: color, fillOpacity: intensity * 0.65 + 0.12};
+            },
+          })
+          .bindTooltip(Number(precip).toFixed(1) + ' mm', {sticky: true})
+          .addTo(layers.rainfall);
+        }
+      });
+      var meta = fc.meta || {};
+      setCount('rainfall', meta.source || 'loaded');
+    } else {
+      setCount('rainfall', 'none');
+    }
+    layerLoaded.rainfall = true;
+  } catch(e) {
+    setCount('rainfall', 'err');
+  }
+  spinStop('rainfall');
+}
+
+// ── Load GloFAS ───────────────────────────────────────────────────────────────
+async function loadGlofas() {
+  if (layerLoaded.glofas) return;
+  spinStart('glofas');
+  try {
+    var r = await fetch('/map/layers/glofas');
+    var fc = await r.json();
+    if (fc.features && fc.features.length > 0) {
+      fc.features.forEach(function(f) {
+        var intensity = (f.properties && f.properties.intensity) || 0;
+        var discharge = (f.properties && f.properties.discharge) || 0;
+        var color = glofasColor(intensity);
+
+        if (f.geometry && f.geometry.type === 'Point') {
+          var coords = f.geometry.coordinates;
+          L.circleMarker([coords[1], coords[0]], {
+            radius: 3,
+            color: color,
+            weight: 0,
+            fillColor: color,
+            fillOpacity: intensity * 0.75 + 0.2,
+          })
+          .bindTooltip(Number(discharge).toFixed(0) + ' m³/s', {sticky: true})
+          .addTo(layers.glofas);
+        } else {
+          L.geoJSON(f, {
+            style: function() {
+              return {color: color, weight: 0, fillColor: color, fillOpacity: intensity * 0.7 + 0.15};
+            },
+          })
+          .bindTooltip(Number(discharge).toFixed(0) + ' m³/s', {sticky: true})
+          .addTo(layers.glofas);
+        }
+      });
+      var meta = fc.meta || {};
+      setCount('glofas', meta.forecast_date || 'loaded');
+    } else {
+      setCount('glofas', 'none');
+    }
+    layerLoaded.glofas = true;
+  } catch(e) {
+    setCount('glofas', 'err');
+  }
+  spinStop('glofas');
+}
+
+// ── Load impacts ──────────────────────────────────────────────────────────────
+async function loadImpacts() {
+  if (layerLoaded.impacts) return;
+  spinStart('impacts');
+  try {
+    var r = await fetch('/map/layers/impacts');
+    var fc = await r.json();
+    var count = 0;
+    fc.features.forEach(function(f) {
+      var p = f.properties;
+      var coords = f.geometry.coordinates;
+      var aff = p.affected_population || 1;
+      var radius = Math.max(5, Math.min(18, Math.log10(aff + 10) * 5));
+      L.circleMarker([coords[1], coords[0]], {
+        radius: radius,
+        color: p.color,
+        weight: 1.5,
+        fillColor: p.color,
+        fillOpacity: 0.35,
+      })
+      .on('click', function() { showImpactInfo(p); })
+      .addTo(layers.impacts);
+      count++;
+    });
+    setCount('impacts', count + ' records');
+    layerLoaded.impacts = true;
+  } catch(e) {
+    setCount('impacts', 'err');
+  }
+  spinStop('impacts');
+}
+
+function showImpactInfo(p) {
+  var icon = {flood:'🌊',storm:'⛈',drought:'🌵',cyclone:'🌀'}[p.hazard_type] || '⚠';
+  var title = icon + ' ' + p.event_name;
+
+  var body = '';
+  body += '<div class="info-row"><div class="info-label">Date</div>';
+  body += '<div class="info-val">' + (p.event_date || '—') + '</div></div>';
+  body += '<div class="info-row"><div class="info-label">Location</div>';
+  body += '<div class="info-val">' + [p.region, p.country].filter(Boolean).join(', ') + '</div></div>';
+
+  if (p.affected_population > 0) {
+    body += '<div class="info-row"><div class="info-label">Affected</div>';
+    body += '<div class="info-val"><strong>' + fmt(p.affected_population) + '</strong> people</div></div>';
+  }
+  if (p.casualties > 0) {
+    body += '<div class="info-row"><div class="info-label">Casualties</div>';
+    body += '<div class="info-val" style="color:#dc2626;font-weight:700;">' + fmt(p.casualties) + '</div></div>';
+  }
+  if (p.displaced > 0) {
+    body += '<div class="info-row"><div class="info-label">Displaced</div>';
+    body += '<div class="info-val">' + fmt(p.displaced) + '</div></div>';
+  }
+
+  var footer = '<a href="/impacts/' + p.id + '" class="btn-sm btn-primary">View impact →</a>';
+  openInfo(title, body, footer);
+}
+
+// ── Layer toggles ─────────────────────────────────────────────────────────────
+function toggleLayer(name) {
+  layerVisible[name] = !layerVisible[name];
+  var toggleEl = document.getElementById('toggle-' + name);
+
+  if (layerVisible[name]) {
+    toggleEl.classList.add('on');
+    map.addLayer(layers[name]);
+    if (!layerLoaded[name]) {
+      if (name === 'glofas') loadGlofas();
+      if (name === 'impacts') loadImpacts();
+    }
+  } else {
+    toggleEl.classList.remove('on');
+    map.removeLayer(layers[name]);
+  }
+}
+
+// ── Panel collapse ────────────────────────────────────────────────────────────
+var panelOpen = true;
+function togglePanel() {
+  panelOpen = !panelOpen;
+  var body = document.getElementById('layer-panel-body');
+  var chevron = document.getElementById('panel-chevron');
+  body.style.display = panelOpen ? 'block' : 'none';
+  chevron.style.transform = panelOpen ? '' : 'rotate(-90deg)';
+}
+
+// ── Keyboard shortcut ─────────────────────────────────────────────────────────
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeInfo();
+});
+
+// ── Initial load ──────────────────────────────────────────────────────────────
+loadTriggers();
+loadRainfall();
+</script>
+{% endblock %}
+
+{% block extra_scripts %}{% include '_wmo_badge.html' %}{% endblock %}

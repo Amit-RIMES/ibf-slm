@@ -1,0 +1,458 @@
+{% extends "base.html" %}
+{% block title %}IBF Matrix — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.25rem; font-size: .875rem; color: #6b7280; }
+  nav .nav-links a { color: #6b7280; text-decoration: none; }
+  nav .nav-links a.active { color: #4f46e5; font-weight: 700; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+
+  .page-header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .75rem; margin-bottom: .4rem; }
+  .page-title { font-size: 1.4rem; font-weight: 700; color: #1a1a2e; }
+  .summary-chips { display: flex; gap: .5rem; flex-wrap: wrap; }
+  .chip { padding: .25rem .75rem; border-radius: 999px; font-size: .78rem; font-weight: 600; }
+  .chip-default { background: #f3f4f6; color: #374151; }
+  .chip-alert  { background: #fee2e2; color: #dc2626; }
+  .chip-warn   { background: #fff7ed; color: #ea580c; }
+
+  .page-sub { font-size: .85rem; color: #6b7280; margin-bottom: 1.75rem; }
+
+  /* ── Matrix layout ──────────────────────────────────────────── */
+  .matrix-wrapper { margin-bottom: 2rem; }
+  .axis-label-x {
+    text-align: center;
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #9ca3af;
+    margin-bottom: .35rem;
+  }
+  .matrix-outer { display: flex; align-items: stretch; gap: 0; }
+  .axis-label-y {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: #9ca3af;
+    margin-right: .5rem;
+    white-space: nowrap;
+    text-align: center;
+  }
+  .matrix-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 110px repeat(3, 1fr);
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  /* Header row */
+  .matrix-corner {
+    background: #f9fafb;
+    border-right: 1px solid #e5e7eb;
+    border-bottom: 2px solid #e5e7eb;
+    display: flex; align-items: center; justify-content: center;
+    padding: .6rem;
+    font-size: .7rem; font-weight: 700; color: #9ca3af;
+    text-transform: uppercase; letter-spacing: .06em;
+  }
+  .col-header {
+    background: #f9fafb;
+    border-right: 1px solid #e5e7eb;
+    border-bottom: 2px solid #e5e7eb;
+    padding: .65rem .5rem;
+    text-align: center;
+    font-size: .78rem; font-weight: 700; color: #374151;
+  }
+  .col-header small { display: block; font-size: .68rem; font-weight: 400; color: #9ca3af; margin-top: .1rem; }
+  .col-header:last-child { border-right: none; }
+
+  /* Impact row label */
+  .row-header {
+    background: #f9fafb;
+    border-right: 1px solid #e5e7eb;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex; align-items: center; justify-content: flex-end;
+    padding: .5rem .75rem;
+    font-size: .78rem; font-weight: 700; color: #374151;
+    text-align: right;
+  }
+  .row-header:last-of-type { border-bottom: none; }
+
+  /* Matrix cell */
+  .matrix-cell {
+    border-right: 1px solid rgba(0,0,0,.06);
+    border-bottom: 1px solid rgba(0,0,0,.06);
+    padding: .5rem .6rem;
+    min-height: 90px;
+    position: relative;
+    vertical-align: top;
+  }
+  .matrix-cell:last-child { border-right: none; }
+
+  .cell-wmo-tag {
+    font-size: .62rem;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    opacity: .65;
+    margin-bottom: .35rem;
+  }
+
+  .trigger-chip {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: none;
+    border-radius: 6px;
+    padding: .28rem .55rem;
+    margin-bottom: .25rem;
+    font-size: .72rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: opacity .12s;
+    font-family: inherit;
+  }
+  .trigger-chip:hover { opacity: .82; }
+  .trigger-chip .active-dot { font-size: .7rem; margin-right: .2rem; }
+
+  /* ── Legend ─────────────────────────────────────────────────── */
+  .legend {
+    display: flex; gap: 1rem; flex-wrap: wrap;
+    margin-bottom: 1.75rem; align-items: center;
+  }
+  .legend-label { font-size: .75rem; font-weight: 700; color: #6b7280; margin-right: .25rem; }
+  .legend-item { display: flex; align-items: center; gap: .4rem; font-size: .78rem; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+
+  /* ── Methodology note ───────────────────────────────────────── */
+  .method-note {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: .85rem 1.1rem;
+    font-size: .78rem;
+    color: #6b7280;
+    margin-bottom: 2rem;
+    line-height: 1.55;
+  }
+  .method-note strong { color: #374151; }
+
+  /* ── Active triggers list ────────────────────────────────────── */
+  .section-title { font-size: .95rem; font-weight: 700; color: #1a1a2e; margin-bottom: .9rem; }
+  .trigger-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: .9rem; margin-bottom: 2rem; }
+  .trigger-card {
+    border-radius: 10px;
+    border: 1.5px solid;
+    padding: .9rem 1.1rem;
+    cursor: pointer;
+    transition: box-shadow .12s;
+    background: #fff;
+  }
+  .trigger-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.1); }
+  .card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: .45rem; }
+  .card-name { font-weight: 700; font-size: .9rem; color: #1a1a2e; }
+  .wmo-badge {
+    padding: .18rem .6rem;
+    border-radius: 999px;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: #fff;
+  }
+  .card-meta { font-size: .75rem; color: #6b7280; line-height: 1.5; }
+  .card-meta span { display: inline-block; margin-right: .75rem; }
+
+  /* ── Detail modal ────────────────────────────────────────────── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.45);
+    z-index: 5000;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: #fff;
+    border-radius: 14px;
+    padding: 1.5rem;
+    max-width: 480px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 40px rgba(0,0,0,.2);
+  }
+  .modal-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1rem; gap: .75rem; }
+  .modal-title { font-size: 1.05rem; font-weight: 700; color: #1a1a2e; }
+  .modal-close { background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #9ca3af; flex-shrink: 0; }
+  .modal-row { margin-bottom: .85rem; }
+  .modal-row-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; margin-bottom: .2rem; }
+  .modal-row-val { font-size: .875rem; color: #374151; }
+  .tier-pill {
+    display: inline-block;
+    padding: .2rem .65rem;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 700;
+  }
+  .modal-plan {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 6px;
+    padding: .6rem .8rem;
+    font-size: .82rem;
+    color: #14532d;
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
+  .modal-footer { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.25rem; }
+  .btn { padding: .45rem 1rem; border-radius: 7px; font-size: .82rem; font-weight: 600; cursor: pointer; border: none; text-decoration: none; }
+  .btn-primary { background: #4f46e5; color: #fff; }
+  .btn-ghost { background: #f3f4f6; color: #374151; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/forecasts">Forecasts</a>
+    <a href="/observed">Observed</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/ecmwf">ECMWF</a>
+    <a href="/cds">CDS</a>
+    <a href="/glofas">GloFAS</a>
+    <a href="/drought">Drought</a>
+    <a href="/risk">Risk</a>
+    <a href="/ibf" class="active">IBF Matrix</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/seasonal">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div class="page-title">Impact-Based Forecasting Matrix</div>
+    <div class="summary-chips">
+      <span class="chip chip-default">{{ total_triggers }} trigger{{ 's' if total_triggers != 1 }}</span>
+      {% if active_count > 0 %}
+      <span class="chip chip-alert">{{ active_count }} active alert{{ 's' if active_count != 1 }}</span>
+      {% endif %}
+      {% if high_risk_count > 0 %}
+      <span class="chip chip-warn">{{ high_risk_count }} high-risk</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="page-sub">Each trigger is placed by current likelihood and historical impact severity. Click any trigger for details and response guidance.</div>
+
+  <!-- Matrix -->
+  <div class="matrix-wrapper">
+    <div class="axis-label-x">← LIKELIHOOD →</div>
+    <div class="matrix-outer">
+      <div class="axis-label-y">← IMPACT SEVERITY →</div>
+      <div class="matrix-grid">
+        <!-- Header row -->
+        <div class="matrix-corner">IMPACT \ PROB</div>
+        {% for pl in prob_levels %}
+        <div class="col-header">
+          {{ pl }}
+          {% if pl == "Low" %}<small>&lt; 33 %</small>
+          {% elif pl == "Medium" %}<small>33 – 66 %</small>
+          {% else %}<small>&gt; 66 %</small>{% endif %}
+        </div>
+        {% endfor %}
+
+        <!-- Data rows -->
+        {% for row in rows %}
+        <div class="row-header">{{ row.label }}</div>
+        {% for cell in row.cols %}
+        <div class="matrix-cell" style="background:{{ cell.bg }};border-color:{{ cell.hex }}33;">
+          <div class="cell-wmo-tag" style="color:{{ cell.hex }};">{{ cell.wmo_name }}</div>
+          {% for item in cell.triggers %}
+          <button class="trigger-chip"
+                  style="background:{{ cell.hex }};color:{{ cell.text }};"
+                  onclick="openDetail({{ item.id }})">
+            {% if item.has_active %}<span class="active-dot">●</span>{% endif %}{{ item.icon }} {{ item.name }}
+          </button>
+          {% endfor %}
+        </div>
+        {% endfor %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <span class="legend-label">WMO level:</span>
+    <div class="legend-item"><div class="legend-dot" style="background:#16a34a;"></div> Green — Low risk</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ca8a04;"></div> Yellow — Moderate risk</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ea580c;"></div> Orange — High risk</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#dc2626;"></div> Red — Extreme risk</div>
+    <div class="legend-item" style="margin-left:.5rem;"><span style="color:#dc2626;font-weight:700;">●</span> = currently active alert</div>
+  </div>
+
+  <!-- Methodology -->
+  <div class="method-note">
+    <strong>Likelihood</strong> is based on current trigger status: <em>High</em> = active unacknowledged alert;
+    <em>Medium</em> = activation within 7 days or latest forecast ≥ 80 % of threshold;
+    <em>Low</em> = no recent activity. &nbsp;
+    <strong>Impact severity</strong> is derived from historical impact records for each hazard type:
+    <em>Extreme</em> &gt;100k affected or &gt;100 casualties;
+    <em>Severe</em> &gt;10k or &gt;10 casualties;
+    <em>Moderate</em> &gt;1k or any casualties;
+    <em>Minor</em> = small recorded impacts;
+    <em>Negligible</em> = no data.
+  </div>
+
+  <!-- Active trigger cards (sorted by WMO level desc) -->
+  {% set sorted_triggers = trigger_list | sort(attribute='wmo_name', reverse=False) %}
+  {% if trigger_list %}
+  <div class="section-title">All Active Triggers ({{ total_triggers }})</div>
+  <div class="trigger-cards">
+    {% for item in trigger_list | sort(attribute='wmo_name') %}
+    <div class="trigger-card" style="border-color:{{ item.hex }};" onclick="openDetail({{ item.id }})">
+      <div class="card-top">
+        <div class="card-name">{{ item.icon }} {{ item.name }}</div>
+        <div class="wmo-badge" style="background:{{ item.hex }};">{{ item.wmo_name }}</div>
+      </div>
+      <div class="card-meta">
+        <span>{{ item.hazard_type | capitalize }}</span>
+        <span>Prob: <strong>{{ item.prob_tier }}</strong></span>
+        <span>Impact: <strong>{{ item.impact_tier }}</strong></span>
+        {% if item.has_active %}<span style="color:#dc2626;font-weight:600;">● Active alert</span>
+        {% elif item.has_recent %}<span style="color:#ca8a04;font-weight:600;">Recent (7d)</span>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</div>
+
+<!-- Detail Modal -->
+<div id="detail-modal" class="modal-overlay" onclick="if(event.target===this)closeDetail()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-name"></div>
+      <button class="modal-close" onclick="closeDetail()">✕</button>
+    </div>
+    <div id="modal-status" class="modal-row"></div>
+    <div class="modal-row">
+      <div class="modal-row-label">WMO Warning Level</div>
+      <div class="modal-row-val"><span id="modal-wmo-badge" class="tier-pill"></span></div>
+    </div>
+    <div class="modal-row">
+      <div class="modal-row-label">Likelihood</div>
+      <div class="modal-row-val"><strong id="modal-prob"></strong> — <span id="modal-prob-desc" style="color:#6b7280;font-size:.82rem;"></span></div>
+    </div>
+    <div class="modal-row">
+      <div class="modal-row-label">Impact Severity</div>
+      <div class="modal-row-val">
+        <strong id="modal-impact"></strong> — <span id="modal-impact-desc" style="color:#6b7280;font-size:.82rem;"></span>
+        <div id="modal-impact-stats" style="font-size:.75rem;color:#9ca3af;margin-top:.15rem;"></div>
+      </div>
+    </div>
+    <div id="modal-plan-row" class="modal-row" style="display:none;">
+      <div class="modal-row-label">Response Plan</div>
+      <div class="modal-plan" id="modal-plan"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeDetail()">Close</button>
+      <a id="modal-link" href="#" class="btn btn-primary">View trigger →</a>
+    </div>
+  </div>
+</div>
+
+<script>
+var TRIGGERS = {{ trigger_list | tojson }};
+var BY_ID = {};
+TRIGGERS.forEach(function(t) { BY_ID[t.id] = t; });
+
+function openDetail(id) {
+  var t = BY_ID[id];
+  if (!t) return;
+  document.getElementById('modal-name').textContent = t.icon + ' ' + t.name;
+
+  // Status
+  var statusEl = document.getElementById('modal-status');
+  if (t.has_active) {
+    statusEl.innerHTML = '<div style="background:#fee2e2;color:#dc2626;border-radius:6px;padding:.4rem .75rem;font-size:.8rem;font-weight:600;">● Active alert — unacknowledged</div>';
+  } else if (t.has_recent) {
+    statusEl.innerHTML = '<div style="background:#fefce8;color:#713f12;border-radius:6px;padding:.4rem .75rem;font-size:.8rem;font-weight:600;">⚐ Activated within last 7 days</div>';
+  } else {
+    statusEl.innerHTML = '<div style="background:#f3f4f6;color:#6b7280;border-radius:6px;padding:.4rem .75rem;font-size:.8rem;">No recent activation</div>';
+  }
+
+  // WMO badge
+  var badge = document.getElementById('modal-wmo-badge');
+  badge.textContent = '⚑ ' + t.wmo_name.toUpperCase();
+  badge.style.background = t.hex;
+  badge.style.color = t.text;
+
+  document.getElementById('modal-prob').textContent = t.prob_tier;
+  document.getElementById('modal-prob-desc').textContent = t.prob_desc;
+  document.getElementById('modal-impact').textContent = t.impact_tier;
+  document.getElementById('modal-impact-desc').textContent = t.impact_desc;
+
+  var statsEl = document.getElementById('modal-impact-stats');
+  if (t.impact_count > 0) {
+    statsEl.textContent = t.impact_count + ' historical event' + (t.impact_count !== 1 ? 's' : '') +
+      (t.max_affected > 0 ? ' · max ' + t.max_affected.toLocaleString() + ' affected' : '');
+  } else {
+    statsEl.textContent = '';
+  }
+
+  var planRow = document.getElementById('modal-plan-row');
+  if (t.response_plan) {
+    planRow.style.display = 'block';
+    document.getElementById('modal-plan').textContent = t.response_plan;
+  } else {
+    planRow.style.display = 'none';
+  }
+
+  document.getElementById('modal-link').href = '/triggers/' + t.id;
+  document.getElementById('detail-modal').classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detail-modal').classList.remove('open');
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeDetail();
+});
+</script>
+{% endblock %}
+
+{% block extra_scripts %}{% include '_wmo_badge.html' %}{% endblock %}
