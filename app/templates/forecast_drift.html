@@ -40,8 +40,7 @@
   <span class="brand">IBF App</span>
   <div class="nav-links">
     <a href="/dashboard">Dashboard</a>
-    <a href="/forecasts">Forecasts</a>
-    <a href="/forecasts/drift" class="active">Drift</a>
+    <a href="/forecasts" class="active">Forecasts</a>
     <a href="/observed">Observed</a>
     <a href="/impacts">Impacts</a>
     <a href="/triggers">Triggers</a>
@@ -61,6 +60,10 @@
   </div>
 </nav>
 <div class="main">
+  <div style="display:flex;gap:.25rem;margin-bottom:1.25rem;">
+    <a href="/forecasts" style="padding:.45rem 1rem;border-radius:7px;font-size:.875rem;font-weight:600;color:#6b7280;border:1px solid #e5e7eb;text-decoration:none;">All Forecasts</a>
+    <a href="/forecasts/drift" style="padding:.45rem 1rem;border-radius:7px;font-size:.875rem;font-weight:600;background:#4f46e5;color:#fff;text-decoration:none;">Drift Analysis</a>
+  </div>
   <h1>Forecast Drift</h1>
   <p style="color:#6b7280;font-size:.9rem;margin-top:-.25rem;margin-bottom:1.25rem;">
     Track how precipitation forecasts from a single source have changed across successive uploads.
