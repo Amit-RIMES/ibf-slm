@@ -93,9 +93,12 @@ async def impact_list(
     )
     impacts = result.scalars().all()
 
-    # Map data — all filtered impacts with coordinates (up to 500)
+    # Map data — all filtered impacts with valid coordinates (up to 500)
     map_stmt = (
-        base.where(ImpactRecord.lat.isnot(None), ImpactRecord.lon.isnot(None))
+        base.where(
+            ImpactRecord.lat.isnot(None), ImpactRecord.lon.isnot(None),
+            ImpactRecord.lat.between(-90, 90), ImpactRecord.lon.between(-180, 180),
+        )
         .order_by(desc(ImpactRecord.event_date))
         .limit(500)
     )
