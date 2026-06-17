@@ -484,6 +484,10 @@
 
   <script src="/static/chart.umd.min.js"></script>
   <script>
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const gridColor = isDark ? 'rgba(255,255,255,0.08)' : '#f3f4f6';
+    const textColor = isDark ? '#9ca3af' : '#6b7280';
+
     // ── Seasonal heatmap ──────────────────────────────────────
     const HEATMAP = {{ heatmap_json }};
     const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -550,21 +554,22 @@
       options: {
         spanGaps: true,
         plugins: {
-          legend: { position: 'top' },
+          legend: { position: 'top', labels: { color: textColor } },
           annotation: undefined,
         },
         scales: {
           y: {
             min: -3.5, max: 3.5,
-            ticks: { stepSize: 0.5 },
+            ticks: { stepSize: 0.5, color: textColor },
             grid: { color: ctx => {
               const v = ctx.tick?.value;
               if (v === -2 || v === 2) return 'rgba(220,38,38,.35)';
               if (v === -1 || v === 1) return 'rgba(234,179,8,.35)';
-              if (v === 0) return 'rgba(0,0,0,.2)';
-              return 'rgba(0,0,0,.05)';
+              if (v === 0) return isDark ? 'rgba(255,255,255,.2)' : 'rgba(0,0,0,.2)';
+              return isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.05)';
             }},
           },
+          x: { ticks: { color: textColor } },
         },
       },
     });
@@ -598,6 +603,9 @@
 {% if risk_history_len > 1 %}
 <script>
 (function() {
+  const _isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const _gridColor = _isDark ? 'rgba(255,255,255,0.08)' : '#f3f4f6';
+  const _textColor = _isDark ? '#9ca3af' : '#6b7280';
   const H = {{ risk_history }};
   const ctx = document.getElementById('riskSparkline');
   if (!ctx || !H.length) return;
@@ -622,9 +630,9 @@
         label: ctx => `Risk: ${ctx.parsed.y} / 100`
       }}},
       scales: {
-        x: { grid: { display: false }, ticks: { font: { size: 10 }, maxTicksLimit: 8 } },
-        y: { min: 0, max: 100, grid: { color: '#f3f4f6' },
-             ticks: { font: { size: 10 }, stepSize: 25,
+        x: { grid: { display: false }, ticks: { font: { size: 10 }, maxTicksLimit: 8, color: _textColor } },
+        y: { min: 0, max: 100, grid: { color: _gridColor },
+             ticks: { font: { size: 10 }, stepSize: 25, color: _textColor,
                       callback: v => ['Low','Mod','High','Ext',''][v/25] || v } }
       }
     }
