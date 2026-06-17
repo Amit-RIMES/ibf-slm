@@ -369,10 +369,13 @@
   const gridColor = isDark ? 'rgba(255,255,255,0.08)' : '#f3f4f6';
   const textColor = isDark ? '#9ca3af' : '#6b7280';
 
-  // Sort by lead_days descending (far future first → near future last)
-  data.sort((a, b) => b.lead_days - a.lead_days);
+  // Sort by lead_days descending when available; fall back to label order (upload date)
+  const hasLeadDays = data.some(d => d.lead_days !== null);
+  if (hasLeadDays) data.sort((a, b) => (b.lead_days ?? 0) - (a.lead_days ?? 0));
 
-  const labels = data.map(d => d.lead_days >= 0 ? `${d.lead_days}d` : `+${-d.lead_days}d`);
+  const labels = data.map(d =>
+    d.lead_days !== null ? (d.lead_days >= 0 ? `${d.lead_days}d` : `+${-d.lead_days}d`) : d.label
+  );
   const values = data.map(d => d.value);
   const pointColors = data.map(d => d.value >= threshold ? '#dc2626' : '#3b82f6');
 
@@ -410,7 +413,10 @@
         legend: { labels: { color: textColor, font: { size: 11 } } },
         tooltip: {
           callbacks: {
-            title: (items) => `Lead time: ${data[items[0].dataIndex].lead_days} days`,
+            title: (items) => {
+              const d = data[items[0].dataIndex];
+              return d.lead_days !== null ? `Lead time: ${d.lead_days} days` : d.label;
+            },
             label: (item) => item.datasetIndex === 0
               ? ` Value: ${item.raw} mm ${item.raw >= threshold ? '(FIRED)' : ''}`
               : ` Threshold: ${item.raw}`,
@@ -419,7 +425,7 @@
       },
       scales: {
         x: {
-          title: { display: true, text: 'Lead time (days before event)', color: textColor },
+          title: { display: true, text: hasLeadDays ? 'Lead time (days before event)' : 'Upload date', color: textColor },
           ticks: { color: textColor, font: { size: 11 } },
           grid: { color: gridColor }
         },

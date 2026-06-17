@@ -989,26 +989,29 @@ async def trigger_detail(trigger_id: int, request: Request, db: AsyncSession = D
     )
     lead_time_data = []
     for act, fc in act_with_fc.all():
+        uploaded = fc.uploaded_at
+        if uploaded.tzinfo is None:
+            uploaded = uploaded.replace(tzinfo=timezone.utc)
+        # Try to compute absolute lead days; fall back to None when time_start is
+        # a relative offset string like "T+024h" rather than an ISO date.
+        lead_days: int | None = None
         try:
-            if hasattr(fc.time_start, 'date'):
-                event_start = fc.time_start
-            else:
-                event_start = datetime.fromisoformat(str(fc.time_start).replace('Z', '+00:00'))
-            uploaded = fc.uploaded_at
-            if uploaded.tzinfo is None:
-                uploaded = uploaded.replace(tzinfo=timezone.utc)
-            if hasattr(event_start, 'tzinfo') and event_start.tzinfo is None:
+            ts = fc.time_start
+            event_start = ts if hasattr(ts, "date") else datetime.fromisoformat(
+                str(ts).replace("Z", "+00:00")
+            )
+            if hasattr(event_start, "tzinfo") and event_start.tzinfo is None:
                 event_start = event_start.replace(tzinfo=timezone.utc)
             lead_days = (event_start - uploaded).days
-            lead_time_data.append({
-                "label": fc.uploaded_at.strftime("%b %d"),
-                "lead_days": lead_days,
-                "value": round(act.value or 0, 2),
-                "status": act.status,
-                "probability": round((act.probability or 0) * 100, 1) if act.probability else None,
-            })
         except Exception:
-            continue
+            pass
+        lead_time_data.append({
+            "label": uploaded.strftime("%b %d %H:%M"),
+            "lead_days": lead_days,
+            "value": round(act.value or 0, 2),
+            "status": act.status,
+            "probability": round((act.probability or 0) * 100, 1) if act.probability else None,
+        })
 
     lead_time_json = json.dumps(lead_time_data)
 
