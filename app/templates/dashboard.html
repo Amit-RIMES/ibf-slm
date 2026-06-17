@@ -479,6 +479,10 @@
     '#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1',
   ];
 
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const gridColor = isDark ? 'rgba(255,255,255,0.08)' : '#f3f4f6';
+  const textColor = isDark ? '#9ca3af' : '#6b7280';
+
   const precip = {{ precip_chart | safe }};
   const hazard = {{ hazard_chart | safe }};
   const monthly = {{ monthly_chart | safe }};
@@ -514,8 +518,8 @@
           },
         },
         scales: {
-          y: { beginAtZero: true, ticks: { font: { size: 11 } }, grid: { color: '#f3f4f6' } },
-          x: { ticks: { font: { size: 11 }, maxRotation: 45 }, grid: { display: false } },
+          y: { beginAtZero: true, ticks: { font: { size: 11 }, color: textColor }, grid: { color: gridColor } },
+          x: { ticks: { font: { size: 11 }, maxRotation: 45, color: textColor }, grid: { display: false } },
         },
       },
     });
@@ -541,7 +545,7 @@
       options: {
         responsive: true,
         plugins: {
-          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 12 } },
+          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 12, color: textColor } },
         },
         cutout: '60%',
       },
@@ -571,8 +575,8 @@
         responsive: true,
         plugins: { legend: { display: false } },
         scales: {
-          x: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: '#f3f4f6' } },
-          y: { ticks: { font: { size: 11 } }, grid: { display: false } },
+          x: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 }, color: textColor }, grid: { color: gridColor } },
+          y: { ticks: { font: { size: 11 }, color: textColor }, grid: { display: false } },
         },
       },
     });
@@ -599,8 +603,8 @@
       responsive: true,
       plugins: { legend: { display: false } },
       scales: {
-        y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: '#f3f4f6' } },
-        x: { ticks: { font: { size: 11 } }, grid: { display: false } },
+        y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 }, color: textColor }, grid: { color: gridColor } },
+        x: { ticks: { font: { size: 11 }, color: textColor }, grid: { display: false } },
       },
     },
   });
@@ -637,6 +641,53 @@
       scales: { x: { display: false }, y: { display: false, min: 0, max: 100 } }
     }
   });
+})();
+</script>
+
+<script>
+// ── Feature 1: Dashboard filter localStorage persistence ──────────────────
+(function () {
+  const KEYS = ['ibf_dash_date_from', 'ibf_dash_date_to', 'ibf_dash_hazard', 'ibf_dash_country'];
+  const NAMES = ['date_from', 'date_to', 'hazard', 'country'];
+
+  // On clean /dashboard (no query params), restore from localStorage
+  if (window.location.pathname === '/dashboard' && !window.location.search) {
+    const params = new URLSearchParams();
+    KEYS.forEach((key, i) => {
+      const val = localStorage.getItem(key);
+      if (val) params.set(NAMES[i], val);
+    });
+    if (params.toString()) {
+      window.location.replace('/dashboard?' + params.toString());
+      return;
+    }
+  }
+
+  // Save filter values when form is submitted
+  const filterForm = document.querySelector('form[action="/dashboard"]');
+  if (filterForm) {
+    filterForm.addEventListener('submit', function () {
+      NAMES.forEach((name, i) => {
+        const el = filterForm.elements[name];
+        if (el) {
+          const val = el.value.trim();
+          if (val) {
+            localStorage.setItem(KEYS[i], val);
+          } else {
+            localStorage.removeItem(KEYS[i]);
+          }
+        }
+      });
+    });
+  }
+
+  // Clear localStorage when the "Clear" link is clicked
+  const clearLink = document.querySelector('a[href="/dashboard"]');
+  if (clearLink) {
+    clearLink.addEventListener('click', function () {
+      KEYS.forEach(key => localStorage.removeItem(key));
+    });
+  }
 })();
 </script>
 {% endblock %}

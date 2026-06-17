@@ -242,6 +242,9 @@
 {% if chart_data %}
 <script src="/static/chart.umd.min.js"></script>
 <script>
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const gridColor = isDark ? 'rgba(255,255,255,0.08)' : '#f3f4f6';
+  const textColor = isDark ? '#9ca3af' : '#6b7280';
   const obsLabels = {{ chart_data | map(attribute='obs_date') | map('string') | list | tojson }};
   const obsMeans  = {{ chart_data | map(attribute='precip_mean') | list | tojson }};
   const obsMaxes  = {{ chart_data | map(attribute='precip_max') | list | tojson }};
@@ -255,8 +258,11 @@
       ]
     },
     options: {
-      plugins: { legend: { position: 'top' } },
-      scales: { y: { beginAtZero: true, title: { display: true, text: 'mm/day' } } }
+      plugins: { legend: { position: 'top', labels: { color: textColor } } },
+      scales: {
+        y: { beginAtZero: true, ticks: { color: textColor }, grid: { color: gridColor }, title: { display: true, text: 'mm/day', color: textColor } },
+        x: { ticks: { color: textColor } },
+      }
     }
   });
 </script>

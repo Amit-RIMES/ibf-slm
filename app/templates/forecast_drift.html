@@ -124,6 +124,9 @@
 
   <script src="/static/chart.umd.min.js"></script>
   <script>
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const gridColor = isDark ? 'rgba(255,255,255,0.08)' : '#f3f4f6';
+    const textColor = isDark ? '#9ca3af' : '#6b7280';
     const labels = {{ forecasts | map(attribute='uploaded_at') | map('string') | list | tojson }};
     const means  = {{ forecasts | map(attribute='precip_mean') | list | tojson }};
     const maxes  = {{ forecasts | map(attribute='precip_max') | list | tojson }};
@@ -137,7 +140,13 @@
           { label: 'Max mm',  data: maxes,  borderColor: '#dc2626', borderDash:[4,4], tension: .3, fill: false },
         ]
       },
-      options: { plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }
+      options: {
+        plugins: { legend: { position: 'top', labels: { color: textColor } } },
+        scales: {
+          y: { beginAtZero: true, ticks: { color: textColor }, grid: { color: gridColor } },
+          x: { ticks: { color: textColor } },
+        }
+      }
     });
   </script>
   {% else %}
