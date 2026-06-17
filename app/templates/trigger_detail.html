@@ -327,6 +327,17 @@
   {% if user.role == "admin" %}
   </form>
   {% endif %}
+
+  {% if lead_time_data_exists %}
+  <div class="card" style="margin-top:1.25rem;">
+    <div class="section-title">Lead-time Evolution — How Signal Changed Over Time</div>
+    <div style="font-size:.8rem;color:#6b7280;margin-bottom:.75rem;">
+      Each point is a forecast evaluation. X-axis: days before forecast valid period (shorter = closer to event).
+      Dashed line = trigger threshold.
+    </div>
+    <canvas id="leadTimeChart" height="90"></canvas>
+  </div>
+  {% endif %}
 </div>
 
 <script>
@@ -345,4 +356,83 @@
     if (el) el.textContent = n + ' selected';
   }));
 </script>
+
+{% if lead_time_data_exists %}
+<script src="/static/chart.umd.min.js"></script>
+<script>
+(function() {
+  const data = {{ lead_time_json | safe }};
+  if (!data.length) return;
+
+  const threshold = {{ trigger.threshold }};
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const gridColor = isDark ? 'rgba(255,255,255,0.08)' : '#f3f4f6';
+  const textColor = isDark ? '#9ca3af' : '#6b7280';
+
+  // Sort by lead_days descending (far future first → near future last)
+  data.sort((a, b) => b.lead_days - a.lead_days);
+
+  const labels = data.map(d => d.lead_days >= 0 ? `${d.lead_days}d` : `+${-d.lead_days}d`);
+  const values = data.map(d => d.value);
+  const pointColors = data.map(d => d.value >= threshold ? '#dc2626' : '#3b82f6');
+
+  new Chart(document.getElementById('leadTimeChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Forecast value',
+          data: values,
+          borderColor: '#4f46e5',
+          backgroundColor: 'rgba(79,70,229,0.08)',
+          pointBackgroundColor: pointColors,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          fill: true,
+          tension: 0.25,
+          borderWidth: 2,
+        },
+        {
+          label: `Threshold (${threshold})`,
+          data: Array(labels.length).fill(threshold),
+          borderColor: '#ef4444',
+          borderWidth: 1.5,
+          borderDash: [6, 3],
+          pointRadius: 0,
+          fill: false,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { labels: { color: textColor, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            title: (items) => `Lead time: ${data[items[0].dataIndex].lead_days} days`,
+            label: (item) => item.datasetIndex === 0
+              ? ` Value: ${item.raw} mm ${item.raw >= threshold ? '(FIRED)' : ''}`
+              : ` Threshold: ${item.raw}`,
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Lead time (days before event)', color: textColor },
+          ticks: { color: textColor, font: { size: 11 } },
+          grid: { color: gridColor }
+        },
+        y: {
+          beginAtZero: true,
+          title: { display: true, text: 'Value (mm)', color: textColor },
+          ticks: { color: textColor, font: { size: 11 } },
+          grid: { color: gridColor }
+        }
+      }
+    }
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}
