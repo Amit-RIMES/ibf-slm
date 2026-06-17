@@ -10,7 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
 from app.core.csrf import _token_for, validate_csrf
 from app.core.database import Base, engine
-from app.models import forecast, impact, trigger, sync, reset_token, audit, api_key, webhook, activation_comment, observed_rainfall, spi, seasonal, bulletin_schedule, risk_history, job_run, bulletin_draft, alert_recipient, ecmwf_config, cds_config, glofas, sms_config, return_level  # noqa: F401
+from app.models import forecast, impact, trigger, sync, reset_token, audit, api_key, webhook, activation_comment, observed_rainfall, spi, seasonal, bulletin_schedule, risk_history, job_run, bulletin_draft, alert_recipient, ecmwf_config, cds_config, glofas, sms_config, return_level, station  # noqa: F401
 from app.routers import admin, alerts, api, auth, bulletin, chat, dashboard, drought, forecasts, impacts, observed, reports, risk_overview as risk_overview_router, seasonal as seasonal_router, triggers, totp
 from app.routers import sync as sync_router
 from app.routers import ecmwf as ecmwf_router
@@ -20,6 +20,7 @@ from app.routers import ibf_matrix as ibf_matrix_router
 from app.routers import map_view as map_view_router
 from app.routers import sms as sms_router
 from app.routers import return_period as return_period_router
+from app.routers import stations as stations_router
 from app.scheduler import apply_schedule, start_scheduler, stop_scheduler
 
 
@@ -146,6 +147,7 @@ app.include_router(ibf_matrix_router.router)
 app.include_router(map_view_router.router)
 app.include_router(sms_router.router)
 app.include_router(return_period_router.router)
+app.include_router(stations_router.router)
 
 
 @app.get("/")

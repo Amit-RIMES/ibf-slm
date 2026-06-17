@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% block title %}Stations — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; text-decoration: none; }
+  nav .nav-links a.active { color: #059669; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 1080px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
+
+  .flash { padding: .75rem 1rem; border-radius: 8px; font-size: .875rem; margin-bottom: 1.25rem; }
+  .flash-ok  { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+  .flash-err { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+
+  .card { background: #fff; border-radius: 12px; padding: 1.25rem 1.4rem;
+    box-shadow: 0 1px 5px rgba(0,0,0,.07); margin-bottom: 1.5rem; }
+  .card h2 { font-size: .95rem; font-weight: 700; margin-bottom: 1rem; color: #111; }
+
+  .toolbar { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1.25rem; }
+  .field { display: flex; flex-direction: column; gap: .3rem; }
+  .field label { font-size: .75rem; font-weight: 600; color: #6b7280; }
+  .field select, .field input {
+    padding: .4rem .65rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: .875rem;
+  }
+  .btn { padding: .45rem 1rem; border: none; border-radius: 7px; font-size: .875rem;
+    font-weight: 600; cursor: pointer; }
+  .btn-primary { background: #059669; color: #fff; }
+  .btn-primary:hover { opacity: .85; }
+  .btn-sm { padding: .25rem .65rem; border: 1px solid #e5e7eb; border-radius: 6px;
+    font-size: .78rem; font-weight: 600; cursor: pointer; background: #fff;
+    text-decoration: none; display: inline-block; }
+  .btn-sm:hover { background: #f9fafb; }
+  .btn-outline { background: #fff; color: #374151; border: 1px solid #d1d5db; }
+
+  .stat-chips { display: flex; gap: .75rem; margin-bottom: 1.25rem; }
+  .stat-chip { background: #fff; border-radius: 10px; padding: .6rem 1rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07); font-size: .82rem; color: #6b7280; }
+  .stat-chip strong { color: #111; font-size: 1.1rem; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  th { text-align: left; padding: .55rem .7rem; font-size: .72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; border-bottom: 1px solid #e5e7eb; }
+  td { padding: .65rem .7rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f9fafb; }
+
+  .dim { color: #9ca3af; font-size: .8rem; }
+  .badge { display: inline-block; padding: .2rem .55rem; border-radius: 999px; font-size: .7rem; font-weight: 700; }
+  .badge-active { background: #dcfce7; color: #15803d; }
+  .badge-inactive { background: #f3f4f6; color: #6b7280; }
+  .badge-prov { background: #fef9c3; color: #854d0e; }
+
+  .add-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: .65rem; }
+  .add-form-grid .field.wide { grid-column: span 2; }
+
+  .upload-card { border: 2px dashed #d1d5db; border-radius: 10px; padding: 1.25rem;
+    text-align: center; cursor: pointer; transition: border-color .2s; }
+  .upload-card:hover { border-color: #059669; }
+  .upload-card input[type=file] { display: none; }
+
+  details summary { cursor: pointer; font-size: .875rem; font-weight: 600;
+    color: #374151; padding: .5rem 0; user-select: none; }
+  details[open] summary { color: #059669; }
+
+  .hint { font-size: .75rem; color: #9ca3af; margin-top: .3rem; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/observed">Observed</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/stations" class="active">Stations</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/ecmwf">ECMWF</a>
+    <a href="/cds">CDS</a>
+    <a href="/glofas">GloFAS</a>
+    <a href="/drought">Drought</a>
+    <a href="/risk">Risk</a>
+    <a href="/ibf">IBF Matrix</a>
+    <a href="/map">Map</a>
+    <a href="/return-period">Return Periods</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/seasonal">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}{% if user.role == "admin" %}<a href="/admin/sms" style="color:#7c3aed;font-weight:600">SMS</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <h1>Weather Stations / AWS</h1>
+  </div>
+
+  {% if flash %}
+  <div class="flash flash-ok">{{ flash | replace("+", " ") }}</div>
+  {% elif error %}
+  <div class="flash flash-err">{{ error | replace("+", " ") }}</div>
+  {% endif %}
+
+  <div class="stat-chips">
+    <div class="stat-chip"><strong>{{ stations | length }}</strong> stations shown</div>
+    <div class="stat-chip"><strong>{{ stations | selectattr("is_active") | list | length }}</strong> active</div>
+    <div class="stat-chip">Countries: <strong>{{ countries | length }}</strong></div>
+  </div>
+
+  <!-- Filter bar -->
+  <form method="get" action="/stations">
+    <div class="toolbar">
+      <div class="field">
+        <label for="country">Country</label>
+        <select id="country" name="country" onchange="this.form.submit()">
+          <option value="">All countries</option>
+          {% for c in countries %}
+          <option value="{{ c }}" {% if c == country %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;cursor:pointer;padding-bottom:.1rem;">
+        <input type="checkbox" name="active_only" value="1" {% if active_only %}checked{% endif %}
+               onchange="this.form.submit()">
+        Active only
+      </label>
+    </div>
+  </form>
+
+  {% if user.role == "admin" %}
+  <!-- Add station form -->
+  <div class="card">
+    <details>
+      <summary>➕ Add new station</summary>
+      <form method="post" action="/stations/add" style="margin-top:.85rem;">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <div class="add-form-grid">
+          <div class="field">
+            <label>Station ID *</label>
+            <input type="text" name="station_id" placeholder="AWS-001" required>
+          </div>
+          <div class="field wide">
+            <label>Station name</label>
+            <input type="text" name="name" placeholder="Phnom Penh AWS">
+          </div>
+          <div class="field">
+            <label>Country</label>
+            <input type="text" name="country" placeholder="Cambodia">
+          </div>
+          <div class="field">
+            <label>Latitude *</label>
+            <input type="number" name="lat" step="0.0001" placeholder="11.5625" required>
+          </div>
+          <div class="field">
+            <label>Longitude *</label>
+            <input type="number" name="lon" step="0.0001" placeholder="104.916" required>
+          </div>
+          <div class="field">
+            <label>Elevation (m)</label>
+            <input type="number" name="elevation_m" step="1" placeholder="12">
+          </div>
+          <div class="field">
+            <label>Source/Network</label>
+            <input type="text" name="source" placeholder="WMO / NMHS / manual" value="manual">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top:.85rem;">Add station</button>
+      </form>
+    </details>
+  </div>
+
+  <!-- CSV upload -->
+  <div class="card">
+    <details>
+      <summary>📥 Upload observations CSV</summary>
+      <div style="margin-top:.85rem;">
+        <p style="font-size:.82rem;color:#6b7280;margin-bottom:.75rem;">
+          CSV must have a <code>date</code> column (YYYY-MM-DD) and at least one of:
+          <code>station_id</code>, <code>precip_mm</code>, <code>temp_max_c</code>,
+          <code>temp_min_c</code>, <code>humidity_pct</code>, <code>wind_speed_ms</code>.
+          If all rows belong to one station, enter the Station ID below and omit the column.
+        </p>
+        <form method="post" action="/stations/upload-csv" enctype="multipart/form-data">
+          <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+          <div class="toolbar">
+            <div class="field">
+              <label>Default Station ID (optional)</label>
+              <input type="text" name="default_station_id" placeholder="AWS-001" style="min-width:140px;">
+            </div>
+            <label style="display:flex;align-items:center;gap:.4rem;font-size:.82rem;cursor:pointer;padding-bottom:.1rem;">
+              <input type="checkbox" name="is_provisional" value="1">
+              Mark as provisional
+            </label>
+          </div>
+          <div class="upload-card" onclick="document.getElementById('csv-file').click();">
+            <input type="file" id="csv-file" name="csv_file" accept=".csv" onchange="this.form.submit()">
+            <span style="font-size:.875rem;color:#6b7280;">Click to choose CSV file</span>
+          </div>
+          <p class="hint" style="margin-top:.5rem;">File is submitted immediately when selected.</p>
+        </form>
+      </div>
+    </details>
+  </div>
+  {% endif %}
+
+  <!-- Station list -->
+  <div class="card" style="padding:0;overflow:hidden;">
+    {% if stations %}
+    <table>
+      <thead>
+        <tr>
+          <th>Station ID</th>
+          <th>Name</th>
+          <th>Country</th>
+          <th>Lat / Lon</th>
+          <th>Latest obs</th>
+          <th>Precip (mm)</th>
+          <th>T-max (°C)</th>
+          <th>Records</th>
+          <th>Status</th>
+          {% if user.role == "admin" %}<th></th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in stations %}
+        {% set obs = latest_obs.get(s.station_id) %}
+        <tr>
+          <td>
+            <a href="/stations/{{ s.station_id }}" style="font-weight:700;color:#4f46e5;text-decoration:none;">
+              {{ s.station_id }}
+            </a>
+          </td>
+          <td style="font-weight:500;">{{ s.name or "—" }}</td>
+          <td class="dim">{{ s.country or "—" }}</td>
+          <td class="dim" style="font-family:monospace;font-size:.78rem;">
+            {{ "%.3f" | format(s.lat) }}°, {{ "%.3f" | format(s.lon) }}°
+          </td>
+          <td class="dim">{{ obs.obs_date.strftime("%b %d") if obs else "—" }}</td>
+          <td style="font-weight:500;">
+            {{ "%.1f" | format(obs.precip_mm) if obs and obs.precip_mm is not none else "—" }}
+          </td>
+          <td>{{ "%.1f" | format(obs.temp_max_c) if obs and obs.temp_max_c is not none else "—" }}</td>
+          <td class="dim">{{ obs_counts.get(s.station_id, 0) }}</td>
+          <td>
+            <span class="badge {% if s.is_active %}badge-active{% else %}badge-inactive{% endif %}">
+              {{ "Active" if s.is_active else "Inactive" }}
+            </span>
+            {% if obs and obs.is_provisional %}
+            <span class="badge badge-prov" style="margin-left:.3rem;">Prov.</span>
+            {% endif %}
+          </td>
+          {% if user.role == "admin" %}
+          <td>
+            <form method="post" action="/stations/{{ s.station_id }}/toggle" style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+              <button type="submit" class="btn-sm">
+                {{ "Deactivate" if s.is_active else "Activate" }}
+              </button>
+            </form>
+            <a href="/stations/{{ s.station_id }}/export.csv" class="btn-sm" style="margin-left:.3rem;">↓ CSV</a>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="text-align:center;padding:3rem 0;color:#9ca3af;">
+      No stations found.
+      {% if user.role == "admin" %}
+      Add a station using the form above or upload a CSV.
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}{% include '_wmo_badge.html' %}{% endblock %}
