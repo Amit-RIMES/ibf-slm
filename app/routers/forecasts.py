@@ -614,6 +614,21 @@ async def forecast_drift(
     if not user:
         return RedirectResponse("/login")
 
+    # Build source list from actual DB sources so nothing is invisible in the dropdown
+    _source_label = {
+        "manual": "Manual upload",
+        **{s["value"]: s["label"] for s in SOURCES},
+    }
+    db_sources_result = await db.execute(
+        select(ForecastUpload.source)
+        .where(ForecastUpload.source.isnot(None))
+        .distinct()
+    )
+    drift_sources = [
+        {"value": src, "label": _source_label.get(src, src)}
+        for (src,) in sorted(db_sources_result.all(), key=lambda r: _source_label.get(r[0], r[0]))
+    ]
+
     # Show last 14 forecasts for the selected source (same-source drift view)
     forecasts_for_source = []
     if source:
@@ -630,7 +645,7 @@ async def forecast_drift(
         "forecast_drift.html",
         {
             "user": user,
-            "sources": SOURCES,
+            "sources": drift_sources,
             "selected_source": source,
             "forecasts": forecasts_for_source,
         },
