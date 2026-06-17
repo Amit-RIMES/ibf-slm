@@ -202,7 +202,9 @@ async def fetch_glofas(
         return None
 
     if forecast_date is None:
-        forecast_date = datetime.now(timezone.utc).date()
+        # GloFAS forecasts are published with a 1-day lag; today's data is not yet available.
+        from datetime import timedelta
+        forecast_date = datetime.now(timezone.utc).date() - timedelta(days=1)
 
     try:
         client = _cdsapi_client(api_key)
