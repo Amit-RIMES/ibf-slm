@@ -12,6 +12,18 @@ if TYPE_CHECKING:
 
 _MONTH_ABBR = [calendar.month_abbr[i] for i in range(1, 13)]
 
+# WMO standard 4-level warning colours
+WMO_LEVELS: dict[str, dict] = {
+    "Low":      {"wmo_name": "Green",  "hex": "#16a34a", "bg": "#dcfce7", "text": "#14532d",
+                 "description": "No significant weather expected. Routine monitoring."},
+    "Moderate": {"wmo_name": "Yellow", "hex": "#ca8a04", "bg": "#fefce8", "text": "#713f12",
+                 "description": "Possible impact. Be aware and stay updated."},
+    "High":     {"wmo_name": "Orange", "hex": "#ea580c", "bg": "#fff7ed", "text": "#7c2d12",
+                 "description": "Likely impact. Be prepared to take action."},
+    "Extreme":  {"wmo_name": "Red",    "hex": "#dc2626", "bg": "#fef2f2", "text": "#7f1d1d",
+                 "description": "Severe impact expected. Take action now."},
+}
+
 
 def compute_risk_score(
     current_spi: dict,
@@ -67,20 +79,28 @@ def compute_risk_score(
     total = spi_pts + seasonal_pts + trigger_pts
 
     if total >= 75:
-        level, level_color = "Extreme", "#dc2626"
+        level = "Extreme"
     elif total >= 50:
-        level, level_color = "High", "#f97316"
+        level = "High"
     elif total >= 25:
-        level, level_color = "Moderate", "#f59e0b"
+        level = "Moderate"
     else:
-        level, level_color = "Low", "#22c55e"
+        level = "Low"
 
+    wmo = WMO_LEVELS[level]
     has_data = bool(current_spi) or latest_seasonal is not None or n_active_triggers > 0
 
     return {
         "total": total,
         "level": level,
-        "level_color": level_color,
+        "label": level,                    # alias used in templates
+        "level_color": wmo["hex"],
+        "colour": wmo["hex"],              # alias used in templates
+        "wmo_name": wmo["wmo_name"],       # "Green" / "Yellow" / "Orange" / "Red"
+        "wmo_hex": wmo["hex"],
+        "wmo_bg": wmo["bg"],
+        "wmo_text": wmo["text"],
+        "wmo_description": wmo["description"],
         "spi_pts": spi_pts,
         "seasonal_pts": seasonal_pts,
         "trigger_pts": trigger_pts,

@@ -326,6 +326,29 @@ async def api_status(db: AsyncSession = Depends(get_db)):
     }
 
 
+@router.get("/warning-level", summary="Current WMO warning level (public)")
+async def api_warning_level(db: AsyncSession = Depends(get_db)):
+    from app.models.risk_history import RiskScoreRecord
+    from app.core.risk import WMO_LEVELS
+    latest = await db.scalar(
+        select(RiskScoreRecord).order_by(desc(RiskScoreRecord.scored_at)).limit(1)
+    )
+    if not latest:
+        wmo = WMO_LEVELS["Low"]
+        return {"level": "Low", "wmo_name": wmo["wmo_name"], "hex": wmo["hex"],
+                "bg": wmo["bg"], "text": wmo["text"], "score": 0, "description": wmo["description"]}
+    wmo = WMO_LEVELS.get(latest.level, WMO_LEVELS["Low"])
+    return {
+        "level": latest.level,
+        "wmo_name": wmo["wmo_name"],
+        "hex": wmo["hex"],
+        "bg": wmo["bg"],
+        "text": wmo["text"],
+        "score": latest.total,
+        "description": wmo["description"],
+    }
+
+
 # ── Forecasts ─────────────────────────────────────────────────────────────────
 
 @router.get("/forecasts", summary="List forecasts")
