@@ -240,7 +240,7 @@
 </div>
 
 {% if chart_data %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="/static/chart.umd.min.js"></script>
 <script>
   const obsLabels = {{ chart_data | map(attribute='obs_date') | map('string') | list | tojson }};
   const obsMeans  = {{ chart_data | map(attribute='precip_mean') | list | tojson }};

@@ -69,7 +69,7 @@
   .page-ellipsis { color:#9ca3af; padding:0 .2rem; }
   #impact-map { height: 360px; border-radius: 10px; }
 </style>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="/static/leaflet.css" />
 {% endblock %}
 
 {% block body %}
@@ -229,7 +229,7 @@
 </div>
 
 {% if map_count %}
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/leaflet.js"></script>
 <script>
 (function () {
   const HAZARD_COLORS = {

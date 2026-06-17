@@ -2,7 +2,7 @@
 {% block title %}Alert Map — IBF App{% endblock %}
 
 {% block extra_styles %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="/static/leaflet.css" />
 <style>
   nav {
     background: #fff; border-bottom: 1px solid #e5e7eb;
@@ -203,8 +203,8 @@
   {% endif %}
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script src="/static/leaflet.js"></script>
+<script src="/static/leaflet-heat.js"></script>
 <script>
 const alerts    = {{ alerts_json | safe }};
 const heatPts   = {{ heatmap_json | safe }};

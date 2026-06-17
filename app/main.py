@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
@@ -42,6 +43,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="IBF App", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # ── Prometheus metrics ─────────────────────────────────────────────────────────
 try:

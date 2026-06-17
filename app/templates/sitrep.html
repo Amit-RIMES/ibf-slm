@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Situation Report — ACT-{{ "%04d"|format(activation.id) }} — IBF-SLM</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="/static/leaflet.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', system-ui, sans-serif; font-size: 13px;
@@ -473,7 +473,7 @@
 </div><!-- .page -->
 
 {% if has_map %}
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/leaflet.js"></script>
 <script>
 (function () {
   const map = L.map('sitrep-map', { zoomControl: true });

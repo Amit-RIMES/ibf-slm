@@ -469,7 +469,7 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/static/chart.umd.min.js"></script>
 <script>
 (function () {
   const PURPLE = '#4f46e5';
@@ -617,7 +617,7 @@
   if (n) { n.setAttribute('x2', x2.toFixed(1)); n.setAttribute('y2', y2.toFixed(1)); }
 })();
 (function() {
-  const S = {{ risk_sparkline }};
+  const S = {{ risk_sparkline | safe }};
   if (!S.length) return;
   const wrap = document.getElementById('dashSparkWrap');
   const ctx = document.getElementById('dashSparkline');

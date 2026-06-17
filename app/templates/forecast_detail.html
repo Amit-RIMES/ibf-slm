@@ -2,7 +2,7 @@
 {% block title %}Forecast #{{ forecast.id }} — IBF App{% endblock %}
 
 {% block extra_styles %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="/static/leaflet.css" />
 <style>
   nav {
     background: #fff;
@@ -230,7 +230,7 @@
   </div>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/leaflet.js"></script>
 <script>
   const geojson = {{ forecast.geojson | safe }};
   const precipMax = {{ forecast.precip_max }};

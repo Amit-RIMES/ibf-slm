@@ -52,7 +52,7 @@
       <button type="submit" class="btn btn-primary" style="width:100%;">Enable 2FA</button>
     </form>
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  <script src="/static/qrcode.min.js"></script>
   <script>
     QRCode.toCanvas(document.getElementById('qr-canvas'), {{ otp_uri | tojson }}, {width: 220}, function(err){});
   </script>

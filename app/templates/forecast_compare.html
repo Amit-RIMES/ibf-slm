@@ -2,7 +2,7 @@
 {% block title %}Compare Forecasts — IBF App{% endblock %}
 
 {% block extra_styles %}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="/static/leaflet.css" />
 <style>
   nav {
     background: #fff; border-bottom: 1px solid #e5e7eb;
@@ -182,7 +182,7 @@
   </div>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/leaflet.js"></script>
 <script>
   const geojsonA = {{ fc_a.geojson | safe }};
   const geojsonB = {{ fc_b.geojson | safe }};

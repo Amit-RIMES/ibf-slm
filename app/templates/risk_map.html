@@ -58,7 +58,7 @@
   .legend-item { display: flex; align-items: center; gap: .35rem; }
   .legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
 </style>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="/static/leaflet.css" />
 {% endblock %}
 
 {% block body %}
@@ -165,7 +165,7 @@
   </div>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/leaflet.js"></script>
 <script>
 (function () {
   const map = L.map('risk-map', { zoomControl: true });

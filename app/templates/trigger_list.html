@@ -47,7 +47,7 @@
   .q-none   { background: #f3f4f6; color: #9ca3af; }
   .q-meta   { font-size: .75rem; color: #6b7280; }
 </style>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="/static/leaflet.css" />
 {% endblock %}
 
 {% block body %}
@@ -181,7 +181,7 @@
 </div>
 
 {% if scoped_count %}
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/leaflet.js"></script>
 <script>
 (function () {
   const HAZARD_COLORS = {
