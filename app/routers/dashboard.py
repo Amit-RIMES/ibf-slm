@@ -118,8 +118,11 @@ async def dashboard(
 
     # --- Chart data ---
 
-    # 1. Precipitation trend — date filter only (forecasts don't carry hazard/country)
+    # 1. Precipitation trend — date filter only, exclude non-precip ECMWF variables (2t, wind10, msl)
     precip_stmt = select(ForecastUpload.uploaded_at, ForecastUpload.precip_mean, ForecastUpload.filename)
+    precip_stmt = precip_stmt.where(
+        (ForecastUpload.variable == None) | (ForecastUpload.variable == "tp")  # noqa: E711
+    )
     if dt_from:
         precip_stmt = precip_stmt.where(ForecastUpload.uploaded_at >= dt_from)
     if dt_to:
@@ -186,6 +189,8 @@ async def dashboard(
         "manual": "Manual upload",
         "regional_rimes": "Regional — RIMES",
         "regional_sea": "Regional — SEA",
+        "ECMWF-IFS-HRES": "ECMWF IFS HRES",
+        "ECMWF-IFS-ENS": "ECMWF IFS ENS",
         **{f"country_{cc}": f"{name} ({cc.upper()})" for cc, name in COUNTRY_NAMES.items()},
     }
     source_stmt = (

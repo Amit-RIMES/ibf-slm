@@ -169,6 +169,10 @@
               Regional — RIMES
             {% elif fc.source == "regional_sea" %}
               Regional — SEA
+            {% elif fc.source == "ECMWF-IFS-HRES" %}
+              ECMWF IFS HRES
+            {% elif fc.source == "ECMWF-IFS-ENS" %}
+              ECMWF IFS ENS
             {% elif fc.source and fc.source.startswith("country_") %}
               {{ fc.source[8:] | upper }}
             {% else %}

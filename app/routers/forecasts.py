@@ -44,8 +44,10 @@ COUNTRY_NAMES = {
 }
 
 SOURCES = [
-    {"value": "regional_rimes", "label": "Regional — RIMES",          "path": "Regional/rimes/ECMWF/ifs15"},
-    {"value": "regional_sea",   "label": "Regional — South-East Asia", "path": "Regional/sea/ECMWF/ifs15"},
+    {"value": "regional_rimes",   "label": "Regional — RIMES",          "path": "Regional/rimes/ECMWF/ifs15"},
+    {"value": "regional_sea",     "label": "Regional — South-East Asia", "path": "Regional/sea/ECMWF/ifs15"},
+    {"value": "ECMWF-IFS-HRES",  "label": "ECMWF IFS HRES",            "path": ""},
+    {"value": "ECMWF-IFS-ENS",   "label": "ECMWF IFS ENS",             "path": ""},
 ] + [
     {"value": f"country_{cc}", "label": f"{name} ({cc.upper()})", "path": f"Countries/{cc}/ECMWF/ifs15"}
     for cc, name in sorted(COUNTRY_NAMES.items(), key=lambda x: x[1])
