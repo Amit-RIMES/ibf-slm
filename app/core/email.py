@@ -509,6 +509,53 @@ async def send_trigger_activation_email(
             logger.error("Failed to send trigger alert to %s: %s", email, exc)
 
 
+async def send_anomaly_alert_email(to_list: list[str], forecast_id: int, filename: str, precip_mean: float, anomaly_score: float) -> None:
+    """Alert admins that a newly ingested forecast is a statistical anomaly."""
+    subject = f"IBF App — Anomaly detected in forecast {filename}"
+    html = f"""
+    <div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;padding:2rem;">
+      <div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:1rem 1.25rem;border-radius:6px;margin-bottom:1.5rem;">
+        <div style="font-weight:700;color:#92400e;font-size:1.05rem;">⚠ Statistical Anomaly Detected</div>
+        <div style="color:#78350f;margin-top:.4rem;font-size:.9rem;">
+          A newly ingested forecast has an unusually high precipitation value.
+        </div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:.9rem;">
+        <tr style="border-bottom:1px solid #e5e7eb;">
+          <td style="padding:.6rem 0;color:#6b7280;font-weight:500;">Filename</td>
+          <td style="padding:.6rem 0;font-weight:600;">{filename}</td>
+        </tr>
+        <tr style="border-bottom:1px solid #e5e7eb;">
+          <td style="padding:.6rem 0;color:#6b7280;font-weight:500;">Mean precipitation</td>
+          <td style="padding:.6rem 0;font-weight:600;">{precip_mean} mm</td>
+        </tr>
+        <tr style="border-bottom:1px solid #e5e7eb;">
+          <td style="padding:.6rem 0;color:#6b7280;font-weight:500;">Anomaly score</td>
+          <td style="padding:.6rem 0;font-weight:700;color:#dc2626;">{anomaly_score}σ above baseline</td>
+        </tr>
+      </table>
+      <a href="{settings.APP_BASE_URL}/forecasts/{forecast_id}"
+         style="display:inline-block;margin-top:1.5rem;padding:.65rem 1.4rem;
+                background:#f59e0b;color:#fff;border-radius:8px;
+                text-decoration:none;font-weight:600;">
+        View Forecast
+      </a>
+      <p style="color:#9ca3af;font-size:.8rem;margin-top:1.5rem;">
+        This email was sent automatically by the IBF Early Warning System.
+        Adjust anomaly sensitivity in Admin → Health.
+      </p>
+    </div>
+    """
+    if not settings.SMTP_HOST:
+        logger.warning("SMTP not configured. Anomaly alert skipped for forecast %s.", filename)
+        return
+    for addr in to_list:
+        try:
+            await asyncio.to_thread(_send_sync, addr, subject, html)
+        except Exception as exc:
+            logger.warning("Failed to send anomaly alert to %s: %s", addr, exc)
+
+
 async def send_bulletin_email(recipients: list[str], subject: str, html: str) -> int:
     """Send bulletin HTML to all recipients. Returns count of successful sends."""
     if not settings.SMTP_HOST:

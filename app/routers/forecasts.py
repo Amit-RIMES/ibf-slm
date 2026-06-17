@@ -17,9 +17,11 @@ from typing import Optional
 
 from app.core.anomaly import compute_anomaly
 from app.core.audit import log_action
+from app.core.background import enqueue
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.forecast import ForecastUpload
+from app.models.user import User
 from app.routers.triggers import evaluate_triggers
 
 PORTAL_BASE = "https://open-data.rimes.int"
@@ -446,6 +448,12 @@ async def upload_forecast(
     await db.refresh(forecast)
 
     await compute_anomaly(forecast, db)
+    if forecast.is_anomaly:
+        admins_result = await db.execute(select(User.email).where(User.role == "admin"))
+        admin_emails = [r[0] for r in admins_result.all()]
+        if admin_emails:
+            from app.core.email import send_anomaly_alert_email
+            enqueue(send_anomaly_alert_email(admin_emails, forecast.id, forecast.filename, forecast.precip_mean, forecast.anomaly_score))
     await _compute_seasonal_context(forecast, db)
     await evaluate_triggers(forecast, db)
     await _log_import(db, user.id, forecast)
@@ -517,6 +525,12 @@ async def do_import(source: str, date: str, db: AsyncSession) -> ForecastUpload:
     await db.commit()
     await db.refresh(forecast)
     await compute_anomaly(forecast, db)
+    if forecast.is_anomaly:
+        admins_result = await db.execute(select(User.email).where(User.role == "admin"))
+        admin_emails = [r[0] for r in admins_result.all()]
+        if admin_emails:
+            from app.core.email import send_anomaly_alert_email
+            enqueue(send_anomaly_alert_email(admin_emails, forecast.id, forecast.filename, forecast.precip_mean, forecast.anomaly_score))
     await _compute_seasonal_context(forecast, db)
     await evaluate_triggers(forecast, db)
     return forecast

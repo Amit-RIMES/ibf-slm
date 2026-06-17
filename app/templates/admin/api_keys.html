@@ -125,6 +125,7 @@
         <th>Created by</th>
         <th>Created</th>
         <th>Last used</th>
+        <th>Calls</th>
         <th></th>
       </tr>
     </thead>
@@ -145,6 +146,7 @@
         <td style="color:#6b7280;font-size:.82rem;">
           {{ k.last_used_at.strftime("%Y-%m-%d %H:%M") if k.last_used_at else 'Never' }}
         </td>
+        <td style="color:#374151;font-size:.82rem;font-variant-numeric:tabular-nums;">{{ k.call_count }}</td>
         <td>
           {% if k.is_active %}
           <div style="display:flex;flex-direction:column;gap:.4rem;align-items:flex-start;">
