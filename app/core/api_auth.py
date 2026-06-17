@@ -54,5 +54,6 @@ async def require_api_key(
 
     from datetime import datetime, timezone
     api_key.last_used_at = datetime.now(timezone.utc)
+    api_key.call_count += 1
     await db.commit()
     return api_key
