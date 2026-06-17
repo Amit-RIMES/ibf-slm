@@ -614,23 +614,25 @@ async def forecast_drift(
     if not user:
         return RedirectResponse("/login")
 
-    # Build source list from actual DB sources so nothing is invisible in the dropdown
+    # Build source list with counts from actual DB sources
     _source_label = {
         "manual": "Manual upload",
         **{s["value"]: s["label"] for s in SOURCES},
     }
+    from sqlalchemy import func as sqlfunc
     db_sources_result = await db.execute(
-        select(ForecastUpload.source)
+        select(ForecastUpload.source, sqlfunc.count(ForecastUpload.id))
         .where(ForecastUpload.source.isnot(None))
-        .distinct()
+        .group_by(ForecastUpload.source)
     )
     drift_sources = [
-        {"value": src, "label": _source_label.get(src, src)}
-        for (src,) in sorted(db_sources_result.all(), key=lambda r: _source_label.get(r[0], r[0]))
+        {"value": src, "label": _source_label.get(src, src), "count": cnt}
+        for src, cnt in sorted(db_sources_result.all(), key=lambda r: _source_label.get(r[0], r[0]))
     ]
 
     # Show last 14 forecasts for the selected source (same-source drift view)
     forecasts_for_source = []
+    drift_rows = []  # enriched rows with delta_mean, delta_pct
     if source:
         result = await db.execute(
             select(ForecastUpload)
@@ -639,6 +641,21 @@ async def forecast_drift(
             .limit(14)
         )
         forecasts_for_source = list(reversed(result.scalars().all()))
+        for i, fc in enumerate(forecasts_for_source):
+            prev = forecasts_for_source[i - 1] if i > 0 else None
+            delta_mean = None
+            delta_pct = None
+            if prev is not None and prev.precip_mean and fc.precip_mean is not None:
+                delta_mean = fc.precip_mean - prev.precip_mean
+                delta_pct = (delta_mean / prev.precip_mean * 100) if prev.precip_mean else None
+            drift_rows.append({
+                "fc": fc,
+                "delta_mean": delta_mean,
+                "delta_pct": delta_pct,
+            })
+
+    has_seasonal = any(fc.seasonal_anomaly_pct is not None for fc in forecasts_for_source)
+    has_anomaly = any(fc.is_anomaly for fc in forecasts_for_source)
 
     return templates.TemplateResponse(
         request,
@@ -648,6 +665,9 @@ async def forecast_drift(
             "sources": drift_sources,
             "selected_source": source,
             "forecasts": forecasts_for_source,
+            "drift_rows": drift_rows,
+            "has_seasonal": has_seasonal,
+            "has_anomaly": has_anomaly,
         },
     )
 

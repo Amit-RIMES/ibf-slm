@@ -2,8 +2,8 @@
 {% block title %}Forecast Drift — IBF App{% endblock %}
 {% block extra_styles %}
 <style>
-  .main { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
-  h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: 1.5rem; }
+  .main { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: .5rem; }
   .filter-bar { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.07); padding: 1rem 1.25rem; margin-bottom: 1.5rem; display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; }
   .filter-bar label { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #9ca3af; display: block; margin-bottom: .3rem; }
   select { padding: .5rem .75rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: .9rem; background: #fff; }
@@ -20,7 +20,19 @@
   tr:last-child td { border-bottom: none; }
   .seasonal-pos { color: #dc2626; font-weight: 600; }
   .seasonal-neg { color: #2563eb; font-weight: 600; }
+  .delta-up { color: #dc2626; font-weight: 600; font-size: .82rem; }
+  .delta-dn { color: #2563eb; font-weight: 600; font-size: .82rem; }
+  .delta-zero { color: #9ca3af; font-size: .82rem; }
   .no-data { color: #9ca3af; font-style: italic; text-align: center; padding: 3rem; }
+  .notice { background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:.75rem 1rem;font-size:.85rem;color:#92400e;margin-bottom:1.5rem; }
+  [data-theme="dark"] .filter-bar,
+  [data-theme="dark"] .card { background: #1e2330; }
+  [data-theme="dark"] select { background: #1e2330; color: #e5e7eb; border-color: #374151; }
+  [data-theme="dark"] .stat-card { background: #262d3f; }
+  [data-theme="dark"] .stat-val { color: #f9fafb; }
+  [data-theme="dark"] .chart-title { color: #e5e7eb; }
+  [data-theme="dark"] th { color: #6b7280; border-bottom-color: #374151; }
+  [data-theme="dark"] td { border-bottom-color: #262d3f; }
 </style>
 {% endblock %}
 {% block body %}
@@ -50,33 +62,32 @@
 </nav>
 <div class="main">
   <h1>Forecast Drift</h1>
-  <p style="color:#6b7280;font-size:.9rem;margin-top:-.75rem;margin-bottom:1.25rem;">
-    Track how the same source's forecasts have changed over the last two weeks.
+  <p style="color:#6b7280;font-size:.9rem;margin-top:-.25rem;margin-bottom:1.25rem;">
+    Track how precipitation forecasts from a single source have changed across successive uploads.
   </p>
 
   <div class="filter-bar">
     <form method="get" action="/forecasts/drift" style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;">
       <div>
         <label>Source</label>
-        <select name="source">
-          <option value="">— select —</option>
+        <select name="source" onchange="this.form.submit()">
+          <option value="">— select source —</option>
           {% for s in sources %}
-          <option value="{{ s.value }}" {% if s.value == selected_source %}selected{% endif %}>{{ s.label }}</option>
+          <option value="{{ s.value }}" {% if s.value == selected_source %}selected{% endif %}>
+            {{ s.label }} ({{ s.count }})
+          </option>
           {% endfor %}
         </select>
       </div>
-      <button type="submit" class="btn">View drift</button>
+      <noscript><button type="submit" class="btn">View drift</button></noscript>
     </form>
   </div>
 
-  {% if selected_source and not forecasts %}
-  <div class="card"><p class="no-data">No forecasts found for this source.</p></div>
-  {% elif forecasts %}
-  <div class="card">
-    <div class="chart-title">Mean precipitation over time — {{ selected_source }}</div>
-    <canvas id="driftChart" height="80"></canvas>
+  {% if selected_source and forecasts|length == 1 %}
+  <div class="notice">
+    ⚠ Only 1 forecast on record for this source — drift analysis requires at least 2 uploads to compare.
+    Upload another forecast from the same source to see how values have changed.
   </div>
-
   <div class="card">
     <table>
       <thead>
@@ -86,19 +97,21 @@
           <th>Mean (mm)</th>
           <th>Max (mm)</th>
           <th>Min (mm)</th>
-          <th>Seasonal Δ</th>
-          <th>Anomaly</th>
+          {% if has_seasonal %}<th>Seasonal Δ</th>{% endif %}
+          {% if has_anomaly %}<th>Anomaly</th>{% endif %}
           <th></th>
         </tr>
       </thead>
       <tbody>
-        {% for fc in forecasts %}
+        {% for row in drift_rows %}
+        {% set fc = row.fc %}
         <tr>
           <td style="color:#9ca3af">{{ fc.id }}</td>
           <td>{{ fc.uploaded_at.strftime("%d %b %Y %H:%M") }}</td>
           <td style="font-weight:600">{{ "%.2f"|format(fc.precip_mean) }}</td>
           <td>{{ "%.2f"|format(fc.precip_max) }}</td>
           <td>{{ "%.2f"|format(fc.precip_min) }}</td>
+          {% if has_seasonal %}
           <td>
             {% if fc.seasonal_anomaly_pct is not none %}
               {% if fc.seasonal_anomaly_pct > 0 %}
@@ -110,11 +123,108 @@
               <span style="color:#9ca3af">—</span>
             {% endif %}
           </td>
+          {% endif %}
+          {% if has_anomaly %}
           <td>
             {% if fc.is_anomaly %}
               <span style="background:#fef2f2;color:#991b1b;padding:.15rem .55rem;border-radius:999px;font-size:.75rem;font-weight:700">anomaly</span>
             {% endif %}
           </td>
+          {% endif %}
+          <td><a href="/forecasts/{{ fc.id }}" style="color:#4f46e5;font-weight:600;font-size:.82rem">View →</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% elif selected_source and forecasts %}
+  {# Summary stats #}
+  {% set mean_vals = forecasts | map(attribute='precip_mean') | list %}
+  {% set first_mean = mean_vals[0] %}
+  {% set last_mean  = mean_vals[-1] %}
+  {% set net_change = last_mean - first_mean %}
+  <div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.75rem;margin-bottom:1.25rem;">
+    <div class="stat-card">
+      <div class="stat-val">{{ forecasts|length }}</div>
+      <div class="stat-lbl">Uploads compared</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val" style="color:{% if net_change > 0 %}#dc2626{% elif net_change < 0 %}#2563eb{% else %}#6b7280{% endif %}">
+        {% if net_change > 0 %}+{% endif %}{{ "%.1f"|format(net_change) }} mm
+      </div>
+      <div class="stat-lbl">Net drift (first → last)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">{{ "%.1f"|format(mean_vals | max) }}</div>
+      <div class="stat-lbl">Peak mean (mm)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-val">{{ "%.1f"|format(mean_vals | min) }}</div>
+      <div class="stat-lbl">Min mean (mm)</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="chart-title">Mean &amp; max precipitation — {{ selected_source }}</div>
+    <canvas id="driftChart" height="80"></canvas>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Uploaded</th>
+          <th>Mean (mm)</th>
+          <th>Δ from prev</th>
+          <th>Max (mm)</th>
+          <th>Min (mm)</th>
+          {% if has_seasonal %}<th>Seasonal Δ</th>{% endif %}
+          {% if has_anomaly %}<th>Anomaly</th>{% endif %}
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in drift_rows %}
+        {% set fc = row.fc %}
+        <tr>
+          <td style="color:#9ca3af">{{ fc.id }}</td>
+          <td>{{ fc.uploaded_at.strftime("%d %b %Y %H:%M") }}</td>
+          <td style="font-weight:600">{{ "%.2f"|format(fc.precip_mean) }}</td>
+          <td>
+            {% if row.delta_mean is none %}
+              <span style="color:#9ca3af">—</span>
+            {% elif row.delta_mean > 0.05 %}
+              <span class="delta-up">▲ +{{ "%.2f"|format(row.delta_mean) }}{% if row.delta_pct is not none %} ({{ "+%.0f"|format(row.delta_pct) }}%){% endif %}</span>
+            {% elif row.delta_mean < -0.05 %}
+              <span class="delta-dn">▼ {{ "%.2f"|format(row.delta_mean) }}{% if row.delta_pct is not none %} ({{ "%.0f"|format(row.delta_pct) }}%){% endif %}</span>
+            {% else %}
+              <span class="delta-zero">≈ no change</span>
+            {% endif %}
+          </td>
+          <td>{{ "%.2f"|format(fc.precip_max) }}</td>
+          <td>{{ "%.2f"|format(fc.precip_min) }}</td>
+          {% if has_seasonal %}
+          <td>
+            {% if fc.seasonal_anomaly_pct is not none %}
+              {% if fc.seasonal_anomaly_pct > 0 %}
+                <span class="seasonal-pos">+{{ "%.1f"|format(fc.seasonal_anomaly_pct) }}%</span>
+              {% else %}
+                <span class="seasonal-neg">{{ "%.1f"|format(fc.seasonal_anomaly_pct) }}%</span>
+              {% endif %}
+            {% else %}
+              <span style="color:#9ca3af">—</span>
+            {% endif %}
+          </td>
+          {% endif %}
+          {% if has_anomaly %}
+          <td>
+            {% if fc.is_anomaly %}
+              <span style="background:#fef2f2;color:#991b1b;padding:.15rem .55rem;border-radius:999px;font-size:.75rem;font-weight:700">anomaly</span>
+            {% endif %}
+          </td>
+          {% endif %}
           <td><a href="/forecasts/{{ fc.id }}" style="color:#4f46e5;font-weight:600;font-size:.82rem">View →</a></td>
         </tr>
         {% endfor %}
@@ -130,27 +240,65 @@
     const labels = {{ forecasts | map(attribute='uploaded_at') | map('string') | list | tojson }};
     const means  = {{ forecasts | map(attribute='precip_mean') | list | tojson }};
     const maxes  = {{ forecasts | map(attribute='precip_max') | list | tojson }};
-    const labels_fmt = labels.map(d => d.slice(0,10));
+    const deltas = {{ drift_rows | map(attribute='delta_mean') | list | tojson }};
+    const labels_fmt = labels.map(d => {
+      const dt = new Date(d.replace(' ', 'T') + 'Z');
+      return isNaN(dt) ? d.slice(0,10) : dt.toLocaleDateString('en-GB', {day:'2-digit', month:'short'});
+    });
     new Chart(document.getElementById('driftChart'), {
       type: 'line',
       data: {
         labels: labels_fmt,
         datasets: [
-          { label: 'Mean mm', data: means, borderColor: '#4f46e5', backgroundColor: 'rgba(79,70,229,.1)', tension: .3, fill: true },
-          { label: 'Max mm',  data: maxes,  borderColor: '#dc2626', borderDash:[4,4], tension: .3, fill: false },
+          {
+            label: 'Mean (mm)',
+            data: means,
+            borderColor: '#4f46e5',
+            backgroundColor: 'rgba(79,70,229,.12)',
+            tension: .3,
+            fill: true,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+          },
+          {
+            label: 'Max (mm)',
+            data: maxes,
+            borderColor: '#dc2626',
+            borderDash: [4,4],
+            tension: .3,
+            fill: false,
+            pointRadius: 3,
+          },
         ]
       },
       options: {
-        plugins: { legend: { position: 'top', labels: { color: textColor } } },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'top', labels: { color: textColor } },
+          tooltip: {
+            callbacks: {
+              afterBody: function(ctx) {
+                const i = ctx[0].dataIndex;
+                const d = deltas[i];
+                if (d === null || d === undefined) return '';
+                const sign = d > 0 ? '+' : '';
+                return `Δ from prev: ${sign}${d.toFixed(2)} mm`;
+              }
+            }
+          }
+        },
         scales: {
           y: { beginAtZero: true, ticks: { color: textColor }, grid: { color: gridColor } },
-          x: { ticks: { color: textColor } },
+          x: { ticks: { color: textColor, maxRotation: 45 } },
         }
       }
     });
   </script>
+
+  {% elif selected_source and not forecasts %}
+  <div class="card"><p class="no-data">No forecasts found for this source.</p></div>
   {% else %}
-  <div class="card"><p class="no-data">Select a source above to view drift.</p></div>
+  <div class="card"><p class="no-data">Select a source above to view drift analysis.</p></div>
   {% endif %}
 </div>
 {% endblock %}
