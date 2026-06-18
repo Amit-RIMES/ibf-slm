@@ -118,6 +118,11 @@
   @media(max-width:900px) {
     .summary-grid { grid-template-columns: repeat(3, 1fr); }
   }
+  @media(max-width:700px) {
+    .summary-grid { grid-template-columns: 1fr 1fr !important; }
+    .verdict-form { flex-direction: column; align-items: stretch; }
+    .verdict-radios { flex-wrap: wrap; }
+  }
 </style>
 {% endblock %}
 

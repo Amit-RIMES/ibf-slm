@@ -83,8 +83,13 @@
       .map-grid { grid-template-columns: 1fr !important; }
       .chart-grid { grid-template-columns: 1fr !important; }
 
-      /* Stats: 2 per row on mobile is fine */
-      .stats-grid { grid-template-columns: 1fr 1fr !important; }
+      /* 2-per-row stat grids (covers all common naming patterns) */
+      .stats-grid,
+      .summary-grid,
+      .stat-grid,
+      .status-grid,
+      .fc-grid,
+      .spi-grid { grid-template-columns: 1fr 1fr !important; }
 
       /* Main spacing */
       .main { padding: 0 .75rem !important; margin: 1rem auto !important; }
@@ -92,8 +97,23 @@
       /* Filter bars wrap */
       .filter-bar { padding: .75rem !important; }
 
+      /* Toolbar / add-row flex groups */
+      .toolbar, .add-row { flex-direction: column !important; align-items: stretch !important; }
+
+      /* Wide tables — force horizontal scroll inside any container */
+      table { min-width: 480px; }
+
+      /* Collapse stat-chip strips */
+      .stat-chips, .stats-strip { flex-wrap: wrap !important; }
+
       /* Auth forms */
       .auth-wrapper { padding: .75rem; align-items: flex-start; padding-top: 2rem; }
+    }
+    /* Very narrow screens: single-column summary grids */
+    @media (max-width: 420px) {
+      .summary-grid,
+      .stat-grid,
+      .status-grid { grid-template-columns: 1fr !important; }
     }
     /* ── Dark mode toggle button ── */
     .dark-toggle {

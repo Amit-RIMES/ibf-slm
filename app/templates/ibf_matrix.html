@@ -230,6 +230,16 @@
   .btn { padding: .45rem 1rem; border-radius: 7px; font-size: .82rem; font-weight: 600; cursor: pointer; border: none; text-decoration: none; }
   .btn-primary { background: #4f46e5; color: #fff; }
   .btn-ghost { background: #f3f4f6; color: #374151; }
+
+  @media (max-width: 700px) {
+    .matrix-wrapper { overflow-x: auto; }
+    .matrix-grid { min-width: 380px; }
+    .matrix-outer { min-width: 420px; }
+    .axis-label-y { font-size: .6rem; margin-right: .25rem; }
+    .matrix-corner, .matrix-cell { padding: .45rem .35rem; font-size: .7rem; }
+    .cell-title { font-size: .75rem; }
+    .trigger-cards { grid-template-columns: 1fr !important; }
+  }
 </style>
 {% endblock %}
 
