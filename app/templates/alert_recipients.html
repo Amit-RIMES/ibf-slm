@@ -113,7 +113,7 @@
     in addition to admin users and subscribed app users.
     <strong>No app account required.</strong>
     Add a phone number to also receive <strong>SMS and/or WhatsApp</strong> alerts.
-    <a href="/admin/sms" style="color:#1d4ed8;font-weight:600;">Configure SMS provider →</a>
+    {% if user.role == "admin" %}<a href="/admin/sms" style="color:#1d4ed8;font-weight:600;">Configure SMS provider →</a>{% endif %}
   </div>
 
   <div class="add-card">
