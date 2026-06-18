@@ -27,6 +27,9 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
             return None
         from datetime import datetime
         issued_at = datetime.fromtimestamp(iat, tz=timezone.utc)
+        # SQLite returns naive datetimes — ensure aware before comparison
+        if invalidated.tzinfo is None:
+            invalidated = invalidated.replace(tzinfo=timezone.utc)
         if issued_at <= invalidated:
             return None
     return user
