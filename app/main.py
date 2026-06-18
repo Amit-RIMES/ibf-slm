@@ -21,6 +21,7 @@ from app.routers import map_view as map_view_router
 from app.routers import sms as sms_router
 from app.routers import return_period as return_period_router
 from app.routers import stations as stations_router
+from app.routers import verification as verification_router
 from app.scheduler import apply_schedule, start_scheduler, stop_scheduler
 
 
@@ -148,6 +149,7 @@ app.include_router(map_view_router.router)
 app.include_router(sms_router.router)
 app.include_router(return_period_router.router)
 app.include_router(stations_router.router)
+app.include_router(verification_router.router)
 
 
 @app.get("/")
