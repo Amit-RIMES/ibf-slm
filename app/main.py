@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import logging.handlers
 from contextlib import asynccontextmanager
@@ -23,6 +24,7 @@ from app.routers import return_period as return_period_router
 from app.routers import stations as stations_router
 from app.routers import verification as verification_router
 from app.routers import help_docs as help_docs_router
+from app.core.llm import ensure_model
 from app.scheduler import apply_schedule, start_scheduler, stop_scheduler
 
 
@@ -45,6 +47,7 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     start_scheduler()
     await apply_schedule()
+    asyncio.create_task(ensure_model())
     yield
     stop_scheduler()
 

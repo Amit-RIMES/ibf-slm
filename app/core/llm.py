@@ -54,6 +54,37 @@ GUIDELINES:
 {context}"""
 
 
+async def ensure_model() -> None:
+    """Check that OLLAMA_MODEL is available locally; pull it in the background if not."""
+    tags_url = f"{settings.OLLAMA_HOST.rstrip('/')}/api/tags"
+    pull_url = f"{settings.OLLAMA_HOST.rstrip('/')}/api/pull"
+    model = settings.OLLAMA_MODEL
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(tags_url)
+            if resp.status_code == 200:
+                names = [m.get("name", "") for m in resp.json().get("models", [])]
+                # Ollama stores names as "model:tag"; match on the base name too
+                if any(n == model or n.startswith(model.split(":")[0] + ":") for n in names):
+                    logger.info("Ollama model '%s' is ready.", model)
+                    return
+                logger.info("Ollama model '%s' not found locally — pulling in background.", model)
+            else:
+                logger.warning("Could not list Ollama models (HTTP %d) — skipping auto-pull.", resp.status_code)
+                return
+        # Pull without streaming so the request completes in background
+        async with httpx.AsyncClient(timeout=3600) as client:
+            pull_resp = await client.post(pull_url, json={"name": model, "stream": False})
+            if pull_resp.status_code == 200:
+                logger.info("Ollama model '%s' pulled successfully.", model)
+            else:
+                logger.error("Ollama pull failed (HTTP %d): %s", pull_resp.status_code, pull_resp.text[:200])
+    except httpx.ConnectError:
+        logger.warning("Ollama not reachable at %s — skipping model check. Start Ollama with: ollama serve", settings.OLLAMA_HOST)
+    except Exception as exc:
+        logger.warning("Ollama model check failed: %s", exc)
+
+
 def _ensure_aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
