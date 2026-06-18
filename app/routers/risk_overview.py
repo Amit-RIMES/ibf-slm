@@ -16,17 +16,36 @@ from app.models.trigger import Trigger, TriggerActivation
 
 # Approximate centroids for common impact-reporting countries in RIMES region
 _COUNTRY_CENTROIDS = {
-    "Afghanistan": [33.9, 67.7], "Bangladesh": [23.7, 90.4], "Bhutan": [27.5, 90.4],
-    "Cambodia": [12.6, 104.9], "DR Congo": [-2.9, 23.7], "Fiji": [-17.7, 178.1],
-    "India": [22.0, 79.0], "Indonesia": [-2.5, 118.0], "Kenya": [0.0, 38.0],
-    "Laos": [18.2, 103.8], "Madagascar": [-20.0, 47.0], "Malaysia": [3.9, 109.7],
-    "Maldives": [3.2, 73.2], "Mongolia": [46.9, 103.8], "Mozambique": [-18.7, 35.5],
-    "Myanmar": [19.2, 96.1], "Nepal": [28.4, 84.1], "Pakistan": [30.4, 69.3],
-    "Papua New Guinea": [-6.3, 143.9], "Philippines": [12.9, 121.8],
-    "Samoa": [-13.6, -172.5], "Sri Lanka": [7.9, 80.8], "Tanzania": [-6.4, 35.0],
-    "Thailand": [15.9, 100.9], "Timor-Leste": [-8.9, 125.7], "Tonga": [-20.0, -175.2],
-    "Vietnam": [16.2, 107.8], "Yemen": [15.6, 48.5], "Zambia": [-13.1, 27.8],
-    "Zimbabwe": [-19.0, 29.8],
+    "Afghanistan": [33.9, 67.7], "AF": [33.9, 67.7],
+    "Bangladesh": [23.7, 90.4], "BD": [23.7, 90.4],
+    "Bhutan": [27.5, 90.4], "BT": [27.5, 90.4],
+    "Cambodia": [12.6, 104.9], "KH": [12.6, 104.9],
+    "DR Congo": [-2.9, 23.7], "CD": [-2.9, 23.7],
+    "Fiji": [-17.7, 178.1], "FJ": [-17.7, 178.1],
+    "India": [22.0, 79.0], "IN": [22.0, 79.0],
+    "Indonesia": [-2.5, 118.0], "ID": [-2.5, 118.0],
+    "Kenya": [0.0, 38.0], "KE": [0.0, 38.0],
+    "Laos": [18.2, 103.8], "LA": [18.2, 103.8],
+    "Madagascar": [-20.0, 47.0], "MG": [-20.0, 47.0],
+    "Malaysia": [3.9, 109.7], "MY": [3.9, 109.7],
+    "Maldives": [3.2, 73.2], "MV": [3.2, 73.2],
+    "Mongolia": [46.9, 103.8], "MN": [46.9, 103.8],
+    "Mozambique": [-18.7, 35.5], "MZ": [-18.7, 35.5],
+    "Myanmar": [19.2, 96.1], "MM": [19.2, 96.1],
+    "Nepal": [28.4, 84.1], "NP": [28.4, 84.1],
+    "Pakistan": [30.4, 69.3], "PK": [30.4, 69.3],
+    "Papua New Guinea": [-6.3, 143.9], "PG": [-6.3, 143.9],
+    "Philippines": [12.9, 121.8], "PH": [12.9, 121.8],
+    "Samoa": [-13.6, -172.5], "WS": [-13.6, -172.5],
+    "Sri Lanka": [7.9, 80.8], "LK": [7.9, 80.8],
+    "Tanzania": [-6.4, 35.0], "TZ": [-6.4, 35.0],
+    "Thailand": [15.9, 100.9], "TH": [15.9, 100.9],
+    "Timor-Leste": [-8.9, 125.7], "TL": [-8.9, 125.7],
+    "Tonga": [-20.0, -175.2], "TO": [-20.0, -175.2],
+    "Vietnam": [16.2, 107.8], "VN": [16.2, 107.8],
+    "Yemen": [15.6, 48.5], "YE": [15.6, 48.5],
+    "Zambia": [-13.1, 27.8], "ZM": [-13.1, 27.8],
+    "Zimbabwe": [-19.0, 29.8], "ZW": [-19.0, 29.8],
 }
 
 router = APIRouter(prefix="/risk")
@@ -290,12 +309,14 @@ async def risk_country(request: Request, db: AsyncSession = Depends(get_db)):
                 "active_alerts": active_by_country.get(cc, 0),
             })
 
-    # Also add impact points from ImpactRecord.lat/lon for records with coordinates
+    # Also add impact points from ImpactRecord.lat/lon for records with valid coordinates
     coord_impacts = (await db.execute(
         select(ImpactRecord.lat, ImpactRecord.lon, ImpactRecord.country,
                ImpactRecord.hazard_type, ImpactRecord.affected_population)
         .where(ImpactRecord.lat.isnot(None))
         .where(ImpactRecord.lon.isnot(None))
+        .where(ImpactRecord.lat.between(-90, 90))
+        .where(ImpactRecord.lon.between(-180, 180))
         .order_by(desc(ImpactRecord.event_date))
         .limit(500)
     )).all()

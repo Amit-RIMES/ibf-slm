@@ -212,8 +212,10 @@
     );
   });
 
-  if (allBounds.length) {
-    map.fitBounds(allBounds, { padding: [30, 30] });
+  if (allBounds.length > 1) {
+    map.fitBounds(allBounds, { padding: [40, 40], maxZoom: 7 });
+  } else if (allBounds.length === 1) {
+    map.setView(allBounds[0], 5);
   } else {
     map.setView([15, 100], 4);
   }
