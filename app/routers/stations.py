@@ -236,6 +236,82 @@ async def station_upload_csv(
     return RedirectResponse(f"/stations?flash={msg}", status_code=303)
 
 
+@router.get("/stations/compare", response_class=HTMLResponse)
+async def station_compare(
+    request: Request,
+    ids: str = "",
+    variable: str = "precip_mm",
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
+    VARIABLES = ["precip_mm", "temp_max_c", "temp_min_c", "temp_mean_c",
+                 "humidity_pct", "wind_speed_ms", "pressure_hpa"]
+    VARIABLE_LABELS = {
+        "precip_mm": "Precipitation (mm)",
+        "temp_max_c": "Max Temperature (°C)",
+        "temp_min_c": "Min Temperature (°C)",
+        "temp_mean_c": "Mean Temperature (°C)",
+        "humidity_pct": "Humidity (%)",
+        "wind_speed_ms": "Wind Speed (m/s)",
+        "pressure_hpa": "Pressure (hPa)",
+    }
+    if variable not in VARIABLES:
+        variable = "precip_mm"
+
+    # Load all stations for the selector
+    all_stations_r = await db.execute(select(Station).order_by(Station.name))
+    all_stations = all_stations_r.scalars().all()
+
+    selected_ids = [s.strip() for s in ids.split(",") if s.strip()][:5]  # max 5 stations
+
+    import json as _json
+    series = []
+    if selected_ids:
+        obs_r = await db.execute(
+            select(StationObservation)
+            .where(StationObservation.station_id.in_(selected_ids))
+            .order_by(StationObservation.obs_date)
+        )
+        all_obs = obs_r.scalars().all()
+
+        # Build per-station date→value map
+        from collections import defaultdict
+        by_station: dict[str, dict] = defaultdict(dict)
+        all_dates: set = set()
+        for obs in all_obs:
+            val = getattr(obs, variable)
+            if val is not None:
+                by_station[obs.station_id][obs.obs_date.isoformat()] = val
+                all_dates.add(obs.obs_date.isoformat())
+
+        sorted_dates = sorted(all_dates)
+        station_map = {s.station_id: s for s in all_stations}
+
+        for sid in selected_ids:
+            st = station_map.get(sid)
+            if not st:
+                continue
+            values = [by_station[sid].get(d) for d in sorted_dates]
+            series.append({"id": sid, "name": st.name, "values": values})
+
+    return templates.TemplateResponse(
+        request, "station_compare.html",
+        {
+            "user": user,
+            "all_stations": all_stations,
+            "selected_ids": selected_ids,
+            "variable": variable,
+            "variables": VARIABLES,
+            "variable_labels": VARIABLE_LABELS,
+            "dates_json": _json.dumps(sorted(all_dates) if selected_ids else []),
+            "series_json": _json.dumps(series),
+        },
+    )
+
+
 @router.get("/stations/{sid}", response_class=HTMLResponse)
 async def station_detail(
     sid: str,

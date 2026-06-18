@@ -22,6 +22,7 @@ from app.models.sync import SyncConfig, SyncLog
 from app.models.trigger import Trigger, TriggerActivation
 from app.models.user import User
 from app.models.webhook import Webhook
+from app.models.webhook_delivery import WebhookDelivery
 
 router = APIRouter(prefix="/admin")
 templates = Jinja2Templates(directory="app/templates")
@@ -412,6 +413,32 @@ async def admin_webhook_delete(request: Request, wh_id: int, db: AsyncSession = 
         await db.commit()
         await log_action(db, user.id, "webhook.delete", f"Deleted webhook '{wname}'")
     return RedirectResponse("/admin/webhooks", status_code=303)
+
+
+@router.get("/webhooks/{wh_id}/deliveries", response_class=HTMLResponse)
+async def admin_webhook_deliveries(
+    request: Request, wh_id: int, db: AsyncSession = Depends(get_db)
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    if user.role != "admin":
+        return _FORBIDDEN
+    wh = await db.scalar(select(Webhook).where(Webhook.id == wh_id))
+    if not wh:
+        return RedirectResponse("/admin/webhooks")
+    deliveries_r = await db.execute(
+        select(WebhookDelivery)
+        .where(WebhookDelivery.webhook_id == wh_id)
+        .order_by(desc(WebhookDelivery.delivered_at))
+        .limit(200)
+    )
+    deliveries = deliveries_r.scalars().all()
+    success_count = sum(1 for d in deliveries if d.success)
+    return templates.TemplateResponse(
+        request, "admin/webhook_deliveries.html",
+        {"user": user, "wh": wh, "deliveries": deliveries, "success_count": success_count},
+    )
 
 
 @router.get("/health", response_class=HTMLResponse)

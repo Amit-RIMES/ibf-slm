@@ -1429,6 +1429,113 @@ async def delete_activation_comment(
     return RedirectResponse("/triggers", status_code=303)
 
 
+@router.post("/bulk-toggle")
+async def bulk_toggle(
+    request: Request,
+    ids: list[int] = Form(default=[]),
+    action: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user or user.role != "admin":
+        return RedirectResponse("/login")
+    if not ids or action not in ("enable", "disable"):
+        return RedirectResponse("/triggers", status_code=303)
+    result = await db.execute(select(Trigger).where(Trigger.id.in_(ids)))
+    triggers = result.scalars().all()
+    for t in triggers:
+        t.is_active = action == "enable"
+    await db.commit()
+    await log_action(db, user.id, "trigger.bulk_toggle",
+                     f"Bulk-{action}d {len(triggers)} trigger(s)")
+    return RedirectResponse("/triggers", status_code=303)
+
+
+@router.get("/activations/{activation_id}/cap.xml")
+async def activation_cap_xml(
+    activation_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Export a trigger activation as a CAP 1.2 (Common Alerting Protocol) XML alert."""
+    from fastapi.responses import Response as FastAPIResponse
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    activation = await db.scalar(
+        select(TriggerActivation).where(TriggerActivation.id == activation_id)
+    )
+    if not activation:
+        return HTMLResponse("<h1>Not found</h1>", status_code=404)
+
+    trigger = activation.trigger
+    sent = activation.triggered_at.astimezone(timezone.utc).isoformat()
+
+    # CAP severity mapping from hazard type
+    severity_map = {
+        "flood": "Extreme", "cyclone": "Extreme", "storm": "Severe",
+        "heatwave": "Severe", "landslide": "Severe",
+        "drought": "Moderate", "other": "Minor",
+    }
+    severity = severity_map.get(trigger.hazard_type, "Minor") if trigger else "Minor"
+    urgency = "Immediate" if activation.status == "active" else "Past"
+
+    # Build area block
+    area_xml = ""
+    if trigger and trigger.scope_polygon:
+        try:
+            ring = json.loads(trigger.scope_polygon)
+            cap_poly = " ".join(f"{pt[1]},{pt[0]}" for pt in ring)
+            area_xml = f"<area><areaDesc>Trigger scope polygon</areaDesc><polygon>{cap_poly}</polygon></area>"
+        except Exception:
+            pass
+    elif trigger and trigger.scope_lat_min is not None:
+        area_xml = (
+            f"<area><areaDesc>Trigger bounding box</areaDesc>"
+            f"<circle>{(trigger.scope_lat_min+trigger.scope_lat_max)/2},"
+            f"{(trigger.scope_lon_min+trigger.scope_lon_max)/2} 0</circle></area>"
+        )
+
+    rule_txt = ""
+    if trigger:
+        rule_txt = (
+            f"{VARIABLE_LABELS.get(trigger.variable, trigger.variable)} "
+            f"{OPERATOR_SYMBOLS.get(trigger.operator, trigger.operator)} "
+            f"{trigger.threshold} mm. Observed: {activation.value:.2f} mm."
+        )
+
+    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
+  <identifier>ibf-activation-{activation.id}</identifier>
+  <sender>IBF-SLM@rimes.int</sender>
+  <sent>{sent}</sent>
+  <status>Actual</status>
+  <msgType>Alert</msgType>
+  <scope>Public</scope>
+  <info>
+    <language>en-US</language>
+    <category>Met</category>
+    <event>{trigger.name if trigger else "Unknown trigger"}</event>
+    <urgency>{urgency}</urgency>
+    <severity>{severity}</severity>
+    <certainty>Likely</certainty>
+    <headline>{trigger.name if trigger else "Trigger activation"} — {trigger.hazard_type if trigger else ""} alert</headline>
+    <description>{rule_txt}</description>
+    <parameter><valueName>activation_id</valueName><value>{activation.id}</value></parameter>
+    <parameter><valueName>observed_value_mm</valueName><value>{activation.value}</value></parameter>
+    <parameter><valueName>threshold_mm</valueName><value>{trigger.threshold if trigger else ""}</value></parameter>
+    <parameter><valueName>hazard_type</valueName><value>{trigger.hazard_type if trigger else ""}</value></parameter>
+    {area_xml}
+  </info>
+</alert>"""
+    return FastAPIResponse(
+        content=xml,
+        media_type="application/xml",
+        headers={"Content-Disposition": f"attachment; filename=activation-{activation_id}.cap.xml"},
+    )
+
+
 @router.post("/activations/bulk-acknowledge")
 async def bulk_acknowledge(
     request: Request,

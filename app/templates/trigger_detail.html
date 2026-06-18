@@ -326,10 +326,11 @@
               <button type="submit" class="btn-comment">Post</button>
             </form>
 
-            <div style="margin-top:.4rem;">
-              <a href="/observed">Observed</a>
-    <a href="/triggers/activations/{{ a.id }}/sitrep" target="_blank"
+            <div style="margin-top:.4rem;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
+              <a href="/triggers/activations/{{ a.id }}/sitrep" target="_blank"
                  style="font-size:.78rem; color:#4f46e5; font-weight:600;">Situation report →</a>
+              <a href="/triggers/activations/{{ a.id }}/cap.xml"
+                 style="font-size:.78rem;color:#6b7280;font-weight:600;" title="Download CAP 1.2 XML alert">↓ CAP XML</a>
             </div>
           </td>
         </tr>

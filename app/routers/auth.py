@@ -1,4 +1,5 @@
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
@@ -18,6 +19,7 @@ from app.core.security import create_access_token, hash_password, verify_passwor
 from app.models.reset_token import PasswordResetToken
 from app.models.trigger import Trigger, TriggerSubscription
 from app.models.user import User
+from app.models.user_session import UserSession
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -139,14 +141,35 @@ async def login(
         redirect.set_cookie("totp_pending", pending_token, httponly=True, samesite="lax", max_age=300)
         return redirect
 
-    token = create_access_token({"sub": str(user.id)})
+    now = datetime.now(timezone.utc)
+    session = UserSession(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        created_at=now,
+        last_seen_at=now,
+        ip_address=(request.client.host if request.client else None),
+        user_agent=request.headers.get("user-agent", "")[:512],
+    )
+    db.add(session)
+    await db.commit()
+
+    token = create_access_token({"sub": str(user.id), "sid": session.id})
     redirect = RedirectResponse("/dashboard", status_code=status.HTTP_303_SEE_OTHER)
     redirect.set_cookie("access_token", token, httponly=True, samesite="lax")
     return redirect
 
 
 @router.get("/logout")
-async def logout():
+async def logout(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core.security import decode_access_token
+    token = request.cookies.get("access_token")
+    if token:
+        payload = decode_access_token(token)
+        if payload and (sid := payload.get("sid")):
+            sess = await db.get(UserSession, sid)
+            if sess:
+                await db.delete(sess)
+                await db.commit()
     response = RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
     response.delete_cookie("access_token")
     return response
@@ -451,3 +474,59 @@ async def change_password(
     "change_password.html",
     {"user": user, "success": True},
 )
+
+
+@router.get("/account/sessions", response_class=HTMLResponse)
+async def sessions_page(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core.deps import get_current_user
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    # Get current session ID from token
+    token = request.cookies.get("access_token")
+    from app.core.security import decode_access_token
+    payload = decode_access_token(token) if token else {}
+    current_sid = payload.get("sid") if payload else None
+
+    result = await db.execute(
+        select(UserSession)
+        .where(UserSession.user_id == user.id)
+        .order_by(UserSession.last_seen_at.desc())
+    )
+    sessions = result.scalars().all()
+
+    return templates.TemplateResponse(
+        request,
+        "account_sessions.html",
+        {"user": user, "sessions": sessions, "current_sid": current_sid},
+    )
+
+
+@router.post("/account/sessions/revoke-all")
+async def revoke_all_sessions(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core.deps import get_current_user
+    from app.core.security import decode_access_token
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+
+    # Preserve the current session if we can identify it
+    token = request.cookies.get("access_token")
+    payload = decode_access_token(token) if token else {}
+    current_sid = payload.get("sid") if payload else None
+
+    # Delete all sessions except the current one
+    sessions_result = await db.execute(
+        select(UserSession).where(UserSession.user_id == user.id)
+    )
+    for sess in sessions_result.scalars().all():
+        if sess.id != current_sid:
+            await db.delete(sess)
+
+    # Set the invalidation timestamp so any still-valid JWTs without matching sessions are rejected
+    user.sessions_invalidated_before = datetime.now(timezone.utc)
+    await db.commit()
+    await log_action(db, user.id, "user.sessions_revoked", "Revoked all other sessions")
+
+    return RedirectResponse("/account/sessions?revoked=1", status_code=status.HTTP_303_SEE_OTHER)

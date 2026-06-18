@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Station Comparison — IBF App{% endblock %}
+{% block extra_styles %}
+<style>
+  nav { background:#fff;border-bottom:1px solid #e5e7eb;padding:.85rem 2rem;display:flex;align-items:center;justify-content:space-between; }
+  nav .brand { font-weight:700;font-size:1.1rem;color:#4f46e5; }
+  nav .nav-links { display:flex;align-items:center;gap:1.5rem;font-size:.875rem; }
+  nav .nav-links a { color:#6b7280;text-decoration:none; }
+  nav .nav-links a.active { color:#4f46e5;font-weight:600; }
+  nav .nav-links a.logout { color:#dc2626;font-weight:500; }
+  .main { max-width:960px;margin:2rem auto;padding:0 1rem; }
+  .page-header { display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:.75rem; }
+  .page-header h1 { font-size:1.5rem;font-weight:700;margin:0; }
+  .filter-card { background:#fff;border-radius:12px;padding:1.25rem 1.5rem;border:1px solid #e5e7eb;
+                 box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:1.25rem; }
+  .filter-row { display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap; }
+  .f-group { display:flex;flex-direction:column;gap:.3rem; }
+  .f-group label { font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af; }
+  .f-group select, .f-group input { padding:.4rem .65rem;border:1px solid #d1d5db;border-radius:7px;
+                                     font-size:.875rem;background:#fff;font-family:inherit; }
+  .station-chips { display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.5rem; }
+  .chip { padding:.25rem .65rem;border-radius:999px;font-size:.78rem;font-weight:600;
+          background:#ede9fe;color:#4f46e5;display:flex;align-items:center;gap:.35rem; }
+  .chip a { color:#6b7280;text-decoration:none;font-weight:700; }
+  .chart-card { background:#fff;border-radius:12px;padding:1.5rem;border:1px solid #e5e7eb;
+                box-shadow:0 1px 4px rgba(0,0,0,.06); }
+  .empty { color:#9ca3af;font-size:.875rem;text-align:center;padding:2.5rem 0; }
+  [data-theme="dark"] .filter-card, [data-theme="dark"] .chart-card { background:#1e293b!important;border-color:#334155!important; }
+  [data-theme="dark"] .f-group select, [data-theme="dark"] .f-group input { background:#0f172a!important;border-color:#475569!important;color:#e2e8f0!important; }
+  [data-theme="dark"] .chip { background:#312e81!important;color:#a5b4fc!important; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/stations" >Stations</a>
+    <a href="/stations/compare" class="active">Compare</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/chat">AI Assistant</a>
+    <a href="/help">Help</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <h1>Station Comparison</h1>
+    <a href="/stations" style="font-size:.875rem;color:#6b7280;text-decoration:none;">← All stations</a>
+  </div>
+
+  <div class="filter-card">
+    <form method="get" action="/stations/compare">
+      <div class="filter-row">
+        <div class="f-group" style="flex:2;min-width:200px;">
+          <label>Add station (up to 5)</label>
+          <select name="ids" onchange="this.form.submit()" style="cursor:pointer;">
+            <option value="">— Select a station to add —</option>
+            {% for st in all_stations %}
+            <option value="{{ selected_ids | join(',') }}{{ ',' if selected_ids else '' }}{{ st.station_id }}"
+                    {% if st.station_id in selected_ids %}disabled{% endif %}>
+              {{ st.name }} ({{ st.station_id }}){% if st.country %} · {{ st.country }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="f-group">
+          <label>Variable</label>
+          <select name="variable" onchange="this.form.submit()">
+            {% for v in variables %}
+            <option value="{{ v }}" {% if v == variable %}selected{% endif %}>{{ variable_labels[v] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <input type="hidden" name="ids" value="{{ selected_ids | join(',') }}" />
+      </div>
+      {% if selected_ids %}
+      <div class="station-chips">
+        {% for sid in selected_ids %}
+        <span class="chip">
+          {{ sid }}
+          <a href="/stations/compare?ids={{ selected_ids | reject('equalto', sid) | join(',') }}&variable={{ variable }}"
+             title="Remove">✕</a>
+        </span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </form>
+  </div>
+
+  <div class="chart-card">
+    {% if selected_ids and series_json != '[]' %}
+    <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;margin-bottom:.85rem;">
+      {{ variable_labels[variable] }} — {{ selected_ids | length }} station{{ 's' if selected_ids | length != 1 }}
+    </div>
+    <canvas id="compare-chart" style="max-height:360px;"></canvas>
+    {% elif selected_ids %}
+    <div class="empty">No data available for the selected stations and variable.</div>
+    {% else %}
+    <div class="empty">Select one or more stations above to compare their observations.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if selected_ids and series_json != '[]' %}
+<script src="/static/chart.js"></script>
+<script>
+(function () {
+  var dates  = {{ dates_json | safe }};
+  var series = {{ series_json | safe }};
+  var PALETTE = ['#4f46e5','#10b981','#f59e0b','#ef4444','#8b5cf6'];
+
+  new Chart(document.getElementById('compare-chart'), {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: series.map(function (s, i) {
+        return {
+          label: s.name + ' (' + s.id + ')',
+          data: s.values,
+          borderColor: PALETTE[i % PALETTE.length],
+          backgroundColor: PALETTE[i % PALETTE.length] + '22',
+          borderWidth: 2,
+          pointRadius: dates.length > 90 ? 0 : 3,
+          tension: 0.3,
+          spanGaps: true,
+        };
+      }),
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 12, font: { size: 12 } } },
+        tooltip: { callbacks: {
+          label: function (ctx) {
+            return ctx.dataset.label + ': ' + (ctx.parsed.y !== null ? ctx.parsed.y.toFixed(1) : '—');
+          }
+        }},
+      },
+      scales: {
+        x: { ticks: { maxTicksLimit: 12, maxRotation: 0 } },
+        y: { beginAtZero: true },
+      },
+    },
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

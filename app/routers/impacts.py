@@ -649,6 +649,26 @@ async def impact_detail(impact_id: int, request: Request, db: AsyncSession = Dep
 )
 
 
+@router.get("/{impact_id}/duplicate", response_class=HTMLResponse)
+async def impact_duplicate_page(impact_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return RedirectResponse("/login")
+    result = await db.execute(select(ImpactRecord).where(ImpactRecord.id == impact_id))
+    impact = result.scalar_one_or_none()
+    if not impact:
+        return RedirectResponse("/impacts")
+    forecasts, activations = await _load_form_data(db)
+    return templates.TemplateResponse(
+        request, "impact_form.html",
+        {
+            "user": user, "impact": impact, "is_duplicate": True,
+            "forecasts": forecasts, "activations": activations,
+            "hazard_types": HAZARD_TYPES, "countries": COUNTRY_LIST,
+        },
+    )
+
+
 @router.get("/{impact_id}/edit", response_class=HTMLResponse)
 async def impact_edit_page(impact_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     user = await get_current_user(request, db)

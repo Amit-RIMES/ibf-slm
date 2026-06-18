@@ -199,6 +199,26 @@
     [data-theme="dark"] .auth-card p  { color: #94a3b8; }
     [data-theme="dark"] .success-box  { background: #052e16 !important; border-color: #166534 !important; color: #86efac !important; }
 
+    /* ── Print: always render in light mode regardless of dark-mode setting ── */
+    @media print {
+      [data-theme="dark"] body, [data-theme="dark"] .main,
+      [data-theme="dark"] .card, [data-theme="dark"] .stat-card,
+      [data-theme="dark"] nav, [data-theme="dark"] .handover-card,
+      [data-theme="dark"] .filter-bar, [data-theme="dark"] .section,
+      [data-theme="dark"] .auth-card {
+        background: #fff !important; color: #1a1a2e !important;
+        box-shadow: none !important; border-color: #e5e7eb !important;
+      }
+      [data-theme="dark"] nav .brand { color: #4f46e5 !important; }
+      [data-theme="dark"] nav .nav-links a,
+      [data-theme="dark"] nav .user-info a { color: #6b7280 !important; }
+      [data-theme="dark"] table { background: #fff !important; }
+      [data-theme="dark"] th { color: #6b7280 !important; border-color: #e5e7eb !important; }
+      [data-theme="dark"] td { color: #374151 !important; border-color: #f3f4f6 !important; }
+      [data-theme="dark"] a  { color: #4f46e5 !important; }
+      .dark-toggle, #ai-fab, #ai-panel, #session-expired-banner { display: none !important; }
+    }
+
     /* ── Common surface/container classes ── */
     [data-theme="dark"] .main            { background: transparent !important; }
     [data-theme="dark"] .section,

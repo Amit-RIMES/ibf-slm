@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Webhook Deliveries — IBF App</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f4f6f9; color: #1a1a2e; }
+    nav { background: #fff; border-bottom: 1px solid #e5e7eb; padding: .85rem 2rem;
+          display: flex; align-items: center; justify-content: space-between; }
+    nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+    nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+    nav .nav-links a { color: #6b7280; text-decoration: none; }
+    nav .nav-links a.active { color: #4f46e5; font-weight: 600; }
+    nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+    .main { max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+    .page-header { display: flex; align-items: center; justify-content: space-between;
+                   margin-bottom: 1.25rem; flex-wrap: wrap; gap: .75rem; }
+    .page-header h1 { font-size: 1.5rem; font-weight: 700; margin: 0; }
+    .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.08);
+            padding: 1.5rem; border: 1px solid #e5e7eb; }
+    .meta-row { display: flex; gap: 1.5rem; margin-bottom: 1.25rem; font-size: .875rem; color: #6b7280; flex-wrap: wrap; }
+    .meta-row strong { color: #1a1a2e; }
+    table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+    th { padding: .5rem .75rem; text-align: left; font-size: .72rem; font-weight: 700;
+         text-transform: uppercase; letter-spacing: .05em; color: #9ca3af; border-bottom: 2px solid #f3f4f6; }
+    td { padding: .65rem .75rem; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+    tr:hover td { background: #fafafa; }
+    .badge { display: inline-block; padding: .15rem .55rem; border-radius: 999px;
+             font-size: .72rem; font-weight: 700; }
+    .badge-ok  { background: #dcfce7; color: #15803d; }
+    .badge-err { background: #fee2e2; color: #b91c1c; }
+    .code { font-family: monospace; font-size: .82rem; color: #6b7280; }
+    .err-text { font-size: .78rem; color: #dc2626; max-width: 300px; overflow-wrap: break-word; }
+    .empty { color: #9ca3af; text-align: center; padding: 2.5rem 0; font-size: .875rem; }
+    .stat-chips { display: flex; gap: .75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .stat-chip { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;
+                 padding: .4rem .85rem; font-size: .82rem; }
+    .stat-chip strong { color: #1a1a2e; }
+  </style>
+</head>
+<body>
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/admin/users" class="active">Admin</a>
+    <a href="/admin/webhooks">Webhooks</a>
+    <a href="/admin/health">Health</a>
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="page-header">
+    <div>
+      <h1>Webhook Deliveries</h1>
+      <div style="font-size:.875rem;color:#6b7280;margin-top:.25rem;">
+        {{ wh.name }} — <span class="code">{{ wh.url }}</span>
+      </div>
+    </div>
+    <a href="/admin/webhooks" style="font-size:.875rem;color:#6b7280;text-decoration:none;">← Back to webhooks</a>
+  </div>
+
+  <div class="card">
+    {% if deliveries %}
+    <div class="stat-chips">
+      <div class="stat-chip">Total: <strong>{{ deliveries | length }}</strong></div>
+      <div class="stat-chip">Successful: <strong style="color:#15803d;">{{ success_count }}</strong></div>
+      <div class="stat-chip">Failed: <strong style="color:#b91c1c;">{{ deliveries | length - success_count }}</strong></div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Time (UTC)</th>
+          <th>Status</th>
+          <th>HTTP</th>
+          <th>Attempt</th>
+          <th>Duration</th>
+          <th>Activation</th>
+          <th>Error</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in deliveries %}
+        <tr>
+          <td class="code">{{ d.delivered_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+          <td>
+            {% if d.success %}
+            <span class="badge badge-ok">OK</span>
+            {% else %}
+            <span class="badge badge-err">Failed</span>
+            {% endif %}
+          </td>
+          <td class="code">{{ d.status_code or '—' }}</td>
+          <td class="code">{{ d.attempt }}</td>
+          <td class="code">{% if d.duration_ms is not none %}{{ d.duration_ms }} ms{% else %}—{% endif %}</td>
+          <td>
+            {% if d.activation_id %}
+            <a href="/triggers" style="font-size:.78rem;color:#4f46e5;">#{{ d.activation_id }}</a>
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% if d.error %}<span class="err-text">{{ d.error }}</span>{% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No deliveries recorded yet. Deliveries are logged when a trigger activation fires.</div>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

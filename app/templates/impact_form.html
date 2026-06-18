@@ -85,7 +85,7 @@
   <div class="error">{{ error }}</div>
   {% endif %}
 
-  <form method="post" action="{% if impact %}/impacts/{{ impact.id }}/edit{% else %}/impacts/new{% endif %}">
+  <form method="post" action="{% if impact and not is_duplicate %}/impacts/{{ impact.id }}/edit{% else %}/impacts/new{% endif %}">
     <div class="card">
       <div class="section-heading">Event</div>
       <div class="form-group">
@@ -205,8 +205,8 @@
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="btn-submit">{% if impact %}Save Changes{% else %}Save Impact Record{% endif %}</button>
-        <a href="{% if impact %}/impacts/{{ impact.id }}{% else %}/impacts{% endif %}" class="btn-cancel">Cancel</a>
+        <button type="submit" class="btn-submit">{% if impact and not is_duplicate %}Save Changes{% else %}Save Impact Record{% endif %}</button>
+        <a href="{% if impact and not is_duplicate %}/impacts/{{ impact.id }}{% else %}/impacts{% endif %}" class="btn-cancel">Cancel</a>
       </div>
     </div>
   </form>

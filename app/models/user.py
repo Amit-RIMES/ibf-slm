@@ -22,3 +22,7 @@ class User(Base):
     # TOTP / 2FA
     totp_secret: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="0")
+    # Session revocation — all JWTs issued before this timestamp are invalid
+    sessions_invalidated_before: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

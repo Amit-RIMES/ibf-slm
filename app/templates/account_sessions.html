@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Active Sessions — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.active { color: #4f46e5; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 680px; margin: 3rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; margin-bottom: .3rem; }
+  .sub { color: #6b7280; font-size: .9rem; margin-bottom: 1.75rem; }
+
+  .account-nav { display: flex; gap: .75rem; margin-bottom: 1.75rem; flex-wrap: wrap; }
+  .account-nav a { font-size: .875rem; color: #6b7280; padding: .35rem .85rem;
+    border-radius: 6px; border: 1px solid #e5e7eb; text-decoration: none; }
+  .account-nav a:hover { background: #f9fafb; }
+  .account-nav a.active { background: #f5f3ff; color: #7c3aed; border-color: #c4b5fd; font-weight: 600; }
+
+  .success-box {
+    background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px;
+    padding: .75rem 1rem; color: #166534; font-size: .9rem; margin-bottom: 1rem;
+  }
+
+  .session-list { display: flex; flex-direction: column; gap: .75rem; }
+  .session-card {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 1rem 1.25rem; display: flex; align-items: flex-start;
+    justify-content: space-between; gap: 1rem;
+  }
+  .session-card.current-session { border-color: #a5b4fc; background: #f5f3ff; }
+  .session-info { flex: 1; min-width: 0; }
+  .session-badge {
+    display: inline-block; font-size: .7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; padding: .15rem .55rem; border-radius: 999px;
+    background: #dbeafe; color: #1d4ed8; margin-bottom: .35rem;
+  }
+  .session-ua { font-size: .875rem; font-weight: 600; color: #1a1a2e; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .session-meta { font-size: .8rem; color: #6b7280; margin-top: .25rem; }
+  .session-meta span { margin-right: 1rem; }
+  .session-ip { font-family: monospace; font-size: .8rem; color: #374151; }
+
+  .btn-revoke-all {
+    background: #dc2626; color: #fff; border: none; border-radius: 8px;
+    padding: .55rem 1.25rem; font-size: .875rem; font-weight: 600; cursor: pointer;
+    margin-top: 1.25rem;
+  }
+  .btn-revoke-all:hover { opacity: .85; }
+
+  .empty { color: #9ca3af; font-size: .9rem; padding: 1.5rem 0; text-align: center; }
+  .warning-box {
+    background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px;
+    padding: .75rem 1rem; color: #92400e; font-size: .875rem; margin-top: 1.25rem; line-height: 1.5;
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/stations">Stations</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/drought">Drought</a>
+    <a href="/risk">Risk</a>
+    <a href="/ibf">IBF Matrix</a>
+    <a href="/map">Map</a>
+    <a href="/return-period">Return Periods</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/seasonal">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <h1>Active Sessions</h1>
+  <p class="sub">All devices and browsers currently signed into your account.</p>
+
+  <div class="account-nav">
+    <a href="/account/profile">Profile</a>
+    <a href="/account/password">Password</a>
+    <a href="/account/notifications">Notifications</a>
+    <a href="/account/sessions" class="active">Sessions</a>
+    <a href="/account/2fa">Two-Factor Auth</a>
+  </div>
+
+  {% if request.query_params.get('revoked') %}
+  <div class="success-box">All other sessions have been revoked. You remain signed in on this device.</div>
+  {% endif %}
+
+  {% if sessions %}
+  <div class="session-list">
+    {% for sess in sessions %}
+    <div class="session-card {% if sess.id == current_sid %}current-session{% endif %}">
+      <div class="session-info">
+        {% if sess.id == current_sid %}
+        <span class="session-badge">This device</span>
+        {% endif %}
+        <div class="session-ua">{{ sess.user_agent or 'Unknown browser' }}</div>
+        <div class="session-meta">
+          <span>Signed in: {{ sess.created_at.strftime("%Y-%m-%d %H:%M UTC") }}</span>
+          <span>Last active: {{ sess.last_seen_at.strftime("%Y-%m-%d %H:%M UTC") }}</span>
+          {% if sess.ip_address %}<span class="session-ip">{{ sess.ip_address }}</span>{% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if sessions | length > 1 %}
+  <form method="post" action="/account/sessions/revoke-all"
+        onsubmit="return confirm('This will sign out all other devices. Continue?')">
+    <button type="submit" class="btn-revoke-all">Revoke all other sessions</button>
+  </form>
+  <div class="warning-box">
+    Revoking sessions will immediately sign out all other browsers and devices.
+    Your current session on this device will remain active.
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="empty">No active sessions found.</div>
+  {% endif %}
+</div>
+{% endblock %}

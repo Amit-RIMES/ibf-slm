@@ -153,7 +153,11 @@
             </span>
           </td>
           <td style="font-size:.8rem; color:#9ca3af;">{{ wh.created_at.strftime("%Y-%m-%d") }}</td>
-          <td style="display:flex; gap:.4rem;">
+          <td style="display:flex; gap:.4rem;align-items:center;">
+            <a href="/admin/webhooks/{{ wh.id }}/deliveries"
+               style="font-size:.78rem;color:#4f46e5;font-weight:600;white-space:nowrap;text-decoration:none;">
+              Deliveries →
+            </a>
             <form method="post" action="/admin/webhooks/{{ wh.id }}/toggle" style="display:inline;">
               <button type="submit" class="btn-sm {% if wh.is_active %}btn-toggle-on{% else %}btn-toggle-off{% endif %}">
                 {{ "Disable" if wh.is_active else "Enable" }}

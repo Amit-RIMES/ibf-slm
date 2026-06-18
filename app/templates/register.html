@@ -31,7 +31,11 @@
       </div>
       <div class="form-group">
         <label for="password">Password</label>
-        <input type="password" id="password" name="password" placeholder="Min. 8 characters" required minlength="8" />
+        <input type="password" id="password" name="password" placeholder="Min. 8 characters" required minlength="8" autocomplete="new-password" />
+        <div id="pw-strength-bar" style="height:4px;border-radius:2px;margin-top:5px;background:#e5e7eb;overflow:hidden;">
+          <div id="pw-bar" style="height:100%;width:0%;transition:width .2s,background .2s;border-radius:2px;"></div>
+        </div>
+        <div id="pw-hint" style="font-size:.72rem;margin-top:3px;min-height:1em;"></div>
       </div>
       <button type="submit" class="btn btn-primary">Create account</button>
     </form>
@@ -41,4 +45,28 @@
     </p>
   </div>
 </div>
+<script>
+(function () {
+  var inp = document.getElementById('password');
+  var bar = document.getElementById('pw-bar');
+  var hint = document.getElementById('pw-hint');
+  var COLORS = ['#dc2626', '#f59e0b', '#16a34a', '#15803d'];
+  var LABELS = ['Too weak', 'Weak — add a number or letter', 'Good', 'Strong'];
+  inp.addEventListener('input', function () {
+    var v = inp.value;
+    if (!v) { bar.style.width = '0%'; hint.textContent = ''; return; }
+    var score = 0;
+    if (v.length >= 8) score++;
+    if (/[a-zA-Z]/.test(v)) score++;
+    if (/\d/.test(v)) score++;
+    if (/[^a-zA-Z0-9]/.test(v) || v.length >= 14) score++;
+    score = Math.min(score - 1, 3);
+    if (score < 0) score = 0;
+    bar.style.width = ((score + 1) * 25) + '%';
+    bar.style.background = COLORS[score];
+    hint.style.color = COLORS[score];
+    hint.textContent = LABELS[score];
+  });
+})();
+</script>
 {% endblock %}
