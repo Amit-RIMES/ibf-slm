@@ -3,7 +3,16 @@
 {% block extra_styles %}
 <style>
   body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-  nav { flex-shrink: 0; }
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; }
+  nav .nav-links a.active { color: #ef4444; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
   .chat-wrap { flex: 1; display: flex; flex-direction: column; max-width: 860px; width: 100%; margin: 0 auto; padding: 0 1rem 1rem; min-height: 0; }
   .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .75rem; flex-shrink: 0; padding-top: 1rem; }
   .page-header h1 { font-size: 1.5rem; font-weight: 700; margin: 0; color: #111827; }
@@ -72,6 +81,7 @@
     <a href="/seasonal">Seasonal</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat" class="active">AI Assistant</a>
+    <a href="/help">Help</a>
     {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}{% if user.role == "admin" %}<a href="/admin/sms" style="color:#7c3aed;font-weight:600">SMS</a>{% endif %}
     <a href="/logout" class="logout">Logout</a>
   </div>
