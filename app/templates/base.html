@@ -54,6 +54,9 @@
 
     /* ── Mobile breakpoint ── */
     @media (max-width: 700px) {
+      /* Prevent horizontal overflow on any page */
+      html, body { overflow-x: hidden; max-width: 100vw; }
+
       /* Show hamburger, hide links by default */
       .nav-hamburger { display: flex; align-items: center; margin-left: auto; }
       nav .nav-links,
@@ -65,12 +68,15 @@
         padding-top: .65rem;
         border-top: 1px solid #f3f4f6;
         font-size: .9rem;
+        max-height: 70vh;
+        overflow-y: auto;
       }
       nav .nav-links.nav-open,
       nav .user-info.nav-open { display: flex !important; }
 
       /* Nav wraps to next line */
       nav { flex-wrap: wrap !important; padding: .75rem 1rem !important; gap: .4rem !important; }
+      nav .brand { max-width: calc(100vw - 7rem); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
       /* Scrollable cards with tables */
       .card { overflow-x: auto; padding: 1.25rem !important; }

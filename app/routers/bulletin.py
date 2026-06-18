@@ -227,6 +227,7 @@ async def bulletin_print(
     source: str = "",
     days: int = 7,
     lang: str = "en",
+    auto: int = 0,
     db: AsyncSession = Depends(get_db),
 ):
     user = await get_current_user(request, db)
@@ -273,6 +274,7 @@ async def bulletin_print(
 </div>
 <button class="no-print" onclick="window.print()">🖨 Print / Save as PDF &nbsp;(then close this tab)</button>
 {bulletin_html}
+{('<script>window.onload=function(){window.print();}</script>' if auto else '')}
 </body>
 </html>"""
     return HTMLResponse(print_html)

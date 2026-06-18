@@ -99,12 +99,19 @@
     <div class="empty-state" id="empty-state">
       <div class="icon">🤖</div>
       <p>Ask me anything about your IBF data — forecasts, alerts, impacts, and more.</p>
-      <div class="suggestions">
-        <span class="suggestion">What forecasts were ingested recently?</span>
+      <div class="suggestions" id="suggestions">
+        {% if hints.unack > 0 %}
+        <span class="suggestion">You have {{ hints.unack }} unacknowledged activation{{ 's' if hints.unack != 1 else '' }} — what should I do?</span>
+        {% endif %}
+        {% if hints.recent_impacts > 0 %}
+        <span class="suggestion">Summarise the {{ hints.recent_impacts }} impact{{ 's' if hints.recent_impacts != 1 else '' }} recorded this month</span>
+        {% endif %}
+        {% if hints.latest_fc_date %}
+        <span class="suggestion">What does the forecast from {{ hints.latest_fc_date }} show?</span>
+        {% endif %}
         <span class="suggestion">Are there any unacknowledged alerts?</span>
-        <span class="suggestion">What impacts were recorded this month?</span>
         <span class="suggestion">Which triggers are currently active?</span>
-        <span class="suggestion">Summarise recent activations</span>
+        <span class="suggestion">What forecasts were ingested recently?</span>
       </div>
     </div>
   </div>
@@ -112,18 +119,25 @@
   <div class="input-row">
     <textarea id="input" rows="2" placeholder="Ask about forecasts, triggers, impacts…" maxlength="2000"></textarea>
     <button class="send-btn" id="send-btn">Send</button>
+    <button class="send-btn" id="clear-btn" title="Clear conversation" style="background:#6b7280;padding:.65rem .75rem;">✕</button>
   </div>
 </div>
 
 <script>
 (function () {
+  const STORAGE_KEY = 'ibf_chat_history';
   const messagesEl = document.getElementById('messages');
-  const emptyState = document.getElementById('empty-state');
-  const inputEl = document.getElementById('input');
-  const sendBtn = document.getElementById('send-btn');
-  const history = [];
+  const emptyState  = document.getElementById('empty-state');
+  const inputEl     = document.getElementById('input');
+  const sendBtn     = document.getElementById('send-btn');
+  const clearBtn    = document.getElementById('clear-btn');
+  const history     = [];
 
-  function appendMsg(role, text) {
+  function saveHistory() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(history)); } catch (_) {}
+  }
+
+  function appendMsg(role, text, skipSave) {
     emptyState.style.display = 'none';
     const div = document.createElement('div');
     div.className = `msg ${role}`;
@@ -144,6 +158,14 @@
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     return div;
+  }
+
+  function clearConversation() {
+    history.length = 0;
+    try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+    messagesEl.innerHTML = '';
+    messagesEl.appendChild(emptyState);
+    emptyState.style.display = '';
   }
 
   async function send(text) {
@@ -188,10 +210,7 @@
               messagesEl.scrollTop = messagesEl.scrollHeight;
               return;
             }
-            if (!bubble) {
-              typingEl.remove();
-              bubble = appendMsg('assistant', '');
-            }
+            if (!bubble) { typingEl.remove(); bubble = appendMsg('assistant', ''); }
             full += obj.chunk;
             bubble.textContent = full;
             messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -206,18 +225,28 @@
     if (full) {
       history.push({ role: 'user', content: text });
       history.push({ role: 'assistant', content: full });
+      saveHistory();
     }
     sendBtn.disabled = false;
     inputEl.focus();
   }
 
+  // Restore history from localStorage
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    if (saved.length) {
+      saved.forEach(m => {
+        history.push(m);
+        if (m.role === 'user' || m.role === 'assistant') appendMsg(m.role, m.content, true);
+      });
+    }
+  } catch (_) {}
+
   sendBtn.addEventListener('click', () => send(inputEl.value));
+  clearBtn.addEventListener('click', clearConversation);
 
   inputEl.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      send(inputEl.value);
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(inputEl.value); }
   });
 
   inputEl.addEventListener('input', () => {
@@ -226,7 +255,7 @@
   });
 
   document.querySelectorAll('.suggestion').forEach(el => {
-    el.addEventListener('click', () => send(el.textContent));
+    el.addEventListener('click', () => send(el.textContent.trim()));
   });
 })();
 </script>

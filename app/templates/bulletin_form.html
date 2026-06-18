@@ -82,10 +82,10 @@
   </div>
 
   <div class="form-card">
-    <form method="get" action="/bulletin/generate">
+    <form method="get" action="/bulletin/generate" id="bulletin-form">
       <div class="form-group">
         <label>SPI Data Source</label>
-        <select name="source">
+        <select name="source" id="f-source">
           {% for s in spi_sources %}
           <option value="{{ s }}">{{ s }}</option>
           {% endfor %}
@@ -94,7 +94,7 @@
 
       <div class="form-group">
         <label>Reporting Window</label>
-        <select name="days">
+        <select name="days" id="f-days">
           <option value="7">Last 7 days</option>
           <option value="14">Last 14 days</option>
           <option value="30" selected>Last 30 days</option>
@@ -106,13 +106,13 @@
 
       <div class="form-group">
         <label>Bulletin Title (optional)</label>
-        <input type="text" name="title" placeholder="IBF-SLM Situational Bulletin — June 2026">
+        <input type="text" name="title" id="f-title" placeholder="IBF-SLM Situational Bulletin — June 2026">
         <div class="hint">Leave blank to auto-generate from current month</div>
       </div>
 
       <div class="form-group">
         <label>Language</label>
-        <select name="lang">
+        <select name="lang" id="f-lang">
           {% for code, name in supported_languages.items() %}
           <option value="{{ code }}" {% if code == 'en' %}selected{% endif %}>{{ name }}</option>
           {% endfor %}
@@ -123,16 +123,50 @@
       <button type="submit" class="btn-submit">Generate Bulletin →</button>
     </form>
     <div style="margin-top:1rem;text-align:center;">
-      <a href="/bulletin/print?source=CHIRPS&amp;days=30"
-         target="_blank"
+      <button id="pdf-btn"
          style="display:inline-flex;align-items:center;gap:.4rem;
                 padding:.5rem 1.1rem;background:#fff;border:1px solid #d1d5db;
                 border-radius:8px;font-size:.875rem;font-weight:600;
-                color:#374151;text-decoration:none;">
-        🖨 Print / PDF
-      </a>
-      <div style="font-size:.72rem;color:#9ca3af;margin-top:.35rem;">Opens default settings (CHIRPS, 30 days) in a new tab</div>
+                color:#374151;cursor:pointer;">
+        🖨 Download PDF
+      </button>
+      <div style="font-size:.72rem;color:#9ca3af;margin-top:.35rem;">Opens a print-ready view — use browser's "Save as PDF"</div>
     </div>
   </div>
 </div>
+
+<script>
+(function () {
+  var srcEl  = document.getElementById('f-source');
+  var daysEl = document.getElementById('f-days');
+  var langEl = document.getElementById('f-lang');
+
+  // Restore last-used values
+  var saved = JSON.parse(localStorage.getItem('ibf_bulletin') || '{}');
+  if (saved.source && srcEl)  { for (var o of srcEl.options)  { if (o.value === saved.source) o.selected = true; } }
+  if (saved.days   && daysEl) { for (var o of daysEl.options) { if (o.value === saved.days)   o.selected = true; } }
+  if (saved.lang   && langEl) { for (var o of langEl.options) { if (o.value === saved.lang)   o.selected = true; } }
+
+  // Save on change
+  function save() {
+    localStorage.setItem('ibf_bulletin', JSON.stringify({
+      source: srcEl ? srcEl.value : '',
+      days:   daysEl ? daysEl.value : '30',
+      lang:   langEl ? langEl.value : 'en',
+    }));
+  }
+  if (srcEl)  srcEl.addEventListener('change', save);
+  if (daysEl) daysEl.addEventListener('change', save);
+  if (langEl) langEl.addEventListener('change', save);
+
+  // PDF button opens print page with current form values
+  document.getElementById('pdf-btn').addEventListener('click', function () {
+    var src  = srcEl  ? srcEl.value  : 'CHIRPS';
+    var days = daysEl ? daysEl.value : '30';
+    var lang = langEl ? langEl.value : 'en';
+    window.open('/bulletin/print?source=' + encodeURIComponent(src) +
+                '&days=' + days + '&lang=' + lang + '&auto=1', '_blank');
+  });
+})();
+</script>
 {% endblock %}

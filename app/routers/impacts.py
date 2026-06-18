@@ -18,11 +18,13 @@ from app.core.deps import get_current_user
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
 from app.models.trigger import TriggerActivation
+from app.routers.forecasts import COUNTRY_NAMES
 
 router = APIRouter(prefix="/impacts")
 templates = Jinja2Templates(directory="app/templates")
 
 HAZARD_TYPES = ["flood", "storm", "drought", "landslide", "heatwave", "cyclone", "other"]
+COUNTRY_LIST = sorted(COUNTRY_NAMES.values())
 
 
 PAGE_SIZE = 20
@@ -343,6 +345,7 @@ async def impact_new_page(request: Request, db: AsyncSession = Depends(get_db), 
     {
             "user": user, "forecasts": forecasts,
             "activations": activations, "hazard_types": HAZARD_TYPES,
+            "countries": COUNTRY_LIST,
             "prefill_activation_id": activation or None,
             "prefill_forecast_id": prefill_forecast_id,
         },
@@ -389,7 +392,8 @@ async def impact_create(
     request,
     "impact_form.html",
     {"user": user, "impact": None, "error": msg,
-             "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES},
+             "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES,
+             "countries": COUNTRY_LIST},
 )
 
     lat_val = _float(lat)
@@ -664,7 +668,7 @@ async def impact_edit_page(impact_id: int, request: Request, db: AsyncSession = 
     {
             "user": user, "impact": impact,
             "forecasts": forecasts, "activations": activations,
-            "hazard_types": HAZARD_TYPES,
+            "hazard_types": HAZARD_TYPES, "countries": COUNTRY_LIST,
         },
 )
 
@@ -717,28 +721,32 @@ async def impact_update(
     request,
     "impact_form.html",
     {"user": user, "impact": impact, "error": "Latitude must be a number.",
-             "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES},
+             "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES,
+             "countries": COUNTRY_LIST},
 )
     if lon.strip() and lon_val is None:
         return templates.TemplateResponse(
     request,
     "impact_form.html",
     {"user": user, "impact": impact, "error": "Longitude must be a number.",
-             "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES},
+             "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES,
+             "countries": COUNTRY_LIST},
 )
     if lat_val is not None and not (-90 <= lat_val <= 90):
         return templates.TemplateResponse(
     request,
     "impact_form.html",
     {"user": user, "impact": impact, "error": "Latitude must be between -90 and 90.",
-             "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES},
+             "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES,
+             "countries": COUNTRY_LIST},
 )
     if lon_val is not None and not (-180 <= lon_val <= 180):
         return templates.TemplateResponse(
     request,
     "impact_form.html",
     {"user": user, "impact": impact, "error": "Longitude must be between -180 and 180.",
-             "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES},
+             "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES,
+             "countries": COUNTRY_LIST},
 )
 
     impact.event_name = event_name

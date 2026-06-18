@@ -171,6 +171,94 @@
   <div class="greeting">Hello, {{ user.username }} 👋</div>
   <div class="sub">Here's what's going on today.</div>
 
+  <!-- ── Pending Actions widget ───────────────────────────────────────────── -->
+  {% set pending_items = [] %}
+  {% if active_activations %}{% set _ = pending_items.append(1) %}{% endif %}
+  {% if data_gaps and data_gaps.any_alert %}{% set _ = pending_items.append(1) %}{% endif %}
+  {% if pending_drafts > 0 %}{% set _ = pending_items.append(1) %}{% endif %}
+  {% if user.role == "admin" and stats.pending_count %}{% set _ = pending_items.append(1) %}{% endif %}
+
+  <div style="background:#fff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.07);
+              padding:1.25rem 1.5rem;margin-bottom:1.75rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.85rem;">
+      <span style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#6b7280;">
+        Pending Actions
+      </span>
+      {% if pending_items %}
+      <span style="background:#dc2626;color:#fff;border-radius:999px;font-size:.72rem;font-weight:700;padding:.15rem .55rem;">
+        {{ pending_items|length }}
+      </span>
+      {% else %}
+      <span style="background:#22c55e;color:#fff;border-radius:999px;font-size:.72rem;font-weight:700;padding:.15rem .55rem;">
+        All clear
+      </span>
+      {% endif %}
+    </div>
+
+    {% if not pending_items %}
+    <div style="font-size:.875rem;color:#6b7280;">Nothing requires your attention right now.</div>
+    {% else %}
+    <div style="display:flex;flex-direction:column;gap:.6rem;">
+
+      {% if active_activations %}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;
+                  background:#fef2f2;border-radius:8px;padding:.6rem .9rem;">
+        <div style="display:flex;align-items:center;gap:.5rem;">
+          <span style="font-size:.9rem;">🔴</span>
+          <span style="font-size:.875rem;font-weight:600;color:#991b1b;">
+            {{ active_activations|length }} unacknowledged trigger activation{{ 's' if active_activations|length != 1 else '' }}
+          </span>
+        </div>
+        <a href="/triggers" style="font-size:.8rem;font-weight:600;color:#dc2626;white-space:nowrap;">Acknowledge →</a>
+      </div>
+      {% endif %}
+
+      {% if data_gaps and data_gaps.any_alert %}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;
+                  background:#fff7ed;border-radius:8px;padding:.6rem .9rem;">
+        <div style="display:flex;align-items:center;gap:.5rem;">
+          <span style="font-size:.9rem;">🟠</span>
+          <span style="font-size:.875rem;font-weight:600;color:#9a3412;">
+            Data gap:
+            {% if data_gaps.chirps_alert %}CHIRPS {{ data_gaps.chirps_gap_days }}d stale{% endif %}
+            {% if data_gaps.chirps_alert and data_gaps.forecast_alert %} · {% endif %}
+            {% if data_gaps.forecast_alert %}Forecast {{ data_gaps.forecast_gap_days }}d stale{% endif %}
+          </span>
+        </div>
+        <a href="/admin/health" style="font-size:.8rem;font-weight:600;color:#ea580c;white-space:nowrap;">Check health →</a>
+      </div>
+      {% endif %}
+
+      {% if pending_drafts > 0 %}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;
+                  background:#fef9c3;border-radius:8px;padding:.6rem .9rem;">
+        <div style="display:flex;align-items:center;gap:.5rem;">
+          <span style="font-size:.9rem;">🟡</span>
+          <span style="font-size:.875rem;font-weight:600;color:#a16207;">
+            {{ pending_drafts }} bulletin draft{{ 's' if pending_drafts != 1 else '' }} pending review
+          </span>
+        </div>
+        <a href="/bulletin/drafts" style="font-size:.8rem;font-weight:600;color:#a16207;white-space:nowrap;">Review →</a>
+      </div>
+      {% endif %}
+
+      {% if user.role == "admin" and stats.pending_count %}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;
+                  background:#fffbeb;border-radius:8px;padding:.6rem .9rem;">
+        <div style="display:flex;align-items:center;gap:.5rem;">
+          <span style="font-size:.9rem;">🟡</span>
+          <span style="font-size:.875rem;font-weight:600;color:#92400e;">
+            {{ stats.pending_count }} user registration{{ 's' if stats.pending_count != 1 else '' }} awaiting approval
+          </span>
+        </div>
+        <a href="/admin/users" style="font-size:.8rem;font-weight:600;color:#92400e;white-space:nowrap;">Approve →</a>
+      </div>
+      {% endif %}
+
+    </div>
+    {% endif %}
+  </div>
+
   <!-- ── Section Overview ──────────────────────────────────────────────────── -->
   <div style="margin-bottom:2rem;">
     <div class="section-title" style="margin-bottom:1rem;">Section Overview</div>
