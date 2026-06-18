@@ -1,0 +1,447 @@
+{% extends "base.html" %}
+{% block title %}Shift Handover — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav {
+    background: #fff; border-bottom: 1px solid #e5e7eb;
+    padding: .85rem 2rem; display: flex; align-items: center; justify-content: space-between;
+  }
+  nav .brand { font-weight: 700; font-size: 1.1rem; color: #4f46e5; }
+  nav .nav-links { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  nav .nav-links a { color: #6b7280; text-decoration: none; }
+  nav .nav-links a.active { color: #4f46e5; font-weight: 600; }
+  nav .nav-links a.logout { color: #dc2626; font-weight: 500; }
+
+  .main { max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+
+  .toolbar { display: flex; gap: .75rem; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .toolbar-right { display: flex; gap: .75rem; }
+  .btn { padding: .45rem 1.1rem; border: none; border-radius: 7px; font-size: .875rem; font-weight: 600; cursor: pointer; }
+  .btn-primary { background: #4f46e5; color: #fff; }
+  .btn-primary:hover { opacity: .85; }
+  .btn-secondary { background: #fff; color: #374151; border: 1px solid #d1d5db; }
+  .btn-secondary:hover { background: #f9fafb; }
+
+  /* Handover card */
+  .handover-card {
+    background: #fff; border-radius: 14px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.09);
+    padding: 2rem 2.25rem; border: 1px solid #e5e7eb;
+  }
+
+  /* Header band */
+  .ho-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    border-bottom: 2px solid #e5e7eb; padding-bottom: 1.25rem; margin-bottom: 1.5rem; gap: 1rem;
+  }
+  .ho-title { font-size: 1.3rem; font-weight: 800; color: #1a1a2e; }
+  .ho-subtitle { font-size: .8rem; color: #9ca3af; margin-top: .2rem; }
+
+  /* WMO level block */
+  .wmo-block {
+    padding: .75rem 1.25rem; border-radius: 10px; text-align: center; min-width: 130px;
+  }
+  .wmo-block .wl-name { font-size: 1.25rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+  .wmo-block .wl-lbl { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; opacity: .75; }
+
+  /* Sections */
+  .ho-section { margin-bottom: 1.4rem; }
+  .ho-section:last-child { margin-bottom: 0; }
+  .ho-section-title {
+    font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
+    color: #9ca3af; margin-bottom: .65rem; display: flex; align-items: center; gap: .5rem;
+  }
+  .ho-section-title::after {
+    content: ''; flex: 1; height: 1px; background: #f3f4f6;
+  }
+
+  /* Duty officer row */
+  .duty-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .duty-field { display: flex; flex-direction: column; gap: .3rem; flex: 1; min-width: 160px; }
+  .duty-field label { font-size: .72rem; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: .05em; }
+  .duty-field input { padding: .4rem .65rem; border: 1px solid #e5e7eb; border-radius: 6px; font-size: .875rem; }
+  .duty-field input:focus { outline: none; border-color: #4f46e5; }
+
+  /* Status grid */
+  .status-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; margin-bottom: .75rem; }
+  .status-cell {
+    background: #f9fafb; border-radius: 8px; padding: .65rem .85rem;
+    border: 1px solid #f3f4f6;
+  }
+  .sc-label { font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; margin-bottom: .2rem; }
+  .sc-value { font-size: 1.2rem; font-weight: 800; color: #111; line-height: 1; }
+  .sc-sub { font-size: .72rem; color: #9ca3af; margin-top: .15rem; }
+
+  /* Activations list */
+  .act-list { list-style: none; display: flex; flex-direction: column; gap: .4rem; }
+  .act-item {
+    display: flex; align-items: center; gap: .65rem; padding: .5rem .75rem;
+    border-radius: 7px; background: #fef9f0; border-left: 3px solid #f59e0b;
+    font-size: .83rem;
+  }
+  .act-item.status-acknowledged { background: #f0fdf4; border-color: #22c55e; }
+  .act-item.status-dismissed    { background: #f9fafb; border-color: #9ca3af; }
+
+  .act-trigger { font-weight: 600; color: #1a1a2e; }
+  .act-time { font-size: .75rem; color: #9ca3af; margin-left: auto; white-space: nowrap; }
+  .act-val { font-family: monospace; font-size: .78rem; color: #6b7280; }
+
+  /* SPI badges */
+  .spi-row { display: flex; gap: .6rem; flex-wrap: wrap; }
+  .spi-badge { padding: .3rem .75rem; border-radius: 999px; font-size: .78rem; font-weight: 700; }
+
+  /* Trigger list */
+  .trig-list { display: flex; flex-direction: column; gap: .3rem; }
+  .trig-item { display: flex; align-items: center; gap: .6rem; font-size: .83rem; color: #374151; }
+  .haz-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .haz-flood     { background: #2563eb; }
+  .haz-storm     { background: #7e22ce; }
+  .haz-drought   { background: #ca8a04; }
+  .haz-landslide { background: #16a34a; }
+  .haz-heatwave  { background: #dc2626; }
+  .haz-cyclone   { background: #0369a1; }
+  .haz-other     { background: #9ca3af; }
+
+  /* Bulletin reference */
+  .bull-ref {
+    padding: .6rem .85rem; background: #eff6ff; border-radius: 8px;
+    border-left: 3px solid #4f46e5; font-size: .83rem; color: #1e3a5f;
+    display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+  }
+
+  /* Impact summary */
+  .impact-row { font-size: .83rem; color: #374151; display: flex; flex-direction: column; gap: .25rem; }
+  .impact-item { display: flex; align-items: center; gap: .5rem; }
+  .impact-dot { width: 6px; height: 6px; border-radius: 50%; background: #dc2626; flex-shrink: 0; }
+
+  /* Notes textarea */
+  .notes-area {
+    width: 100%; padding: .6rem .75rem; border: 1px solid #e5e7eb; border-radius: 7px;
+    font-size: .85rem; min-height: 72px; resize: vertical; font-family: inherit;
+  }
+  .notes-area:focus { outline: none; border-color: #4f46e5; }
+
+  /* Empty state */
+  .ho-empty { color: #9ca3af; font-size: .82rem; font-style: italic; }
+
+  /* Print optimisation */
+  @media print {
+    nav, .toolbar, .notes-area:focus, .btn { display: none !important; }
+    .main { margin: 0 !important; padding: 0 !important; max-width: none !important; }
+    .handover-card { box-shadow: none !important; border: 1px solid #d1d5db !important; }
+    body { background: #fff !important; }
+    .notes-area { border: 1px solid #d1d5db !important; resize: none !important; }
+  }
+
+  @media (max-width: 700px) {
+    .status-row { grid-template-columns: 1fr 1fr !important; }
+    .ho-header { flex-direction: column; }
+    .wmo-block { min-width: auto; }
+    .handover-card { padding: 1.25rem !important; }
+    .toolbar { gap: .5rem; }
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/observed">Observed</a>
+    <a href="/impacts">Impacts</a>
+    <a href="/triggers">Triggers</a>
+    <a href="/verification">Verification</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/stations">Stations</a>
+    <a href="/sync">Auto-Sync</a>
+    <a href="/ecmwf">ECMWF</a>
+    <a href="/cds">CDS</a>
+    <a href="/glofas">GloFAS</a>
+    <a href="/drought">Drought</a>
+    <a href="/risk">Risk</a>
+    <a href="/ibf">IBF Matrix</a>
+    <a href="/map">Map</a>
+    <a href="/return-period">Return Periods</a>
+    <a href="/reports/operational">Report</a>
+    <a href="/reports/handover" class="active">Handover</a>
+    <a href="/seasonal">Seasonal</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/chat">AI Assistant</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    {% if user.role == "admin" %}<a href="/admin/sms" style="color:#7c3aed;font-weight:600">SMS</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="toolbar">
+    <span style="font-size:.875rem;color:#6b7280;">
+      Generated {{ generated_at.strftime("%d %b %Y, %H:%M UTC") }}
+      &nbsp;·&nbsp;
+      <a href="/reports/handover" style="color:#4f46e5;">Refresh</a>
+    </span>
+    <div class="toolbar-right">
+      <button class="btn btn-secondary" onclick="copyText()">📋 Copy as text</button>
+      <button class="btn btn-secondary" onclick="window.print()">🖨 Print</button>
+      <a href="/reports/operational" class="btn btn-secondary"
+         style="text-decoration:none;">Full report →</a>
+    </div>
+  </div>
+
+  <div class="handover-card" id="handover-card">
+
+    <!-- Header -->
+    <div class="ho-header">
+      <div>
+        <div class="ho-title">Shift Handover Summary</div>
+        <div class="ho-subtitle">IBF App · {{ generated_at.strftime("%A, %d %B %Y, %H:%M UTC") }}</div>
+      </div>
+      <div class="wmo-block"
+           style="background:{{ wmo.bg }};border:2px solid {{ wmo.hex }};">
+        <div class="wl-lbl" style="color:{{ wmo.text }};">Warning level</div>
+        <div class="wl-name" style="color:{{ wmo.hex }};">{{ wmo.wmo_name }}</div>
+        {% if latest_risk %}
+        <div style="font-size:.68rem;color:{{ wmo.text }};opacity:.7;margin-top:.2rem;">
+          Score: {{ latest_risk.total }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Duty officers -->
+    <div class="ho-section">
+      <div class="ho-section-title">Duty officers</div>
+      <div class="duty-row">
+        <div class="duty-field">
+          <label>Outgoing forecaster</label>
+          <input type="text" placeholder="Name" id="outgoing-name">
+        </div>
+        <div class="duty-field">
+          <label>Incoming forecaster</label>
+          <input type="text" placeholder="Name" id="incoming-name">
+        </div>
+        <div class="duty-field">
+          <label>Handover time (UTC)</label>
+          <input type="text" id="handover-time"
+                 value="{{ generated_at.strftime('%H:%M UTC') }}">
+        </div>
+      </div>
+    </div>
+
+    <!-- Status at a glance -->
+    <div class="ho-section">
+      <div class="ho-section-title">Status at a glance</div>
+      <div class="status-row">
+        <div class="status-cell">
+          <div class="sc-label">Active triggers</div>
+          <div class="sc-value"
+               style="color:{% if active_triggers %}#ea580c{% else %}#16a34a{% endif %};">
+            {{ active_triggers | length }}
+          </div>
+          <div class="sc-sub">defined &amp; enabled</div>
+        </div>
+        <div class="status-cell">
+          <div class="sc-label">Activations (24 h)</div>
+          <div class="sc-value"
+               style="color:{% if recent_activations %}#dc2626{% else %}#16a34a{% endif %};">
+            {{ recent_activations | length }}
+          </div>
+          <div class="sc-sub">new activations</div>
+        </div>
+        <div class="status-cell">
+          <div class="sc-label">Unverified</div>
+          <div class="sc-value"
+               style="color:{% if n_unverified > 0 %}#d97706{% else %}#16a34a{% endif %};">
+            {{ n_unverified }}
+          </div>
+          <div class="sc-sub">activations pending review</div>
+        </div>
+        <div class="status-cell">
+          <div class="sc-label">Latest forecast</div>
+          {% if latest_forecast %}
+          <div class="sc-value" style="font-size:.9rem;color:#1a1a2e;">
+            {{ latest_forecast.uploaded_at.strftime("%d %b") }}
+          </div>
+          <div class="sc-sub">{{ latest_forecast.source }}</div>
+          {% else %}
+          <div class="sc-value" style="color:#9ca3af;">—</div>
+          <div class="sc-sub">no forecast uploaded</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent activations -->
+    <div class="ho-section">
+      <div class="ho-section-title">Trigger activations (last 24 h)</div>
+      {% if recent_activations %}
+      <ul class="act-list">
+        {% for a in recent_activations %}
+        <li class="act-item status-{{ a.status }}">
+          <span class="act-trigger">
+            {% if a.trigger %}{{ a.trigger.name }}{% else %}#{{ a.trigger_id }}{% endif %}
+          </span>
+          <span class="act-val">{{ a.value | round(2) }} mm</span>
+          {% if a.status == 'acknowledged' %}
+          <span style="font-size:.7rem;background:#dcfce7;color:#15803d;padding:.1rem .45rem;border-radius:999px;font-weight:700;">ACK</span>
+          {% endif %}
+          <span class="act-time">{{ a.triggered_at.strftime("%H:%M UTC") }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="ho-empty">No activations in the last 24 hours.</p>
+      {% endif %}
+    </div>
+
+    <!-- Active triggers list -->
+    <div class="ho-section">
+      <div class="ho-section-title">Active monitoring triggers</div>
+      {% if active_triggers %}
+      <div class="trig-list">
+        {% for t in active_triggers %}
+        <div class="trig-item">
+          <span class="haz-dot haz-{{ t.hazard_type }}"></span>
+          <span style="font-weight:600;">{{ t.name }}</span>
+          <span style="font-size:.78rem;color:#9ca3af;">
+            {{ t.hazard_type }} · {{ t.variable }} {{ "≥" if t.operator in ("gte","gt") else "≤" }} {{ t.threshold }} mm
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="ho-empty">No active triggers.</p>
+      {% endif %}
+    </div>
+
+    <!-- SPI status -->
+    {% if spi_current %}
+    <div class="ho-section">
+      <div class="ho-section-title">Drought indicators (SPI)</div>
+      <div class="spi-row">
+        {% for ts in [1, 3, 6] %}
+        {% if ts in spi_current %}
+        {% set s = spi_current[ts] %}
+        <span class="spi-badge"
+              style="background:{{ s.colour }};color:#fff;">
+          SPI-{{ ts }}: {{ s.spi }} ({{ s.label }})
+        </span>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Latest bulletin -->
+    <div class="ho-section">
+      <div class="ho-section-title">Latest bulletin</div>
+      {% if latest_bulletin %}
+      <div class="bull-ref">
+        <div>
+          <span style="font-weight:700;">{{ latest_bulletin.title or "Untitled bulletin" }}</span>
+          <span style="font-size:.75rem;color:#6b7280;margin-left:.5rem;">
+            ({{ latest_bulletin.status | title }})
+          </span>
+          {% if latest_bulletin.approved_at %}
+          · {{ latest_bulletin.approved_at.strftime("%d %b %Y") }}
+          {% endif %}
+        </div>
+        <a href="/bulletin/{{ latest_bulletin.id }}"
+           style="font-size:.78rem;color:#4f46e5;white-space:nowrap;text-decoration:none;font-weight:600;">
+          View →
+        </a>
+      </div>
+      {% else %}
+      <p class="ho-empty">No published bulletin on record.</p>
+      {% endif %}
+    </div>
+
+    <!-- Recent impacts -->
+    {% if recent_impacts %}
+    <div class="ho-section">
+      <div class="ho-section-title">Impacts (last 48 h)</div>
+      <div class="impact-row">
+        {% for imp in recent_impacts %}
+        <div class="impact-item">
+          <span class="impact-dot"></span>
+          <span style="font-weight:600;">{{ imp.event_name }}</span>
+          <span style="font-size:.75rem;color:#9ca3af;">
+            {{ imp.hazard_type }} · {{ imp.country }}
+            {% if imp.affected_population %} · {{ "{:,}".format(imp.affected_population) }} affected{% endif %}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Handover notes -->
+    <div class="ho-section">
+      <div class="ho-section-title">Handover notes</div>
+      <textarea id="handover-notes" class="notes-area"
+                placeholder="Key observations, pending actions, data gaps, instructions for incoming shift…"></textarea>
+    </div>
+
+  </div><!-- end .handover-card -->
+</div>
+
+<script>
+function copyText() {
+  var outgoing = document.getElementById('outgoing-name').value || '(unspecified)';
+  var incoming = document.getElementById('incoming-name').value || '(unspecified)';
+  var time     = document.getElementById('handover-time').value || '{{ generated_at.strftime("%H:%M UTC") }}';
+  var notes    = document.getElementById('handover-notes').value;
+
+  var lines = [
+    '=== IBF Shift Handover ===',
+    'Date: {{ generated_at.strftime("%d %b %Y, %H:%M UTC") }}',
+    'Warning level: {{ wmo.wmo_name | upper }}',
+    'Outgoing: ' + outgoing + '  →  Incoming: ' + incoming + '  (' + time + ')',
+    '',
+    'STATUS',
+    '  Active triggers: {{ active_triggers | length }}',
+    '  Activations (24h): {{ recent_activations | length }}',
+    '  Unverified activations: {{ n_unverified }}',
+    '  Latest forecast: {% if latest_forecast %}{{ latest_forecast.uploaded_at.strftime("%d %b") }} ({{ latest_forecast.source }}){% else %}None{% endif %}',
+    '',
+  ];
+
+  {% if recent_activations %}
+  lines.push('RECENT ACTIVATIONS (24h)');
+  {% for a in recent_activations %}
+  lines.push('  {{ a.triggered_at.strftime("%H:%M") }} - {% if a.trigger %}{{ a.trigger.name }}{% else %}#{{ a.trigger_id }}{% endif %} ({{ a.value | round(2) }} mm)');
+  {% endfor %}
+  lines.push('');
+  {% endif %}
+
+  {% if spi_current %}
+  lines.push('SPI DROUGHT INDICATORS');
+  {% for ts in [1, 3, 6] %}
+  {% if ts in spi_current %}
+  lines.push('  SPI-{{ ts }}: {{ spi_current[ts].spi }} ({{ spi_current[ts].label }})');
+  {% endif %}
+  {% endfor %}
+  lines.push('');
+  {% endif %}
+
+  {% if latest_bulletin %}
+  lines.push('LATEST BULLETIN: {{ latest_bulletin.title or "Untitled" }} ({{ latest_bulletin.status }})');
+  lines.push('');
+  {% endif %}
+
+  if (notes) {
+    lines.push('NOTES');
+    lines.push(notes);
+  }
+
+  navigator.clipboard.writeText(lines.join('\n'))
+    .then(function() { alert('Copied to clipboard!'); })
+    .catch(function() { alert('Copy failed — please select and copy manually.'); });
+}
+</script>
+{% endblock %}
+
+{% block extra_scripts %}{% include '_wmo_badge.html' %}{% endblock %}
