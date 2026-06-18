@@ -9,6 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.i18n import (
+    SUPPORTED_LANGUAGES,
+    build_drought_status,
+    build_impact_summary,
+    get_translations,
+)
 from app.core.spi import TIMESCALES, spi_category
 from app.models.bulletin_schedule import BulletinSchedule, BulletinSubscriber
 from app.models.forecast import ForecastUpload
@@ -33,6 +39,7 @@ async def _build_bulletin_context(
     days: int,
     title: str = "",
     username: str = "Scheduled",
+    lang: str = "en",
 ) -> dict:
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(days=days)
@@ -110,25 +117,28 @@ async def _build_bulletin_context(
     )
     last_obs = last_obs_r.scalar_one_or_none()
 
-    drought_status = "No active drought signal"
+    T = get_translations(lang)
+
+    drought_status = T["drought_no_signal"]
     worst_spi = None
+    worst_ts = None
     for ts in [6, 3, 1]:
         if ts in spi_current and spi_current[ts]["spi"] <= -1.0:
             worst_spi = spi_current[ts]
+            worst_ts = ts
             break
-    if worst_spi:
-        drought_status = (
-            f"SPI-{ts} indicates {worst_spi['label'].lower()} conditions "
-            f"({worst_spi['spi']:+.2f}) as of "
-            f"{worst_spi['month_name']} {worst_spi['year']}."
+    if worst_spi and worst_ts:
+        drought_status = build_drought_status(
+            T, worst_ts, worst_spi["spi"],
+            worst_spi["label"], worst_spi["month_name"], worst_spi["year"],
         )
 
     n_impacts = len(recent_impacts)
-    impact_summary = (
-        f"{n_impacts} impact event{'s' if n_impacts != 1 else ''} recorded in the past {days} days"
-        + (f", affecting {total_affected:,} people" if total_affected else "")
-        + "."
-    )
+    impact_summary = build_impact_summary(T, n_impacts, days, total_affected)
+
+    days_window_str = T["days_window"].format(n=days)
+    impacts_section_title = f"{T['impacts_section']} ({days_window_str})"
+    no_impacts_msg = f"{T['no_impacts_prefix']} {days_window_str}."
 
     bulletin_title = title.strip() or f"IBF-SLM Situational Bulletin — {now.strftime('%B %Y')}"
 
@@ -140,6 +150,8 @@ async def _build_bulletin_context(
         "now": now,
         "days": days,
         "source": source,
+        "lang": lang,
+        "T": T,
         "bulletin_title": bulletin_title,
         "spi_current": spi_current,
         "latest_seasonal": latest_seasonal,
@@ -154,6 +166,9 @@ async def _build_bulletin_context(
         "last_obs": last_obs,
         "drought_status": drought_status,
         "impact_summary": impact_summary,
+        "impacts_section_title": impacts_section_title,
+        "no_impacts_msg": no_impacts_msg,
+        "supported_languages": SUPPORTED_LANGUAGES,
     }
 
 
@@ -176,7 +191,11 @@ async def bulletin_form(request: Request, db: AsyncSession = Depends(get_db)):
 
     return templates.TemplateResponse(
         request, "bulletin_form.html",
-        {"user": user, "spi_sources": spi_sources},
+        {
+            "user": user,
+            "spi_sources": spi_sources,
+            "supported_languages": SUPPORTED_LANGUAGES,
+        },
     )
 
 
@@ -188,13 +207,14 @@ async def bulletin_generate(
     source: str = "CHIRPS",
     days: int = 30,
     title: str = "",
+    lang: str = "en",
     db: AsyncSession = Depends(get_db),
 ):
     user = await get_current_user(request, db)
     if not user:
         return RedirectResponse("/login", status_code=303)
 
-    ctx = await _build_bulletin_context(db, source, days, title, username=user.username)
+    ctx = await _build_bulletin_context(db, source, days, title, username=user.username, lang=lang)
     ctx["user"] = user  # real user object for the route response
     return templates.TemplateResponse(request, "bulletin.html", ctx)
 
@@ -206,6 +226,7 @@ async def bulletin_print(
     request: Request,
     source: str = "",
     days: int = 7,
+    lang: str = "en",
     db: AsyncSession = Depends(get_db),
 ):
     user = await get_current_user(request, db)
@@ -213,7 +234,7 @@ async def bulletin_print(
         return RedirectResponse("/login", status_code=303)
 
     # Build the same context as bulletin_generate but return a print view
-    ctx = await _build_bulletin_context(db, source or "CHIRPS", days)
+    ctx = await _build_bulletin_context(db, source or "CHIRPS", days, lang=lang)
     bulletin_html = _render_bulletin_html(ctx)
 
     # Wrap in a print-optimized page

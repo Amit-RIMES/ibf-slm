@@ -110,6 +110,16 @@
         <div class="hint">Leave blank to auto-generate from current month</div>
       </div>
 
+      <div class="form-group">
+        <label>Language</label>
+        <select name="lang">
+          {% for code, name in supported_languages.items() %}
+          <option value="{{ code }}" {% if code == 'en' %}selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </select>
+        <div class="hint">Translates all fixed-text labels in the bulletin</div>
+      </div>
+
       <button type="submit" class="btn-submit">Generate Bulletin →</button>
     </form>
     <div style="margin-top:1rem;text-align:center;">

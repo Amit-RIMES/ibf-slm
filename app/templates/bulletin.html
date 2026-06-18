@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -167,7 +167,7 @@
     <a href="/dashboard">Dashboard</a>
   </div>
   <div style="display:flex;align-items:center;gap:.6rem;">
-    <a href="/bulletin/print?source={{ source }}&amp;days={{ days }}"
+    <a href="/bulletin/print?source={{ source }}&amp;days={{ days }}&amp;lang={{ lang }}"
        target="_blank"
        style="display:inline-flex;align-items:center;gap:.4rem;
               padding:.5rem 1.1rem;background:#fff;border:1px solid #d1d5db;
@@ -186,26 +186,26 @@
     <div class="org">Index-Based Forecasting — Slow-onset Livelihood Monitoring (IBF-SLM)</div>
     <h1>{{ bulletin_title }}</h1>
     <div class="meta">
-      <span><strong>Issued:</strong> {{ now.strftime('%d %B %Y, %H:%M') }} UTC</span>
-      <span><strong>Data source:</strong> {{ source }}</span>
-      <span><strong>Reporting window:</strong> Last {{ days }} days</span>
-      <span><strong>Prepared by:</strong> {{ user.username }}</span>
+      <span><strong>{{ T.issued }}:</strong> {{ now.strftime('%d %B %Y, %H:%M') }} UTC</span>
+      <span><strong>{{ T.source }}:</strong> {{ source }}</span>
+      <span><strong>{{ T.valid_period }}:</strong> {{ T.no_impacts_prefix }} {{ days }} {{ T.days_label }}</span>
+      <span><strong>{{ T.issued_by }}:</strong> {{ user.username }}</span>
     </div>
   </div>
 
   <!-- ── Executive summary ──────────────────────────────────────────────── -->
   <div class="exec-box">
-    <strong>Summary:</strong>
+    <strong>{{ T.summary_label }}:</strong>
     {{ drought_status }}
     {{ impact_summary }}
     {% if n_unacknowledged > 0 %}
-    {{ n_unacknowledged }} trigger alert{{ 's' if n_unacknowledged != 1 }} currently unacknowledged.
+    {{ n_unacknowledged }} {{ T.unacknowledged_note }}
     {% endif %}
   </div>
 
   <!-- ── SPI Drought Status ─────────────────────────────────────────────── -->
   <div class="section">
-    <div class="section-title">Drought Status — Standardised Precipitation Index (SPI)</div>
+    <div class="section-title">{{ T.drought_section }}</div>
     {% if spi_current %}
     <div class="spi-grid">
       {% for ts in [1, 3, 6] %}
@@ -216,32 +216,32 @@
         <div class="sc-val">{{ '%+.2f' % s.spi }}</div>
         <div class="sc-lbl">{{ s.label }}</div>
         <div class="sc-meta">{{ s.month_name }} {{ s.year }}
-          {% if s.low_confidence %}· low confidence (n={{ s.n_reference }}){% endif %}
+          {% if s.low_confidence %}· {{ T.low_confidence }} (n={{ s.n_reference }}){% endif %}
         </div>
       </div>
       {% else %}
       <div class="spi-card spi-none">
         <div class="sc-scale">SPI-{{ ts }}</div>
         <div class="sc-val" style="font-size:1.2rem;">—</div>
-        <div class="sc-lbl">No data</div>
+        <div class="sc-lbl">{{ T.no_data }}</div>
       </div>
       {% endif %}
       {% endfor %}
     </div>
     {% else %}
-    <p class="no-data">No SPI data available for source {{ source }}.</p>
+    <p class="no-data">{{ T.no_spi_data }} {{ source }}.</p>
     {% endif %}
   </div>
 
   <!-- ── Seasonal Outlook ───────────────────────────────────────────────── -->
   <div class="section">
-    <div class="section-title">Seasonal Outlook</div>
+    <div class="section-title">{{ T.seasonal_section }}</div>
     {% if latest_seasonal %}
     {% set sf = latest_seasonal %}
     <table style="margin-bottom:.75rem;">
       <tr>
-        <th>Source</th><th>Issued</th><th>Valid Period</th>
-        <th>Variable</th><th>Region</th>
+        <th>{{ T.source }}</th><th>{{ T.issued }}</th><th>{{ T.valid_period }}</th>
+        <th>{{ T.variable }}</th><th>{{ T.region }}</th>
       </tr>
       <tr>
         <td><strong>{{ sf.source }}</strong></td>
@@ -258,14 +258,14 @@
       <div class="tb-above" style="flex:{{ sf.above_normal_pct }}">{{ sf.above_normal_pct|int }}%</div>
     </div>
     <div class="tercile-legend">
-      <div class="tl-item"><div class="tl-sw" style="background:#ef4444"></div> Below Normal</div>
-      <div class="tl-item"><div class="tl-sw" style="background:#9ca3af"></div> Near Normal</div>
-      <div class="tl-item"><div class="tl-sw" style="background:#22c55e"></div> Above Normal</div>
+      <div class="tl-item"><div class="tl-sw" style="background:#ef4444"></div> {{ T.below_normal }}</div>
+      <div class="tl-item"><div class="tl-sw" style="background:#9ca3af"></div> {{ T.near_normal }}</div>
+      <div class="tl-item"><div class="tl-sw" style="background:#22c55e"></div> {{ T.above_normal }}</div>
     </div>
     {% endif %}
     {% if sf.precip_anomaly_pct is not none %}
     <p style="margin-top:.6rem;font-size:.82rem;color:#374151;">
-      Precipitation anomaly: <strong>{{ sf.precip_anomaly_pct|int }}% of climatological normal</strong>
+      {{ T.precip_anomaly }}: <strong>{{ sf.precip_anomaly_pct|int }}% {{ T.of_climatological_normal }}</strong>
     </p>
     {% endif %}
     {% if sf.notes %}
@@ -275,69 +275,70 @@
       <a href="/seasonal/{{ sf.id }}" style="color:#4f46e5;">View full detail →</a>
     </p>
     {% else %}
-    <p class="no-data">No seasonal outlook recorded. <a href="/seasonal/new" style="color:#4f46e5;">Add one</a>.</p>
+    <p class="no-data">{{ T.no_seasonal }} <a href="/seasonal/new" style="color:#4f46e5;">{{ T.add_one }}</a>.</p>
     {% endif %}
   </div>
 
   <!-- ── 15-Day Forecast ────────────────────────────────────────────────── -->
   <div class="section">
-    <div class="section-title">Latest 15-Day Precipitation Forecast</div>
+    <div class="section-title">{{ T.forecast_section }}</div>
     {% if latest_forecast %}
     {% set fc = latest_forecast %}
     <div class="fc-grid">
       <div class="fc-box">
         <div class="fv">{{ '%.1f' % fc.precip_mean }} mm</div>
-        <div class="fl">Mean precip</div>
+        <div class="fl">{{ T.mean_precip }}</div>
       </div>
       <div class="fc-box">
         <div class="fv">{{ '%.1f' % fc.precip_max }} mm</div>
-        <div class="fl">Max precip</div>
+        <div class="fl">{{ T.max_precip }}</div>
       </div>
       <div class="fc-box">
         <div class="fv">{{ '%.1f' % fc.precip_min }} mm</div>
-        <div class="fl">Min precip</div>
+        <div class="fl">{{ T.min_precip }}</div>
       </div>
       <div class="fc-box">
         <div class="fv">{{ fc.source or '—' }}</div>
-        <div class="fl">Source</div>
+        <div class="fl">{{ T.source }}</div>
       </div>
     </div>
     <p style="font-size:.75rem;color:#9ca3af;margin-top:.6rem;">
-      Uploaded {{ fc.uploaded_at.strftime('%d %b %Y %H:%M') if fc.uploaded_at else '—' }} UTC
+      {{ T.uploaded }} {{ fc.uploaded_at.strftime('%d %b %Y %H:%M') if fc.uploaded_at else '—' }} UTC
       &nbsp;·&nbsp; <a href="/forecasts/{{ fc.id }}" style="color:#4f46e5;">View →</a>
     </p>
     {% if fc.is_anomaly %}
     <div class="alert-warn" style="margin-top:.75rem;">
-      Anomaly detected — this forecast has an anomaly score of {{ '%.2f' % fc.anomaly_score }} (z-score vs recent baseline).
+      {{ T.anomaly_detected }} — {{ T.anomaly_zscore }} {{ '%.2f' % fc.anomaly_score }} (z-score vs recent baseline).
     </div>
     {% endif %}
     {% else %}
-    <p class="no-data">No forecast data available.</p>
+    <p class="no-data">{{ T.no_forecast }}</p>
     {% endif %}
   </div>
 
   <!-- ── Trigger Alerts ────────────────────────────────────────────────── -->
   <div class="section">
-    <div class="section-title">Trigger Alerts</div>
+    <div class="section-title">{{ T.triggers_section }}</div>
     <div class="stat-row">
       <div class="stat-box">
         <div class="sv">{{ active_triggers | length }}</div>
-        <div class="sl">Active triggers</div>
+        <div class="sl">{{ T.active_triggers }}</div>
       </div>
       <div class="stat-box">
         <div class="sv">{{ activation_rows | length }}</div>
-        <div class="sl">Activations ({{ days }}d)</div>
+        <div class="sl">{{ T.activations }} ({{ days }}d)</div>
       </div>
       <div class="stat-box">
         <div class="sv {% if n_unacknowledged > 0 %}status-active{% endif %}">{{ n_unacknowledged }}</div>
-        <div class="sl">Unacknowledged</div>
+        <div class="sl">{{ T.unacknowledged }}</div>
       </div>
     </div>
     {% if activation_rows %}
     <table>
       <thead>
         <tr>
-          <th>Trigger</th><th>Hazard</th><th>Fired</th><th>Status</th>
+          <th>{{ T.trigger_col }}</th><th>{{ T.hazard_col }}</th>
+          <th>{{ T.fired_col }}</th><th>{{ T.status_col }}</th>
         </tr>
       </thead>
       <tbody>
@@ -355,43 +356,45 @@
         {% endfor %}
         {% if activation_rows | length > 10 %}
         <tr><td colspan="4" style="color:#9ca3af;font-size:.78rem;">
-          + {{ (activation_rows | length) - 10 }} more — <a href="/triggers" style="color:#4f46e5;">view all</a>
+          + {{ (activation_rows | length) - 10 }} {{ T.more_label }} — <a href="/triggers" style="color:#4f46e5;">{{ T.view_all }}</a>
         </td></tr>
         {% endif %}
       </tbody>
     </table>
     {% else %}
-    <p class="no-data">No trigger activations in the reporting window.</p>
+    <p class="no-data">{{ T.no_trigger_activations }}</p>
     {% endif %}
   </div>
 
   <!-- ── Recent Impacts ─────────────────────────────────────────────────── -->
   <div class="section">
-    <div class="section-title">Recent Impact Records (last {{ days }} days)</div>
+    <div class="section-title">{{ impacts_section_title }}</div>
     <div class="stat-row">
       <div class="stat-box">
         <div class="sv">{{ recent_impacts | length }}</div>
-        <div class="sl">Events</div>
+        <div class="sl">{{ T.events }}</div>
       </div>
       <div class="stat-box">
         <div class="sv">{{ '{:,}'.format(total_affected) }}</div>
-        <div class="sl">People affected</div>
+        <div class="sl">{{ T.people_affected }}</div>
       </div>
       <div class="stat-box">
         <div class="sv">{{ '{:,}'.format(total_casualties) }}</div>
-        <div class="sl">Casualties</div>
+        <div class="sl">{{ T.casualties }}</div>
       </div>
       <div class="stat-box">
         <div class="sv">{{ '{:,}'.format(total_displaced) }}</div>
-        <div class="sl">Displaced</div>
+        <div class="sl">{{ T.displaced }}</div>
       </div>
     </div>
     {% if recent_impacts %}
     <table>
       <thead>
         <tr>
-          <th>Event</th><th>Date</th><th>Hazard</th><th>Country</th>
-          <th style="text-align:right;">Affected</th><th style="text-align:right;">Casualties</th>
+          <th>{{ T.event_col }}</th><th>{{ T.date_col }}</th>
+          <th>{{ T.hazard_label }}</th><th>{{ T.country_region }}</th>
+          <th style="text-align:right;">{{ T.affected_col }}</th>
+          <th style="text-align:right;">{{ T.casualties_col }}</th>
         </tr>
       </thead>
       <tbody>
@@ -410,7 +413,7 @@
       </tbody>
     </table>
     {% else %}
-    <p class="no-data">No impacts recorded in the reporting window.</p>
+    <p class="no-data">{{ no_impacts_msg }}</p>
     {% endif %}
   </div>
 
@@ -424,12 +427,12 @@
       <tr>
         <td>CHIRPS Observed Rainfall</td>
         <td>{{ last_obs.obs_date if last_obs else '—' }}</td>
-        <td>{% if last_obs %}✓ Available{% else %}<span style="color:#dc2626;">No data</span>{% endif %}</td>
+        <td>{% if last_obs %}✓ Available{% else %}<span style="color:#dc2626;">{{ T.no_data }}</span>{% endif %}</td>
       </tr>
       <tr>
         <td>15-Day Forecast</td>
         <td>{{ latest_forecast.uploaded_at.strftime('%d %b %Y') if latest_forecast and latest_forecast.uploaded_at else '—' }}</td>
-        <td>{% if latest_forecast %}✓ Available{% else %}<span style="color:#dc2626;">No data</span>{% endif %}</td>
+        <td>{% if latest_forecast %}✓ Available{% else %}<span style="color:#dc2626;">{{ T.no_data }}</span>{% endif %}</td>
       </tr>
       <tr>
         <td>Seasonal Outlook</td>
@@ -441,7 +444,7 @@
 
   <!-- ── Footer ─────────────────────────────────────────────────────────── -->
   <div class="footer">
-    <span>IBF-SLM — Index-Based Forecasting / Slow-onset Livelihood Monitoring</span>
+    <span>{{ T.footer_brand }}</span>
     <span>Generated {{ now.strftime('%d %b %Y %H:%M') }} UTC by {{ user.username }}</span>
   </div>
 
