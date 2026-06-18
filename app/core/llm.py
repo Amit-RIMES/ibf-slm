@@ -1,9 +1,9 @@
 """Ollama client and comprehensive DB context builder for the IBF chat assistant.
 
-Default model: qwen2.5:7b (free, no account needed, runs via Ollama locally).
+Default model: gemma4:e4b (free, no account needed, runs via Ollama locally).
 Change via OLLAMA_MODEL in .env. To switch models:
-    ollama pull qwen2.5:7b        # recommended — 8 GB RAM
-    ollama pull gemma3:4b         # lighter — 4 GB RAM
+    ollama pull gemma4:e4b        # recommended — strong reasoning, 4 GB RAM
+    ollama pull qwen2.5:7b        # alternative — strong structured data, 8 GB RAM
     ollama pull phi4              # stronger reasoning — 10 GB RAM
 """
 import calendar
@@ -418,7 +418,7 @@ async def stream_chat(
         "stream": True,
         "options": {
             "temperature": 0.3,     # lower = more factual, less creative
-            "num_ctx": 8192,        # context window — qwen2.5:7b supports up to 32k
+            "num_ctx": 8192,        # context window — gemma4:e4b default; increase for longer contexts
         },
     }
 

@@ -20,10 +20,28 @@
   .messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: .75rem; padding: .5rem 0; min-height: 0; }
   .msg { display: flex; gap: .6rem; align-items: flex-start; }
   .msg.user { flex-direction: row-reverse; }
-  .bubble { max-width: 80%; padding: .65rem .9rem; border-radius: 12px; font-size: .9rem; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
-  .msg.user .bubble { background: #4f46e5; color: #fff; border-bottom-right-radius: 3px; }
+  .bubble { max-width: 80%; padding: .65rem .9rem; border-radius: 12px; font-size: .9rem; line-height: 1.55; word-break: break-word; }
+  .msg.user .bubble { background: #4f46e5; color: #fff; border-bottom-right-radius: 3px; white-space: pre-wrap; }
   .msg.assistant .bubble { background: #f3f4f6; color: #1a1a2e; border-bottom-left-radius: 3px; }
   .msg.error .bubble { background: #fef2f2; color: #dc2626; border-bottom-left-radius: 3px; }
+  /* Markdown output inside assistant bubbles */
+  .msg.assistant .bubble p { margin: .35rem 0; }
+  .msg.assistant .bubble p:first-child { margin-top: 0; }
+  .msg.assistant .bubble p:last-child { margin-bottom: 0; }
+  .msg.assistant .bubble ul, .msg.assistant .bubble ol { padding-left: 1.2rem; margin: .35rem 0; }
+  .msg.assistant .bubble li { margin: .15rem 0; }
+  .msg.assistant .bubble strong { font-weight: 700; }
+  .msg.assistant .bubble em { font-style: italic; }
+  .msg.assistant .bubble code { background: #e5e7eb; border-radius: 3px; padding: .1rem .35rem; font-size: .83rem; font-family: monospace; }
+  .msg.assistant .bubble pre { background: #1e293b; color: #e2e8f0; border-radius: 7px; padding: .7rem .9rem; overflow-x: auto; margin: .4rem 0; }
+  .msg.assistant .bubble pre code { background: none; padding: 0; font-size: .82rem; }
+  .msg.assistant .bubble h1, .msg.assistant .bubble h2, .msg.assistant .bubble h3 { font-weight: 700; margin: .5rem 0 .25rem; }
+  .msg.assistant .bubble blockquote { border-left: 3px solid #6b7280; padding-left: .65rem; color: #6b7280; margin: .35rem 0; }
+  .msg.assistant .bubble table { border-collapse: collapse; font-size: .82rem; margin: .4rem 0; }
+  .msg.assistant .bubble th, .msg.assistant .bubble td { border: 1px solid #d1d5db; padding: .25rem .5rem; }
+  .msg.assistant .bubble th { background: #f3f4f6; font-weight: 700; }
+  [data-theme="dark"] .msg.assistant .bubble code { background: #374151; }
+  [data-theme="dark"] .msg.assistant .bubble th { background: #1e293b; }
   .avatar { width: 2rem; height: 2rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .75rem; font-weight: 700; flex-shrink: 0; margin-top: .1rem; }
   .msg.user .avatar { background: #4f46e5; color: #fff; }
   .msg.assistant .avatar { background: #e0e7ff; color: #4f46e5; }
@@ -212,7 +230,11 @@
             }
             if (!bubble) { typingEl.remove(); bubble = appendMsg('assistant', ''); }
             full += obj.chunk;
-            bubble.textContent = full;
+            if (window.marked) {
+              bubble.innerHTML = marked.parse(full);
+            } else {
+              bubble.textContent = full;
+            }
             messagesEl.scrollTop = messagesEl.scrollHeight;
           } catch (_) {}
         }
@@ -259,4 +281,5 @@
   });
 })();
 </script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 {% endblock %}

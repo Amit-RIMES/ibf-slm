@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.station_ingest import parse_csv
+from app.core.station_triggers import evaluate_station_triggers
 from app.models.station import Station, StationObservation
 
 logger = logging.getLogger(__name__)
@@ -226,6 +227,9 @@ async def station_upload_csv(
         inserted += 1
 
     await db.commit()
+    if inserted and rows:
+        latest_date = max(r["obs_date"] for r in rows)
+        await evaluate_station_triggers(db, latest_date)
     msg = f"Imported+{inserted}+observations"
     if skipped:
         msg += f",+{skipped}+skipped+(duplicates)"
@@ -358,6 +362,7 @@ async def station_add_obs(
             is_provisional=bool(is_provisional),
         ))
     await db.commit()
+    await evaluate_station_triggers(db, obs_d)
     return RedirectResponse(f"/stations/{sid}", status_code=303)
 
 

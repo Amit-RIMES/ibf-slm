@@ -30,7 +30,7 @@ from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
 from app.models.trigger import (
     FORECAST_VARIABLES, LOGIC_OPS, OPERATOR_LABELS, OPERATOR_SYMBOLS,
-    OPERATORS, SPI_VARIABLES, VARIABLES,
+    OPERATORS, SPI_VARIABLES, STATION_VARIABLES, VARIABLES,
     Trigger, TriggerActivation, TriggerSubscription,
 )
 from app.models.user import User
@@ -48,6 +48,8 @@ VARIABLE_LABELS = {
     "spi_1": "SPI-1 (1-month drought index)",
     "spi_3": "SPI-3 (3-month drought index)",
     "spi_6": "SPI-6 (6-month drought index)",
+    "station_precip_24h": "Station max precip — 24 h (mm)",
+    "station_precip_48h": "Station max precip — 48 h (mm)",
 }
 
 

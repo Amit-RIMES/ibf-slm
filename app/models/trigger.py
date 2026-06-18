@@ -6,7 +6,8 @@ from app.core.database import Base
 
 FORECAST_VARIABLES = ["precip_mean", "precip_max", "precip_min"]
 SPI_VARIABLES = ["spi_1", "spi_3", "spi_6"]
-VARIABLES = FORECAST_VARIABLES + SPI_VARIABLES
+STATION_VARIABLES = ["station_precip_24h", "station_precip_48h"]
+VARIABLES = FORECAST_VARIABLES + SPI_VARIABLES + STATION_VARIABLES
 OPERATORS = ["gt", "gte", "lt", "lte"]
 OPERATOR_SYMBOLS = {"gt": ">", "gte": "≥", "lt": "<", "lte": "≤"}
 OPERATOR_LABELS = {"gt": "greater than (>)", "gte": "at least (≥)", "lt": "less than (<)", "lte": "at most (≤)"}

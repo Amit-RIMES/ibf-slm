@@ -1,0 +1,22 @@
+[Unit]
+Description=IBF App (FastAPI/Uvicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=ibfapp
+WorkingDirectory=/opt/ibf_app
+EnvironmentFile=/opt/ibf_app/.env
+ExecStart=/opt/ibf_app/.venv/bin/uvicorn app.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 2 \
+    --log-level info
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ibf_app
+
+[Install]
+WantedBy=multi-user.target

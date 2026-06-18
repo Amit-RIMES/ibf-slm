@@ -394,6 +394,34 @@
 </div>
 
 <script>
+(function() {
+  var HO_KEY = 'ibf_handover';
+  var fields = ['outgoing-name', 'incoming-name', 'handover-notes'];
+
+  function saveHandover() {
+    var data = {};
+    fields.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) data[id] = el.value;
+    });
+    try { localStorage.setItem(HO_KEY, JSON.stringify(data)); } catch(_) {}
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(HO_KEY) || '{}');
+      fields.forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el && saved[id] !== undefined) el.value = saved[id];
+      });
+    } catch(_) {}
+    fields.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('input', saveHandover);
+    });
+  });
+})();
+
 function copyText() {
   var outgoing = document.getElementById('outgoing-name').value || '(unspecified)';
   var incoming = document.getElementById('incoming-name').value || '(unspecified)';
