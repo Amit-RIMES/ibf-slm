@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     # Ollama chat assistant
     OLLAMA_HOST: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "llama3.2"
+    OLLAMA_MODEL: str = "qwen2.5:7b"
 
     # CHIRPS observed rainfall ingestion
     CHIRPS_ENABLED: bool = True
