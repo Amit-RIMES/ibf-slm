@@ -1,14 +1,18 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Situation Report — ACT-{{ "%04d"|format(activation.id) }} — IBF-SLM</title>
-  <link rel="stylesheet" href="/static/leaflet.css" />
-  <style>
+{% extends "base.html" %}
+{% block title %}Situation Report — ACT-{{ "%04d"|format(activation.id) }} — IBF-SLM{% endblock %}
+{% block extra_styles %}
+<link rel="stylesheet" href="/static/leaflet.css" />
+<style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', system-ui, sans-serif; font-size: 13px;
       color: #1f2937; background: #f3f4f6; }
+
+    nav { background:#fff;border-bottom:1px solid #e5e7eb;padding:.85rem 2rem;display:flex;align-items:center;justify-content:space-between; }
+  nav .brand { font-weight:700;font-size:1.1rem;color:#4f46e5; }
+  nav .nav-links { display:flex;align-items:center;gap:1.25rem;font-size:.875rem; }
+  nav .nav-links a { color:#6b7280;text-decoration:none; }
+  nav .nav-links a.active { color:#4f46e5;font-weight:600; }
+  nav .nav-links a.logout { color:#dc2626;font-weight:500; }
 
     /* ── Screen toolbar ─────────────────────────────────────── */
     .toolbar {
@@ -146,14 +150,43 @@
     }
     .map-print-note { display: none; font-size: .78rem; color: #6b7280;
       margin-top: .5rem; font-style: italic; }
+  @media print { nav { display: none !important; } }
   </style>
-</head>
-<body>
+{% endblock %}
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/observed">Rainfall Data</a>
+    <a href="/impacts">Impact Reports</a>
+    <a href="/triggers">Warning Rules</a>
+    <a href="/verification">Forecast Accuracy</a>
+    <a href="/alerts">Active Alerts</a>
+    <a href="/stations">Weather Stations</a>
+    <a href="/sync">Data Import</a>
+    <a href="/ecmwf">ECMWF Data</a>
+    <a href="/cds">Climate Data</a>
+    <a href="/glofas">River Forecasts</a>
+    <a href="/drought">Drought Monitor</a>
+    <div class="nav-dropdown"><span class="nav-dropdown-toggle">Risk ▾</span><div class="nav-dropdown-menu"><a href="/risk">Risk Overview</a><a href="/ibf">Risk Matrix</a></div></div>
+    <a href="/map">Alert Map</a>
+    <a href="/return-period">Flood History</a>
+    <a href="/reports/operational">Situation Report</a>
+    <a href="/reports/handover">Shift Handover</a>
+    <a href="/seasonal">Seasonal Outlook</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/chat">AI Assistant</a>
+    <a href="/help">Help</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}{% if user.role == "admin" %}<a href="/admin/sms" style="color:#7c3aed;font-weight:600">SMS</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
 
 <!-- Screen toolbar (hidden when printing) -->
 <div class="toolbar">
   <div class="toolbar-left">
-    <span class="toolbar-brand">IBF-SLM</span>
     <span class="toolbar-crumb">
       <a href="/triggers">Warning Rules</a>
     <a href="/verification">Forecast Accuracy</a> &rsaquo;
@@ -529,5 +562,4 @@
 </script>
 {% endif %}
 
-</body>
-</html>
+{% endblock %}
