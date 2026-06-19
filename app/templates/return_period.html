@@ -86,7 +86,7 @@
     <a href="/risk">Risk Overview</a>
     <a href="/ibf">Risk Matrix</a>
     <a href="/map">Alert Map</a>
-    <a href="/return-period" class="active">Return Periods</a>
+    <a href="/return-period" class="active">Flood History</a>
     <a href="/reports/operational">Situation Report</a>
     <a href="/reports/handover">Shift Handover</a>
     <a href="/seasonal">Seasonal Outlook</a>
@@ -100,8 +100,10 @@
 
 <div class="main">
   <div class="page-header">
-    <h1>Flood Frequency Analysis</h1>
-    <p class="sub" style="color:#6b7280;font-size:.875rem;margin-top:.25rem;margin-bottom:0;">Shows how often extreme rainfall events occur historically. A 25-year event is expected once every 25 years on average.</p>
+    <div>
+      <h1>Flood Frequency Analysis</h1>
+      <p class="sub" style="color:#6b7280;font-size:.875rem;margin-top:.25rem;margin-bottom:0;">Shows how often extreme rainfall events occur historically. A 25-year event is expected once every 25 years on average.</p>
+    </div>
     {% if user.role == "admin" %}
     <form method="post" action="/return-period/compute">
       <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
