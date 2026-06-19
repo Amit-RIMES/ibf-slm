@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ lang | default('en') }}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -353,7 +353,7 @@
   {% block extra_styles %}{% endblock %}
 </head>
 <body>
-  <meta name="csrf-token" content="{{ request.state.csrf_token if request.state.csrf_token is defined else '' }}">
+  <meta name="csrf-token" content="{{ request.state.csrf_token if request is defined else '' }}">
   {% block body %}{% endblock %}
   <button class="dark-toggle" id="dark-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
 
