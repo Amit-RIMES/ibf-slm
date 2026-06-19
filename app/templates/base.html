@@ -45,6 +45,20 @@
     .form-group input:focus { border-color: #4f46e5; }
     .error { color: #dc2626; font-size: .875rem; margin-bottom: 1rem; background: #fef2f2; padding: .6rem .85rem; border-radius: 8px; }
 
+    /* ── Nav bar — consistent across all pages ── */
+    nav .nav-links, nav .user-info {
+      flex-wrap: nowrap !important;
+      overflow-x: auto !important;
+      gap: 1.25rem !important;
+      scrollbar-width: none;
+    }
+    nav .nav-links::-webkit-scrollbar, nav .user-info::-webkit-scrollbar { display: none; }
+    nav .nav-links > a, nav .nav-links > div, nav .nav-links > span,
+    nav .user-info > a, nav .user-info > div, nav .user-info > span {
+      white-space: nowrap !important;
+      flex-shrink: 0 !important;
+    }
+
     /* ── Hamburger button (hidden on desktop) ── */
     .nav-hamburger {
       display: none; background: none; border: 1px solid #e5e7eb; border-radius: 6px;
