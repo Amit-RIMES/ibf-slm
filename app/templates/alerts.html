@@ -85,24 +85,24 @@
   <div class="nav-links">
     <a href="/dashboard">Dashboard</a>
     <a href="/forecasts">Forecasts</a>
-    <a href="/observed">Observed</a>
-    <a href="/impacts">Impacts</a>
-    <a href="/triggers">Triggers</a>
-    <a href="/verification">Verification</a>
+    <a href="/observed">Rainfall Data</a>
+    <a href="/impacts">Impact Reports</a>
+    <a href="/triggers">Warning Rules</a>
+    <a href="/verification">Forecast Accuracy</a>
     <a href="/alerts" class="active">Alerts</a>
-    <a href="/stations">Stations</a>
-    <a href="/sync">Auto-Sync</a>
-    <a href="/ecmwf">ECMWF</a>
-    <a href="/cds">CDS</a>
-    <a href="/glofas">GloFAS</a>
-    <a href="/drought">Drought</a>
-    <a href="/risk">Risk</a>
-    <a href="/ibf">IBF Matrix</a>
-    <a href="/map">Map</a>
-    <a href="/return-period">Return Periods</a>
-    <a href="/reports/operational">Report</a>
-    <a href="/reports/handover">Handover</a>
-    <a href="/seasonal">Seasonal</a>
+    <a href="/stations">Weather Stations</a>
+    <a href="/sync">Data Import</a>
+    <a href="/ecmwf">ECMWF Data</a>
+    <a href="/cds">Climate Data</a>
+    <a href="/glofas">River Forecasts</a>
+    <a href="/drought">Drought Monitor</a>
+    <a href="/risk">Risk Overview</a>
+    <a href="/ibf">Risk Matrix</a>
+    <a href="/map">Alert Map</a>
+    <a href="/return-period">Flood History</a>
+    <a href="/reports/operational">Situation Report</a>
+    <a href="/reports/handover">Shift Handover</a>
+    <a href="/seasonal">Seasonal Outlook</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
     <a href="/help">Help</a>
@@ -114,7 +114,8 @@
 <div class="main">
   <div class="page-header">
     <div>
-      <h1>Alert Map</h1>
+      <h1>Active Weather Alerts</h1>
+      <p class="sub" style="color:#6b7280;font-size:.875rem;margin-top:.25rem;">Weather conditions that have exceeded warning thresholds and may require action.</p>
     </div>
     <div style="display:flex;align-items:center;gap:1.25rem;font-size:.875rem;color:#6b7280;">
       <a href="/alerts/timeline" style="font-size:.875rem;font-weight:600;color:#4f46e5;
@@ -141,7 +142,7 @@
   <!-- Heatmap window selector + toggle -->
   <div class="map-toolbar">
     <span style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9ca3af;">
-      Activation history:
+      Alert history:
     </span>
     {% for d, lbl in [(30,'30d'),(90,'90d'),(365,'1y'),(0,'All')] %}
     <a href="/alerts?heatmap_days={{ d }}"
@@ -150,7 +151,7 @@
     </a>
     {% endfor %}
     <span class="heat-meta">
-      {{ heatmap_total }} activation{{ 's' if heatmap_total != 1 }}
+      {{ heatmap_total }} alert{{ 's' if heatmap_total != 1 }}
       {% if heatmap_days > 0 %}in past {{ heatmap_days }} days{% endif %}
     </span>
     {% if heatmap_total > 0 %}
@@ -169,7 +170,7 @@
   <table>
     <thead>
       <tr>
-        <th>Trigger</th>
+        <th>Warning Rule</th>
         <th>Hazard</th>
         <th>Observed vs Threshold</th>
         <th>Forecast</th>
@@ -203,8 +204,8 @@
   {% else %}
   <div class="empty-state">
     <div class="icon">✅</div>
-    <p>No active trigger alerts right now.</p>
-    <p style="margin-top:.5rem;"><a href="/triggers">Manage triggers</a></p>
+    <p>No active weather alerts right now.</p>
+    <p style="margin-top:.5rem;"><a href="/triggers">Manage warning rules</a></p>
   </div>
   {% endif %}
 </div>
@@ -250,7 +251,7 @@ if (alerts.length) {
         <table style="font-size:.82rem;width:100%;border-collapse:collapse;">
           <tr><td style="color:#9ca3af;padding:.2rem 0;">Observed</td>
               <td style="font-weight:700;color:#dc2626;">${a.value} mm</td></tr>
-          <tr><td style="color:#9ca3af;padding:.2rem 0;">Threshold</td>
+          <tr><td style="color:#9ca3af;padding:.2rem 0;">Warning level</td>
               <td>${a.operator_symbol} ${a.threshold} mm</td></tr>
           <tr><td style="color:#9ca3af;padding:.2rem 0;">Forecast</td>
               <td>${a.forecast_filename}</td></tr>

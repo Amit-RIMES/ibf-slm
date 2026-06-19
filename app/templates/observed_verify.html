@@ -67,17 +67,17 @@
     <a href="/dashboard">Dashboard</a>
     <a href="/forecasts">Forecasts</a>
     <a href="/observed" class="active">Observed</a>
-    <a href="/triggers">Triggers</a>
-    <a href="/verification">Verification</a>
-    <a href="/alerts">Alerts</a>
-    <a href="/drought">Drought</a>
-    <a href="/risk">Risk</a>
-    <a href="/ibf">IBF Matrix</a>
-    <a href="/map">Map</a>
-    <a href="/return-period">Return Periods</a>
-    <a href="/reports/operational">Report</a>
-    <a href="/reports/handover">Handover</a>
-    <a href="/seasonal">Seasonal</a>
+    <a href="/triggers">Warning Rules</a>
+    <a href="/verification">Forecast Accuracy</a>
+    <a href="/alerts">Active Alerts</a>
+    <a href="/drought">Drought Monitor</a>
+    <a href="/risk">Risk Overview</a>
+    <a href="/ibf">Risk Matrix</a>
+    <a href="/map">Alert Map</a>
+    <a href="/return-period">Flood History</a>
+    <a href="/reports/operational">Situation Report</a>
+    <a href="/reports/handover">Shift Handover</a>
+    <a href="/seasonal">Seasonal Outlook</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
     <a href="/help">Help</a>
@@ -89,7 +89,7 @@
 <div class="main">
   <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:.75rem; margin-bottom:1.25rem;">
     <div>
-      <h1>Forecast Verification</h1>
+      <h1>Forecast Accuracy</h1>
       <div class="sub">Comparing ECMWF forecasts against CHIRPS observed rainfall</div>
     </div>
     <a href="/observed" style="padding:.45rem 1rem; border:1px solid #d1d5db; border-radius:8px;
@@ -177,7 +177,7 @@
   <!-- Time series chart -->
   {% if pairs %}
   <div class="card">
-    <div class="chart-title">Forecast vs Observed — daily mean precipitation</div>
+    <div class="chart-title">Forecast vs Observed — daily average rainfallitation</div>
     <canvas id="verifyChart" height="70"></canvas>
   </div>
 

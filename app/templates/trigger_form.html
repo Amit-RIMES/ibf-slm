@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{% if trigger %}Edit Trigger{% else %}New Trigger{% endif %} — IBF App{% endblock %}
+{% block title %}{% if trigger %}Edit Warning Rule{% else %}New Warning Rule{% endif %} — IBF App{% endblock %}
 
 {% block extra_styles %}
 <style>
@@ -75,24 +75,24 @@
   <div class="nav-links">
     <a href="/dashboard">Dashboard</a>
     <a href="/forecasts">Forecasts</a>
-    <a href="/observed">Observed</a>
-    <a href="/impacts">Impacts</a>
+    <a href="/observed">Rainfall Data</a>
+    <a href="/impacts">Impact Reports</a>
     <a href="/triggers" class="active">Triggers</a>
-    <a href="/verification">Verification</a>
-    <a href="/alerts">Alerts</a>
-    <a href="/stations">Stations</a>
-    <a href="/sync">Auto-Sync</a>
-    <a href="/ecmwf">ECMWF</a>
-    <a href="/cds">CDS</a>
-    <a href="/glofas">GloFAS</a>
-    <a href="/drought">Drought</a>
-    <a href="/risk">Risk</a>
-    <a href="/ibf">IBF Matrix</a>
-    <a href="/map">Map</a>
-    <a href="/return-period">Return Periods</a>
-    <a href="/reports/operational">Report</a>
-    <a href="/reports/handover">Handover</a>
-    <a href="/seasonal">Seasonal</a>
+    <a href="/verification">Forecast Accuracy</a>
+    <a href="/alerts">Active Alerts</a>
+    <a href="/stations">Weather Stations</a>
+    <a href="/sync">Data Import</a>
+    <a href="/ecmwf">ECMWF Data</a>
+    <a href="/cds">Climate Data</a>
+    <a href="/glofas">River Forecasts</a>
+    <a href="/drought">Drought Monitor</a>
+    <a href="/risk">Risk Overview</a>
+    <a href="/ibf">Risk Matrix</a>
+    <a href="/map">Alert Map</a>
+    <a href="/return-period">Flood History</a>
+    <a href="/reports/operational">Situation Report</a>
+    <a href="/reports/handover">Shift Handover</a>
+    <a href="/seasonal">Seasonal Outlook</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
     <a href="/help">Help</a>
@@ -102,8 +102,8 @@
 </nav>
 
 <div class="main">
-  <h1>{% if trigger %}Edit Trigger{% else %}New Trigger{% endif %}</h1>
-  <p class="sub">{% if trigger %}Update the threshold rule for this trigger.{% else %}Define a threshold rule — it will be evaluated automatically whenever a new forecast is uploaded.{% endif %}</p>
+  <h1>{% if trigger %}Edit Warning Rule{% else %}New Warning Rule{% endif %}</h1>
+  <p class="sub">Set the conditions that will trigger an automatic alert.</p>
 
   {% if error %}
   <div class="error">{{ error }}</div>
@@ -112,7 +112,7 @@
   <form method="post" action="{% if trigger and trigger.id %}/triggers/{{ trigger.id }}/edit{% else %}/triggers/new{% endif %}">
     <div class="card">
       <div class="form-group">
-        <label>Trigger name</label>
+        <label>Rule name</label>
         <input type="text" name="name" placeholder="e.g. East Africa Heavy Rain Alert" required
           value="{{ trigger.name if trigger else '' }}" />
       </div>
@@ -127,9 +127,9 @@
         </select>
       </div>
 
-      <div class="section-heading">Threshold Rule</div>
+      <div class="section-heading">Warning Level Rule</div>
       <p style="font-size:.85rem; color:#6b7280; margin-bottom:1rem;" id="rule-desc">
-        Trigger fires when the selected statistic crosses the threshold.
+        Alert fires when the selected statistic crosses the warning level.
       </p>
 
       <div class="grid-3">
@@ -150,7 +150,7 @@
           </select>
         </div>
         <div class="form-group">
-          <label>Operator</label>
+          <label>Condition</label>
           <select name="operator" id="sel-op" required>
             <option value="" disabled {% if not trigger %}selected{% endif %}>Select…</option>
             {% for op in operators %}
@@ -159,19 +159,19 @@
           </select>
         </div>
         <div class="form-group">
-          <label id="lbl-threshold">Threshold (mm)</label>
+          <label id="lbl-threshold">Warning level (threshold)</label>
           <input type="number" step="any" name="threshold" id="inp-threshold" placeholder="e.g. 50" required
             value="{{ trigger.threshold if trigger else '' }}" />
         </div>
       </div>
 
       <div class="rule-preview" id="rule-preview">
-        Fire when <strong id="preview-text"></strong>
+        Alert fires when <strong id="preview-text"></strong>
       </div>
 
       <div class="section-heading">Probabilistic Mode (optional)</div>
       <p style="font-size:.85rem; color:#6b7280; margin-bottom:.75rem;">
-        For ensemble forecasts: fire when the probability that the variable exceeds the threshold
+        For ensemble forecasts: issue alert when the probability that the variable exceeds the warning level
         meets or exceeds a minimum probability (e.g. 0.7 = at least 70% of ensemble members).
         Ignored for deterministic forecasts.
       </p>
@@ -230,7 +230,7 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Operator</label>
+            <label>Condition</label>
             <select name="cond2_operator" id="sel-op2">
               <option value="">Select…</option>
               {% for op in operators %}
@@ -239,7 +239,7 @@
             </select>
           </div>
           <div class="form-group">
-            <label>Threshold (mm)</label>
+            <label>Warning level (threshold)</label>
             <input type="number" step="any" name="cond2_threshold" id="inp-threshold2"
               placeholder="e.g. 30"
               value="{{ trigger.condition_2_threshold if trigger and trigger.condition_2_threshold is not none else '' }}" />
@@ -304,16 +304,16 @@
 
       <div class="section-heading">Response Plan / SOP</div>
       <p style="font-size:.85rem; color:#6b7280; margin-bottom:.75rem;">
-        Optional standard operating procedure shown on the trigger detail page when this trigger fires.
+        Optional standard operating procedure shown on the warning rule detail page when this alert fires.
       </p>
       <div class="form-group">
         <textarea name="response_plan" rows="5"
-          placeholder="Describe the response actions to take when this trigger is activated…"
+          placeholder="Describe the response actions to take when this alert fires…"
           style="width:100%;padding:.65rem .9rem;border:1px solid #d1d5db;border-radius:8px;font-size:.9rem;font-family:inherit;resize:vertical;">{{ trigger.response_plan if trigger and trigger.response_plan else '' }}</textarea>
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="btn-submit">{% if trigger %}Save Changes{% else %}Create Trigger{% endif %}</button>
+        <button type="submit" class="btn-submit">{% if trigger %}Save Changes{% else %}Create Warning Rule{% endif %}</button>
         <a href="{% if trigger %}/triggers/{{ trigger.id }}{% else %}/triggers{% endif %}" class="btn-cancel">Cancel</a>
       </div>
     </div>
@@ -338,17 +338,17 @@
 
   function onVarChange() {
     if (isSpi()) {
-      lblThreshold.textContent = 'SPI threshold';
+      lblThreshold.textContent = 'Warning level (Drought Index)';
       inpThreshold.placeholder = 'e.g. -1.5';
       inpThreshold.removeAttribute('min');
-      ruleDesc.textContent = 'Trigger fires when the drought index crosses the SPI threshold. Typical: SPI < -1.0 (moderate drought), < -1.5 (severe), < -2.0 (extreme).';
+      ruleDesc.textContent = 'Alert fires when the drought index crosses the warning level. Typical: below -1.0 (moderate drought), -1.5 (severe), -2.0 (extreme).';
       probBox.classList.add('hidden');
       if (probChk) probChk.checked = false;
     } else {
-      lblThreshold.textContent = 'Threshold (mm)';
+      lblThreshold.textContent = 'Warning level (mm)';
       inpThreshold.placeholder = 'e.g. 50';
       inpThreshold.min = '0';
-      ruleDesc.textContent = 'Trigger fires when the selected forecast statistic crosses the threshold.';
+      ruleDesc.textContent = 'Alert fires when the selected forecast statistic crosses the warning level.';
       probBox.classList.remove('hidden');
     }
     updatePreview();

@@ -70,24 +70,24 @@
   <div class="nav-links">
     <a href="/dashboard">Dashboard</a>
     <a href="/forecasts" class="active">Forecasts</a>
-    <a href="/observed">Observed</a>
-    <a href="/impacts">Impacts</a>
-    <a href="/triggers">Triggers</a>
-    <a href="/verification">Verification</a>
-    <a href="/alerts">Alerts</a>
-    <a href="/stations">Stations</a>
-    <a href="/sync">Auto-Sync</a>
-    <a href="/ecmwf">ECMWF</a>
-    <a href="/cds">CDS</a>
-    <a href="/glofas">GloFAS</a>
-    <a href="/drought">Drought</a>
-    <a href="/risk">Risk</a>
-    <a href="/ibf">IBF Matrix</a>
-    <a href="/map">Map</a>
-    <a href="/return-period">Return Periods</a>
-    <a href="/reports/operational">Report</a>
-    <a href="/reports/handover">Handover</a>
-    <a href="/seasonal">Seasonal</a>
+    <a href="/observed">Rainfall Data</a>
+    <a href="/impacts">Impact Reports</a>
+    <a href="/triggers">Warning Rules</a>
+    <a href="/verification">Forecast Accuracy</a>
+    <a href="/alerts">Active Alerts</a>
+    <a href="/stations">Weather Stations</a>
+    <a href="/sync">Data Import</a>
+    <a href="/ecmwf">ECMWF Data</a>
+    <a href="/cds">Climate Data</a>
+    <a href="/glofas">River Forecasts</a>
+    <a href="/drought">Drought Monitor</a>
+    <a href="/risk">Risk Overview</a>
+    <a href="/ibf">Risk Matrix</a>
+    <a href="/map">Alert Map</a>
+    <a href="/return-period">Flood History</a>
+    <a href="/reports/operational">Situation Report</a>
+    <a href="/reports/handover">Shift Handover</a>
+    <a href="/seasonal">Seasonal Outlook</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
     <a href="/help">Help</a>
@@ -102,7 +102,10 @@
     <a href="/forecasts/drift" style="padding:.45rem 1rem;border-radius:7px;font-size:.875rem;font-weight:600;color:#6b7280;border:1px solid #e5e7eb;text-decoration:none;">Drift Analysis</a>
   </div>
   <div class="page-header">
-    <h1>Forecasts</h1>
+    <div>
+      <h1>Weather Forecasts</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:.25rem 0 1.25rem;">Uploaded weather forecast files from ECMWF and regional sources. Each file contains rainfall predictions for the forecast period.</p>
+    </div>
     <div style="display:flex;gap:.6rem;align-items:center;">
       <a href="/forecasts/calendar"
          style="font-size:.85rem;font-weight:600;color:#6b7280;border:1px solid #d1d5db;
@@ -153,7 +156,7 @@
           <th>Uploaded</th>
           <th>Time range</th>
           <th>Steps</th>
-          <th>Mean precip (mm)</th>
+          <th>Avg. Rainfall (mm)</th>
           <th>Spatial extent</th>
           <th></th>
         </tr>

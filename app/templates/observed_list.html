@@ -67,23 +67,23 @@
     <a href="/dashboard">Dashboard</a>
     <a href="/forecasts">Forecasts</a>
     <a href="/observed" class="active">Observed</a>
-    <a href="/impacts">Impacts</a>
-    <a href="/triggers">Triggers</a>
-    <a href="/verification">Verification</a>
-    <a href="/alerts">Alerts</a>
-    <a href="/stations">Stations</a>
-    <a href="/sync">Auto-Sync</a>
-    <a href="/ecmwf">ECMWF</a>
-    <a href="/cds">CDS</a>
-    <a href="/glofas">GloFAS</a>
-    <a href="/drought">Drought</a>
-    <a href="/risk">Risk</a>
-    <a href="/ibf">IBF Matrix</a>
-    <a href="/map">Map</a>
-    <a href="/return-period">Return Periods</a>
-    <a href="/reports/operational">Report</a>
-    <a href="/reports/handover">Handover</a>
-    <a href="/seasonal">Seasonal</a>
+    <a href="/impacts">Impact Reports</a>
+    <a href="/triggers">Warning Rules</a>
+    <a href="/verification">Forecast Accuracy</a>
+    <a href="/alerts">Active Alerts</a>
+    <a href="/stations">Weather Stations</a>
+    <a href="/sync">Data Import</a>
+    <a href="/ecmwf">ECMWF Data</a>
+    <a href="/cds">Climate Data</a>
+    <a href="/glofas">River Forecasts</a>
+    <a href="/drought">Drought Monitor</a>
+    <a href="/risk">Risk Overview</a>
+    <a href="/ibf">Risk Matrix</a>
+    <a href="/map">Alert Map</a>
+    <a href="/return-period">Flood History</a>
+    <a href="/reports/operational">Situation Report</a>
+    <a href="/reports/handover">Shift Handover</a>
+    <a href="/seasonal">Seasonal Outlook</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
     <a href="/help">Help</a>
@@ -95,8 +95,8 @@
 <div class="main">
   <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:.75rem; margin-bottom:1.25rem;">
     <div>
-      <h1>Observed Rainfall</h1>
-      <div class="sub">CHIRPS v2.0 daily observed precipitation — SE Asia / South Asia region</div>
+      <h1>Rainfall Data</h1>
+      <div class="sub">Daily observed rainfall records from CHIRPS satellite rainfall data and manual station uploads.</div>
     </div>
     <div style="display:flex; gap:.6rem; flex-wrap:wrap; align-items:center;">
       <a href="/observed/calendar" class="btn btn-outline">Calendar view</a>
@@ -157,7 +157,7 @@
 
   {% if chart_data %}
   <div class="card">
-    <div class="chart-title">Daily mean precipitation — last {{ chart_data | length }} days (mm)</div>
+    <div class="chart-title">Daily average rainfall — last {{ chart_data | length }} days (mm)</div>
     <canvas id="obsChart" height="60"></canvas>
   </div>
   {% endif %}

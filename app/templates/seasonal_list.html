@@ -73,23 +73,23 @@
   <div class="nav-links">
     <a href="/dashboard">Dashboard</a>
     <a href="/forecasts">Forecasts</a>
-    <a href="/observed">Observed</a>
-    <a href="/impacts">Impacts</a>
-    <a href="/triggers">Triggers</a>
-    <a href="/verification">Verification</a>
-    <a href="/alerts">Alerts</a>
-    <a href="/stations">Stations</a>
-    <a href="/sync">Auto-Sync</a>
-    <a href="/ecmwf">ECMWF</a>
-    <a href="/cds">CDS</a>
-    <a href="/glofas">GloFAS</a>
-    <a href="/drought">Drought</a>
-    <a href="/risk">Risk</a>
-    <a href="/ibf">IBF Matrix</a>
-    <a href="/map">Map</a>
-    <a href="/return-period">Return Periods</a>
-    <a href="/reports/operational">Report</a>
-    <a href="/reports/handover">Handover</a>
+    <a href="/observed">Rainfall Data</a>
+    <a href="/impacts">Impact Reports</a>
+    <a href="/triggers">Warning Rules</a>
+    <a href="/verification">Forecast Accuracy</a>
+    <a href="/alerts">Active Alerts</a>
+    <a href="/stations">Weather Stations</a>
+    <a href="/sync">Data Import</a>
+    <a href="/ecmwf">ECMWF Data</a>
+    <a href="/cds">Climate Data</a>
+    <a href="/glofas">River Forecasts</a>
+    <a href="/drought">Drought Monitor</a>
+    <a href="/risk">Risk Overview</a>
+    <a href="/ibf">Risk Matrix</a>
+    <a href="/map">Alert Map</a>
+    <a href="/return-period">Flood History</a>
+    <a href="/reports/operational">Situation Report</a>
+    <a href="/reports/handover">Shift Handover</a>
     <a href="/seasonal" class="active">Seasonal</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
@@ -101,7 +101,10 @@
 
 <div class="main">
   <div class="page-header">
-    <h1>Seasonal Forecasts</h1>
+    <div>
+      <h1>Seasonal Outlook</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:.25rem 0 1.25rem;">3–6 month rainfall outlooks showing probability of below-normal, near-normal, or above-normal rainfall.</p>
+    </div>
     {% if user.role == "admin" %}
     <a href="/seasonal/new" class="btn-new">+ New Outlook</a>
     {% endif %}

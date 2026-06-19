@@ -248,23 +248,23 @@
   <span class="brand">IBF App</span>
   <div class="nav-links">
     <a href="/forecasts">Forecasts</a>
-    <a href="/observed">Observed</a>
-    <a href="/impacts">Impacts</a>
-    <a href="/triggers">Triggers</a>
-    <a href="/verification">Verification</a>
-    <a href="/alerts">Alerts</a>
-    <a href="/stations">Stations</a>
-    <a href="/sync">Auto-Sync</a>
-    <a href="/ecmwf">ECMWF</a>
-    <a href="/cds">CDS</a>
-    <a href="/glofas">GloFAS</a>
-    <a href="/drought">Drought</a>
-    <a href="/risk">Risk</a>
+    <a href="/observed">Rainfall Data</a>
+    <a href="/impacts">Impact Reports</a>
+    <a href="/triggers">Warning Rules</a>
+    <a href="/verification">Forecast Accuracy</a>
+    <a href="/alerts">Active Alerts</a>
+    <a href="/stations">Weather Stations</a>
+    <a href="/sync">Data Import</a>
+    <a href="/ecmwf">ECMWF Data</a>
+    <a href="/cds">Climate Data</a>
+    <a href="/glofas">River Forecasts</a>
+    <a href="/drought">Drought Monitor</a>
+    <a href="/risk">Risk Overview</a>
     <a href="/ibf" class="active">IBF Matrix</a>
-    <a href="/return-period">Return Periods</a>
-    <a href="/reports/operational">Report</a>
-    <a href="/reports/handover">Handover</a>
-    <a href="/seasonal">Seasonal</a>
+    <a href="/return-period">Flood History</a>
+    <a href="/reports/operational">Situation Report</a>
+    <a href="/reports/handover">Shift Handover</a>
+    <a href="/seasonal">Seasonal Outlook</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
     <a href="/help">Help</a>
@@ -277,9 +277,9 @@
 
   <!-- Header -->
   <div class="page-header">
-    <div class="page-title">Impact-Based Forecasting Matrix</div>
+    <div class="page-title">Risk Matrix</div>
     <div class="summary-chips">
-      <span class="chip chip-default">{{ total_triggers }} trigger{{ 's' if total_triggers != 1 }}</span>
+      <span class="chip chip-default">{{ total_triggers }} warning rule{{ 's' if total_triggers != 1 }}</span>
       {% if active_count > 0 %}
       <span class="chip chip-alert">{{ active_count }} active alert{{ 's' if active_count != 1 }}</span>
       {% endif %}
@@ -288,7 +288,7 @@
       {% endif %}
     </div>
   </div>
-  <div class="page-sub">Each trigger is placed by current likelihood and historical impact severity. Click any trigger for details and response guidance.</div>
+  <div class="page-sub">Shows the current level of concern for each hazard type based on active alerts and forecast data. Click any rule for details and response guidance.</div>
 
   <!-- Matrix -->
   <div class="matrix-wrapper">
@@ -339,8 +339,8 @@
 
   <!-- Methodology -->
   <div class="method-note">
-    <strong>Likelihood</strong> is based on current trigger status: <em>High</em> = active unacknowledged alert;
-    <em>Medium</em> = activation within 7 days or latest forecast ≥ 80 % of threshold;
+    <strong>Likelihood</strong> is based on current warning rule status: <em>High</em> = active unreviewed alert;
+    <em>Medium</em> = alert within 7 days or latest forecast ≥ 80 % of warning level;
     <em>Low</em> = no recent activity. &nbsp;
     <strong>Impact severity</strong> is derived from historical impact records for each hazard type:
     <em>Extreme</em> &gt;100k affected or &gt;100 casualties;
@@ -353,7 +353,7 @@
   <!-- Active trigger cards (sorted by WMO level desc) -->
   {% set sorted_triggers = trigger_list | sort(attribute='wmo_name', reverse=False) %}
   {% if trigger_list %}
-  <div class="section-title">All Active Triggers ({{ total_triggers }})</div>
+  <div class="section-title">All Warning Rules ({{ total_triggers }})</div>
   <div class="trigger-cards">
     {% for item in trigger_list | sort(attribute='wmo_name') %}
     <div class="trigger-card" style="border-color:{{ item.hex }};" onclick="openDetail({{ item.id }})">
@@ -404,7 +404,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeDetail()">Close</button>
-      <a id="modal-link" href="#" class="btn btn-primary">View trigger →</a>
+      <a id="modal-link" href="#" class="btn btn-primary">View warning rule →</a>
     </div>
   </div>
 </div>
@@ -422,11 +422,11 @@ function openDetail(id) {
   // Status
   var statusEl = document.getElementById('modal-status');
   if (t.has_active) {
-    statusEl.innerHTML = '<div style="background:#fee2e2;color:#dc2626;border-radius:6px;padding:.4rem .75rem;font-size:.8rem;font-weight:600;">● Active alert — unacknowledged</div>';
+    statusEl.innerHTML = '<div style="background:#fee2e2;color:#dc2626;border-radius:6px;padding:.4rem .75rem;font-size:.8rem;font-weight:600;">● Active alert — unreviewed</div>';
   } else if (t.has_recent) {
-    statusEl.innerHTML = '<div style="background:#fefce8;color:#713f12;border-radius:6px;padding:.4rem .75rem;font-size:.8rem;font-weight:600;">⚐ Activated within last 7 days</div>';
+    statusEl.innerHTML = '<div style="background:#fefce8;color:#713f12;border-radius:6px;padding:.4rem .75rem;font-size:.8rem;font-weight:600;">⚐ Alert within last 7 days</div>';
   } else {
-    statusEl.innerHTML = '<div style="background:#f3f4f6;color:#6b7280;border-radius:6px;padding:.4rem .75rem;font-size:.8rem;">No recent activation</div>';
+    statusEl.innerHTML = '<div style="background:#f3f4f6;color:#6b7280;border-radius:6px;padding:.4rem .75rem;font-size:.8rem;">No recent alert</div>';
   }
 
   // WMO badge

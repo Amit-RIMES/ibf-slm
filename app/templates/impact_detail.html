@@ -58,24 +58,24 @@
   <div class="nav-links">
     <a href="/dashboard">Dashboard</a>
     <a href="/forecasts">Forecasts</a>
-    <a href="/observed">Observed</a>
+    <a href="/observed">Rainfall Data</a>
     <a href="/impacts" class="active">Impacts</a>
-    <a href="/triggers">Triggers</a>
-    <a href="/verification">Verification</a>
-    <a href="/alerts">Alerts</a>
-    <a href="/stations">Stations</a>
-    <a href="/sync">Auto-Sync</a>
-    <a href="/ecmwf">ECMWF</a>
-    <a href="/cds">CDS</a>
-    <a href="/glofas">GloFAS</a>
-    <a href="/drought">Drought</a>
-    <a href="/risk">Risk</a>
-    <a href="/ibf">IBF Matrix</a>
-    <a href="/map">Map</a>
-    <a href="/return-period">Return Periods</a>
-    <a href="/reports/operational">Report</a>
-    <a href="/reports/handover">Handover</a>
-    <a href="/seasonal">Seasonal</a>
+    <a href="/triggers">Warning Rules</a>
+    <a href="/verification">Forecast Accuracy</a>
+    <a href="/alerts">Active Alerts</a>
+    <a href="/stations">Weather Stations</a>
+    <a href="/sync">Data Import</a>
+    <a href="/ecmwf">ECMWF Data</a>
+    <a href="/cds">Climate Data</a>
+    <a href="/glofas">River Forecasts</a>
+    <a href="/drought">Drought Monitor</a>
+    <a href="/risk">Risk Overview</a>
+    <a href="/ibf">Risk Matrix</a>
+    <a href="/map">Alert Map</a>
+    <a href="/return-period">Flood History</a>
+    <a href="/reports/operational">Situation Report</a>
+    <a href="/reports/handover">Shift Handover</a>
+    <a href="/seasonal">Seasonal Outlook</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
     <a href="/help">Help</a>
@@ -146,7 +146,7 @@
       {% if impact.forecast %}
       <div class="stat-row"><span class="label">File</span><span class="value"><a href="/forecasts/{{ impact.forecast_id }}">{{ impact.forecast.filename }}</a></span></div>
       <div class="stat-row"><span class="label">Time start</span><span class="value">{{ impact.forecast.time_start[:10] }}</span></div>
-      <div class="stat-row"><span class="label">Mean precip</span><span class="value">{{ impact.forecast.precip_mean }} mm</span></div>
+      <div class="stat-row"><span class="label">Average rainfall</span><span class="value">{{ impact.forecast.precip_mean }} mm</span></div>
       <div class="stat-row"><span class="label">Region</span><span class="value">{{ impact.forecast.lat_min }}°–{{ impact.forecast.lat_max }}°N</span></div>
       {% else %}
       <p style="color:#9ca3af; font-size:.9rem;">No forecast linked. <a href="/forecasts/upload">Upload one</a> and edit this record to link it.</p>
@@ -158,7 +158,7 @@
   {% set act = impact.trigger_activation %}
   <div class="card" style="border-left: 3px solid #4f46e5;">
     <div class="section-title">Validates Trigger Activation</div>
-    <div class="stat-row"><span class="label">Trigger</span><span class="value"><a href="/observed">Observed</a>
+    <div class="stat-row"><span class="label">Trigger</span><span class="value"><a href="/observed">Rainfall Data</a>
     <a href="/triggers/{{ act.trigger_id }}">{{ act.trigger.name }}</a></span></div>
     <div class="stat-row"><span class="label">Hazard type</span><span class="value">{{ act.trigger.hazard_type | capitalize }}</span></div>
     <div class="stat-row"><span class="label">Observed value</span><span class="value" style="font-family:monospace;">{{ act.value }} mm</span></div>

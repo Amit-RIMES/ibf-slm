@@ -72,24 +72,24 @@
   <div class="nav-links">
     <a href="/dashboard">Dashboard</a>
     <a href="/forecasts">Forecasts</a>
-    <a href="/observed">Observed</a>
-    <a href="/impacts">Impacts</a>
-    <a href="/triggers">Triggers</a>
-    <a href="/verification">Verification</a>
-    <a href="/alerts">Alerts</a>
-    <a href="/stations">Stations</a>
-    <a href="/sync">Auto-Sync</a>
-    <a href="/ecmwf">ECMWF</a>
-    <a href="/cds">CDS</a>
-    <a href="/glofas">GloFAS</a>
-    <a href="/drought">Drought</a>
-    <a href="/risk">Risk</a>
-    <a href="/ibf">IBF Matrix</a>
-    <a href="/map">Map</a>
+    <a href="/observed">Rainfall Data</a>
+    <a href="/impacts">Impact Reports</a>
+    <a href="/triggers">Warning Rules</a>
+    <a href="/verification">Forecast Accuracy</a>
+    <a href="/alerts">Active Alerts</a>
+    <a href="/stations">Weather Stations</a>
+    <a href="/sync">Data Import</a>
+    <a href="/ecmwf">ECMWF Data</a>
+    <a href="/cds">Climate Data</a>
+    <a href="/glofas">River Forecasts</a>
+    <a href="/drought">Drought Monitor</a>
+    <a href="/risk">Risk Overview</a>
+    <a href="/ibf">Risk Matrix</a>
+    <a href="/map">Alert Map</a>
     <a href="/return-period" class="active">Return Periods</a>
-    <a href="/reports/operational">Report</a>
-    <a href="/reports/handover">Handover</a>
-    <a href="/seasonal">Seasonal</a>
+    <a href="/reports/operational">Situation Report</a>
+    <a href="/reports/handover">Shift Handover</a>
+    <a href="/seasonal">Seasonal Outlook</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
     <a href="/help">Help</a>
@@ -100,7 +100,8 @@
 
 <div class="main">
   <div class="page-header">
-    <h1>Return Period Analysis</h1>
+    <h1>Flood Frequency Analysis</h1>
+    <p class="sub" style="color:#6b7280;font-size:.875rem;margin-top:.25rem;margin-bottom:0;">Shows how often extreme rainfall events occur historically. A 25-year event is expected once every 25 years on average.</p>
     {% if user.role == "admin" %}
     <form method="post" action="/return-period/compute">
       <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
@@ -116,11 +117,11 @@
   {% endif %}
 
   <div class="info-box">
-    Return periods are estimated by fitting a <strong>GEV (Generalised Extreme Value)</strong> distribution
+    Recurrence intervals are estimated by fitting a <strong>Statistical model (GEV — Generalised Extreme Value)</strong> distribution
     to annual maxima extracted from the CHIRPS observed rainfall archive.
-    A <strong>5-year return level</strong> means the annual maximum is expected to exceed that value
+    A <strong>5-year recurrence interval</strong> means the annual maximum is expected to exceed that value
     once every 5 years (20% annual probability).
-    Trigger thresholds marked with return period chips on trigger pages use these values.
+    Warning levels marked with recurrence interval chips on warning rule pages use these values.
   </div>
 
   <div class="stat-chips">
@@ -132,7 +133,7 @@
 
   {% if return_levels %}
   <div class="card">
-    <h2>Return Level Table</h2>
+    <h2>Recurrence Interval Table</h2>
     <table class="rp-table">
       <thead>
         <tr>
@@ -143,7 +144,7 @@
           <th>25-yr</th>
           <th>50-yr</th>
           <th>100-yr</th>
-          <th>GEV Parameters</th>
+          <th>Statistical model (GEV) Parameters</th>
           <th>Updated</th>
         </tr>
       </thead>
@@ -175,9 +176,9 @@
 
   <!-- Interactive lookup -->
   <div class="card">
-    <h2>Return Period Lookup</h2>
+    <h2>Recurrence Interval Lookup</h2>
     <p style="font-size:.875rem;color:#6b7280;margin-bottom:.75rem;">
-      Enter a precipitation value to find its return period based on the fitted distribution.
+      Enter a rainfall value to find its recurrence interval based on the fitted distribution.
     </p>
     <div class="lookup-box">
       <div>
@@ -241,7 +242,7 @@ function doLookup() {
         div.innerHTML =
           '<strong>' + val.toFixed(1) + ' mm</strong> corresponds to a ' +
           '<span style="background:' + d.color + ';color:#fff;padding:.2rem .6rem;border-radius:999px;' +
-          'font-size:.85rem;font-weight:700;margin:0 .3rem;">' + d.label + '</span> event ' +
+          'font-size:.85rem;font-weight:700;margin:0 .3rem;">' + d.label + '</span> recurrence interval ' +
           '(' + (d.return_period_years ? 'P(exceed/yr) = ' + (100/d.return_period_years).toFixed(1) + '%' : 'extremely rare') + ')';
       }
     })

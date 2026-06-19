@@ -51,24 +51,24 @@
   <div class="nav-links">
     <a href="/dashboard">Dashboard</a>
     <a href="/forecasts" class="active">Forecasts</a>
-    <a href="/observed">Observed</a>
-    <a href="/impacts">Impacts</a>
-    <a href="/triggers">Triggers</a>
-    <a href="/verification">Verification</a>
-    <a href="/alerts">Alerts</a>
-    <a href="/stations">Stations</a>
-    <a href="/sync">Auto-Sync</a>
-    <a href="/ecmwf">ECMWF</a>
-    <a href="/cds">CDS</a>
-    <a href="/glofas">GloFAS</a>
-    <a href="/drought">Drought</a>
-    <a href="/risk">Risk</a>
-    <a href="/ibf">IBF Matrix</a>
-    <a href="/map">Map</a>
-    <a href="/return-period">Return Periods</a>
-    <a href="/reports/operational">Report</a>
-    <a href="/reports/handover">Handover</a>
-    <a href="/seasonal">Seasonal</a>
+    <a href="/observed">Rainfall Data</a>
+    <a href="/impacts">Impact Reports</a>
+    <a href="/triggers">Warning Rules</a>
+    <a href="/verification">Forecast Accuracy</a>
+    <a href="/alerts">Active Alerts</a>
+    <a href="/stations">Weather Stations</a>
+    <a href="/sync">Data Import</a>
+    <a href="/ecmwf">ECMWF Data</a>
+    <a href="/cds">Climate Data</a>
+    <a href="/glofas">River Forecasts</a>
+    <a href="/drought">Drought Monitor</a>
+    <a href="/risk">Risk Overview</a>
+    <a href="/ibf">Risk Matrix</a>
+    <a href="/map">Alert Map</a>
+    <a href="/return-period">Flood History</a>
+    <a href="/reports/operational">Situation Report</a>
+    <a href="/reports/handover">Shift Handover</a>
+    <a href="/seasonal">Seasonal Outlook</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
     <a href="/help">Help</a>
@@ -81,10 +81,8 @@
     <a href="/forecasts" style="padding:.45rem 1rem;border-radius:7px;font-size:.875rem;font-weight:600;color:#6b7280;border:1px solid #e5e7eb;text-decoration:none;">All Forecasts</a>
     <a href="/forecasts/drift" style="padding:.45rem 1rem;border-radius:7px;font-size:.875rem;font-weight:600;background:#4f46e5;color:#fff;text-decoration:none;">Drift Analysis</a>
   </div>
-  <h1>Forecast Drift</h1>
-  <p style="color:#6b7280;font-size:.9rem;margin-top:-.25rem;margin-bottom:1.25rem;">
-    Track how precipitation forecasts from a single source have changed across successive uploads.
-  </p>
+  <h1>Forecast Trend Over Time</h1>
+  <p style="color:#6b7280;font-size:.9rem;margin:.25rem 0 1.25rem;">Shows how forecast rainfall amounts have changed across recent uploads for a given data source.</p>
 
   <div class="filter-bar">
     <form method="get" action="/forecasts/drift" style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;">
@@ -118,7 +116,7 @@
           <th>Max (mm)</th>
           <th>Min (mm)</th>
           {% if has_seasonal %}<th>Seasonal Δ</th>{% endif %}
-          {% if has_anomaly %}<th>Anomaly</th>{% endif %}
+          {% if has_anomaly %}<th>Unusual Variation</th>{% endif %}
           <th></th>
         </tr>
       </thead>
@@ -147,7 +145,7 @@
           {% if has_anomaly %}
           <td>
             {% if fc.is_anomaly %}
-              <span style="background:#fef2f2;color:#991b1b;padding:.15rem .55rem;border-radius:999px;font-size:.75rem;font-weight:700">anomaly</span>
+              <span style="background:#fef2f2;color:#991b1b;padding:.15rem .55rem;border-radius:999px;font-size:.75rem;font-weight:700">unusual variation</span>
             {% endif %}
           </td>
           {% endif %}
@@ -201,7 +199,7 @@
           <th>Max (mm)</th>
           <th>Min (mm)</th>
           {% if has_seasonal %}<th>Seasonal Δ</th>{% endif %}
-          {% if has_anomaly %}<th>Anomaly</th>{% endif %}
+          {% if has_anomaly %}<th>Unusual Variation</th>{% endif %}
           <th></th>
         </tr>
       </thead>
@@ -241,7 +239,7 @@
           {% if has_anomaly %}
           <td>
             {% if fc.is_anomaly %}
-              <span style="background:#fef2f2;color:#991b1b;padding:.15rem .55rem;border-radius:999px;font-size:.75rem;font-weight:700">anomaly</span>
+              <span style="background:#fef2f2;color:#991b1b;padding:.15rem .55rem;border-radius:999px;font-size:.75rem;font-weight:700">unusual variation</span>
             {% endif %}
           </td>
           {% endif %}

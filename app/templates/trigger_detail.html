@@ -88,24 +88,24 @@
   <div class="nav-links">
     <a href="/dashboard">Dashboard</a>
     <a href="/forecasts">Forecasts</a>
-    <a href="/observed">Observed</a>
-    <a href="/impacts">Impacts</a>
+    <a href="/observed">Rainfall Data</a>
+    <a href="/impacts">Impact Reports</a>
     <a href="/triggers" class="active">Triggers</a>
-    <a href="/verification">Verification</a>
-    <a href="/alerts">Alerts</a>
-    <a href="/stations">Stations</a>
-    <a href="/sync">Auto-Sync</a>
-    <a href="/ecmwf">ECMWF</a>
-    <a href="/cds">CDS</a>
-    <a href="/glofas">GloFAS</a>
-    <a href="/drought">Drought</a>
-    <a href="/risk">Risk</a>
-    <a href="/ibf">IBF Matrix</a>
-    <a href="/map">Map</a>
-    <a href="/return-period">Return Periods</a>
-    <a href="/reports/operational">Report</a>
-    <a href="/reports/handover">Handover</a>
-    <a href="/seasonal">Seasonal</a>
+    <a href="/verification">Forecast Accuracy</a>
+    <a href="/alerts">Active Alerts</a>
+    <a href="/stations">Weather Stations</a>
+    <a href="/sync">Data Import</a>
+    <a href="/ecmwf">ECMWF Data</a>
+    <a href="/cds">Climate Data</a>
+    <a href="/glofas">River Forecasts</a>
+    <a href="/drought">Drought Monitor</a>
+    <a href="/risk">Risk Overview</a>
+    <a href="/ibf">Risk Matrix</a>
+    <a href="/map">Alert Map</a>
+    <a href="/return-period">Flood History</a>
+    <a href="/reports/operational">Situation Report</a>
+    <a href="/reports/handover">Shift Handover</a>
+    <a href="/seasonal">Seasonal Outlook</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
     <a href="/help">Help</a>
@@ -125,26 +125,27 @@
         <span class="badge badge-inactive" style="vertical-align:middle; font-size:.7rem;">Inactive</span>
         {% endif %}
       </h1>
-      <div class="meta">Trigger #{{ trigger.id }} &nbsp;·&nbsp; Created {{ trigger.created_at.strftime("%Y-%m-%d") }} &nbsp;·&nbsp; Hazard: {{ trigger.hazard_type | capitalize }}</div>
+      <div class="meta">Warning rule — fires an alert when conditions are met.</div>
+      <div class="meta">Rule #{{ trigger.id }} &nbsp;·&nbsp; Created {{ trigger.created_at.strftime("%Y-%m-%d") }} &nbsp;·&nbsp; Hazard: {{ trigger.hazard_type | capitalize }}</div>
     </div>
     <div style="display:flex; gap:.6rem; align-items:center; flex-wrap:wrap;">
-      <a href="/observed">Observed</a>
+      <a href="/observed">Rainfall Data</a>
     <a href="/triggers/{{ trigger.id }}/backtest"
          style="padding:.45rem 1rem; border:1px solid #d1d5db; border-radius:8px;
                 font-size:.85rem; font-weight:600; color:#6b7280; text-decoration:none;">Backtest</a>
-      <a href="/observed">Observed</a>
+      <a href="/observed">Rainfall Data</a>
     <a href="/triggers/activations/export.csv?trigger_id={{ trigger.id }}"
          style="padding:.45rem 1rem; border:1px solid #d1d5db; border-radius:8px;
                 font-size:.85rem; font-weight:600; color:#6b7280; text-decoration:none;">↓ CSV</a>
-      <a href="/observed">Observed</a>
+      <a href="/observed">Rainfall Data</a>
     <a href="/triggers/{{ trigger.id }}/export.geojson"
          style="padding:.45rem 1rem; border:1px solid #d1d5db; border-radius:8px;
                 font-size:.85rem; font-weight:600; color:#6b7280; text-decoration:none;">↓ GeoJSON</a>
-      <a href="/observed">Observed</a>
+      <a href="/observed">Rainfall Data</a>
     <a href="/triggers/{{ trigger.id }}/edit"
         style="display:inline-block; padding:.45rem 1rem; background:#4f46e5; color:#fff; border-radius:8px; font-size:.85rem; font-weight:600;">Edit</a>
       <form method="post" action="/triggers/{{ trigger.id }}/delete" style="display:inline;"
-        onsubmit="return confirm('Delete this trigger and all its activations?')">
+        onsubmit="return confirm('Delete this warning rule and all its alerts?')">
         <button type="submit"
           style="padding:.45rem 1rem; background:#fff; border:1px solid #d1d5db; border-radius:8px; font-size:.85rem; font-weight:600; color:#dc2626; cursor:pointer;">Delete</button>
       </form>
@@ -189,12 +190,12 @@
 
   {% if activations %}
   <div class="summary-bar">
-    <span><span class="s-label">Activations: </span><span class="s-value">{{ activations | length }}</span></span>
+    <span><span class="s-label">Alerts fired: </span><span class="s-value">{{ activations | length }}</span></span>
     <span><span class="s-label">Validated: </span><span class="s-value" style="color:{% if validated_count > 0 %}#16a34a{% else %}#9ca3af{% endif %};">{{ validated_count }}</span></span>
-    <span><span class="s-label">Unacknowledged: </span><span class="s-value">{{ activations | selectattr('status','eq','active') | list | length }}</span></span>
+    <span><span class="s-label">Unreviewed: </span><span class="s-value">{{ activations | selectattr('status','eq','active') | list | length }}</span></span>
     {% if user.role == "admin" %}
     <span style="margin-left:auto;">
-      <button id="bulk-toggle" class="btn-comment" type="button">Select for bulk acknowledge</button>
+      <button id="bulk-toggle" class="btn-comment" type="button">Select for bulk review</button>
     </span>
     {% endif %}
   </div>
@@ -206,12 +207,12 @@
       <span id="bulk-count">0 selected</span>
       <input type="text" name="notes" placeholder="Optional notes…"
              style="flex:1;padding:.4rem .6rem;border:1px solid #d1d5db;border-radius:6px;font-size:.82rem;">
-      <button type="submit" class="btn-ack" style="margin-top:0;">Bulk Acknowledge</button>
+      <button type="submit" class="btn-ack" style="margin-top:0;">Bulk Mark as Reviewed</button>
     </div>
   {% endif %}
 
   <div class="card">
-    <div class="section-title">Activation History ({{ activations | length }})</div>
+    <div class="section-title">Alert History ({{ activations | length }})</div>
     {% if activations %}
     <table>
       <thead>
@@ -222,7 +223,7 @@
           <th>Triggered at</th>
           <th>Status</th>
           <th>Validated impacts</th>
-          <th>Notes / Acknowledge</th>
+          <th>Notes / Review</th>
         </tr>
       </thead>
       <tbody>
@@ -261,9 +262,9 @@
           <td style="font-size:.82rem; color:#6b7280;">{{ a.triggered_at.strftime("%Y-%m-%d %H:%M UTC") }}</td>
           <td>
             {% if a.status == "active" %}
-            <span class="badge badge-alert">Unacknowledged</span>
+            <span class="badge badge-alert">Unreviewed</span>
             {% else %}
-            <span class="badge badge-acknowledged">Acknowledged</span>
+            <span class="badge badge-acknowledged">Reviewed</span>
             {% endif %}
             {% if a.impact_verdict == 'yes' %}
             <span class="badge" style="background:#dcfce7;color:#15803d;margin-left:.3rem;">Impacts ✓</span>
@@ -292,7 +293,7 @@
             {% if a.status == "active" %}
             <form method="post" action="/triggers/activations/{{ a.id }}/acknowledge" class="ack-form">
               <textarea name="notes" placeholder="Optional notes on response taken…"></textarea>
-              <button type="submit" class="btn-ack">Acknowledge</button>
+              <button type="submit" class="btn-ack">Mark as Reviewed</button>
             </form>
             {% else %}
             <span style="font-size:.82rem; color:#6b7280;">
@@ -338,7 +339,7 @@
       </tbody>
     </table>
     {% else %}
-    <div class="empty">No activations yet — this trigger will fire automatically when a matching forecast is uploaded.</div>
+    <div class="empty">No alerts yet — this warning rule will fire automatically when a matching forecast is uploaded.</div>
     {% endif %}
   </div>
 

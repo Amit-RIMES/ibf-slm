@@ -54,22 +54,22 @@
   <div class="nav-links">
     <a href="/dashboard">Dashboard</a>
     <a href="/forecasts">Forecasts</a>
-    <a href="/observed">Observed</a>
-    <a href="/impacts">Impacts</a>
-    <a href="/triggers">Triggers</a>
-    <a href="/verification">Verification</a>
-    <a href="/alerts">Alerts</a>
-    <a href="/stations">Stations</a>
-    <a href="/sync">Auto-Sync</a>
-    <a href="/ecmwf">ECMWF</a>
-    <a href="/cds">CDS</a>
-    <a href="/glofas">GloFAS</a>
-    <a href="/drought">Drought</a>
+    <a href="/observed">Rainfall Data</a>
+    <a href="/impacts">Impact Reports</a>
+    <a href="/triggers">Warning Rules</a>
+    <a href="/verification">Forecast Accuracy</a>
+    <a href="/alerts">Active Alerts</a>
+    <a href="/stations">Weather Stations</a>
+    <a href="/sync">Data Import</a>
+    <a href="/ecmwf">ECMWF Data</a>
+    <a href="/cds">Climate Data</a>
+    <a href="/glofas">River Forecasts</a>
+    <a href="/drought">Drought Monitor</a>
     <a href="/risk" class="active">Risk</a>
-    <a href="/return-period">Return Periods</a>
-    <a href="/reports/operational">Report</a>
-    <a href="/reports/handover">Handover</a>
-    <a href="/seasonal">Seasonal</a>
+    <a href="/return-period">Flood History</a>
+    <a href="/reports/operational">Situation Report</a>
+    <a href="/reports/handover">Shift Handover</a>
+    <a href="/seasonal">Seasonal Outlook</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
     <a href="/help">Help</a>
@@ -79,7 +79,8 @@
 </nav>
 
 <div class="main">
-  <h1 style="margin-bottom:1rem;">Multi-Source Risk Overview</h1>
+  <h1 style="margin-bottom:.25rem;">Risk Overview</h1>
+  <p style="color:#6b7280;font-size:.875rem;margin-bottom:1rem;">Combined risk score across all hazards. Scores above 60 indicate elevated risk requiring attention.</p>
   <div style="display:flex;gap:.75rem;margin-bottom:1.5rem;">
     <a href="/risk" style="font-size:.875rem;color:#4f46e5;padding:.3rem .85rem;
        border-radius:6px;border:1px solid #bfdbfe;background:#eff6ff;font-weight:600;text-decoration:none;">Overview</a>
@@ -108,13 +109,13 @@
       </div>
 
       <div class="component-row">
-        <span>SPI component</span><strong>{{ card.spi_pts }} pts</strong>
+        <span>Drought component</span><strong>{{ card.spi_pts }} pts</strong>
       </div>
       <div class="component-row">
         <span>Seasonal forecast</span><strong>{{ card.seasonal_pts }} pts</strong>
       </div>
       <div class="component-row">
-        <span>Active triggers</span><strong>{{ card.trigger_pts }} pts</strong>
+        <span>Active alerts component</span><strong>{{ card.trigger_pts }} pts</strong>
       </div>
       {% if card.worst_spi is not none %}
       <div class="component-row">

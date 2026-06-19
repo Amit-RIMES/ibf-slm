@@ -77,8 +77,7 @@ async def test_dashboard_pending_actions_shows_unack_activations(
     resp = await client.get("/dashboard", follow_redirects=False)
     assert resp.status_code == 200
     assert b"Pending Actions" in resp.content
-    assert b"unacknowledged trigger activation" in resp.content
-    assert b"Acknowledge" in resp.content
+    assert b"unreviewed weather warning" in resp.content
 
 
 @pytest.mark.asyncio

@@ -70,24 +70,24 @@
   <div class="nav-links">
     <a href="/dashboard">Dashboard</a>
     <a href="/forecasts">Forecasts</a>
-    <a href="/observed">Observed</a>
-    <a href="/impacts">Impacts</a>
-    <a href="/triggers">Triggers</a>
-    <a href="/verification">Verification</a>
-    <a href="/alerts">Alerts</a>
+    <a href="/observed">Rainfall Data</a>
+    <a href="/impacts">Impact Reports</a>
+    <a href="/triggers">Warning Rules</a>
+    <a href="/verification">Forecast Accuracy</a>
+    <a href="/alerts">Active Alerts</a>
     <a href="/stations" class="active">Stations</a>
-    <a href="/sync">Auto-Sync</a>
-    <a href="/ecmwf">ECMWF</a>
-    <a href="/cds">CDS</a>
-    <a href="/glofas">GloFAS</a>
-    <a href="/drought">Drought</a>
-    <a href="/risk">Risk</a>
-    <a href="/ibf">IBF Matrix</a>
-    <a href="/map">Map</a>
-    <a href="/return-period">Return Periods</a>
-    <a href="/reports/operational">Report</a>
-    <a href="/reports/handover">Handover</a>
-    <a href="/seasonal">Seasonal</a>
+    <a href="/sync">Data Import</a>
+    <a href="/ecmwf">ECMWF Data</a>
+    <a href="/cds">Climate Data</a>
+    <a href="/glofas">River Forecasts</a>
+    <a href="/drought">Drought Monitor</a>
+    <a href="/risk">Risk Overview</a>
+    <a href="/ibf">Risk Matrix</a>
+    <a href="/map">Alert Map</a>
+    <a href="/return-period">Flood History</a>
+    <a href="/reports/operational">Situation Report</a>
+    <a href="/reports/handover">Shift Handover</a>
+    <a href="/seasonal">Seasonal Outlook</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
     <a href="/help">Help</a>
@@ -184,7 +184,7 @@
             <input type="date" name="obs_date" required value="{{ observations[0].obs_date if observations else '' }}">
           </div>
           <div class="field">
-            <label>Precip (mm)</label>
+            <label>Rainfall (mm)</label>
             <input type="number" name="precip_mm" step="0.1" placeholder="0.0">
           </div>
           <div class="field">
@@ -231,7 +231,7 @@
       <thead>
         <tr>
           <th>Date</th>
-          <th>Precip (mm)</th>
+          <th>Rainfall (mm)</th>
           <th>T-max (°C)</th>
           <th>T-min (°C)</th>
           <th>Humidity (%)</th>
@@ -282,7 +282,7 @@
   var datasets = [];
   if (hasPrecip) {
     datasets.push({
-      label: 'Precip (mm)',
+      label: 'Rainfall (mm)',
       data: precip,
       type: 'bar',
       backgroundColor: 'rgba(59,130,246,.6)',

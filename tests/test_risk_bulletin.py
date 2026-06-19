@@ -270,7 +270,7 @@ async def test_drought_dashboard_200(client: AsyncClient, admin_user):
     await _login(client)
     resp = await client.get("/drought", follow_redirects=False)
     assert resp.status_code == 200
-    assert b"Composite Risk" in resp.content
+    assert b"Overall Risk Score" in resp.content
 
 
 @pytest.mark.asyncio

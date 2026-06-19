@@ -92,24 +92,24 @@
   <div class="nav-links">
     <a href="/dashboard">Dashboard</a>
     <a href="/forecasts">Forecasts</a>
-    <a href="/observed">Observed</a>
-    <a href="/impacts">Impacts</a>
-    <a href="/triggers">Triggers</a>
-    <a href="/verification">Verification</a>
-    <a href="/alerts">Alerts</a>
-    <a href="/stations">Stations</a>
-    <a href="/sync">Auto-Sync</a>
-    <a href="/ecmwf">ECMWF</a>
-    <a href="/cds">CDS</a>
-    <a href="/glofas">GloFAS</a>
+    <a href="/observed">Rainfall Data</a>
+    <a href="/impacts">Impact Reports</a>
+    <a href="/triggers">Warning Rules</a>
+    <a href="/verification">Forecast Accuracy</a>
+    <a href="/alerts">Active Alerts</a>
+    <a href="/stations">Weather Stations</a>
+    <a href="/sync">Data Import</a>
+    <a href="/ecmwf">ECMWF Data</a>
+    <a href="/cds">Climate Data</a>
+    <a href="/glofas">River Forecasts</a>
     <a href="/drought" class="active">Drought</a>
-    <a href="/risk">Risk</a>
-    <a href="/ibf">IBF Matrix</a>
-    <a href="/map">Map</a>
-    <a href="/return-period">Return Periods</a>
-    <a href="/reports/operational">Report</a>
-    <a href="/reports/handover">Handover</a>
-    <a href="/seasonal">Seasonal</a>
+    <a href="/risk">Risk Overview</a>
+    <a href="/ibf">Risk Matrix</a>
+    <a href="/map">Alert Map</a>
+    <a href="/return-period">Flood History</a>
+    <a href="/reports/operational">Situation Report</a>
+    <a href="/reports/handover">Shift Handover</a>
+    <a href="/seasonal">Seasonal Outlook</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
     <a href="/help">Help</a>
@@ -119,11 +119,11 @@
 </nav>
 
 <div class="main">
-  <h1>Drought Index Monitor</h1>
-  <p class="sub">Standardized Precipitation Index (SPI) computed from CHIRPS observed rainfall.</p>
+  <h1>Drought Monitor</h1>
+  <p class="sub">Tracks dry conditions using the Standardised Precipitation Index (SPI). Values below −1 indicate drought.</p>
 
   {% if request.query_params.get('recomputed') %}
-  <div class="notice success">SPI recomputation enqueued — refresh in a moment to see updated values.</div>
+  <div class="notice success">Drought index recalculation enqueued — refresh in a moment to see updated values.</div>
   {% endif %}
 
   <!-- Source filter -->
@@ -143,8 +143,8 @@
     <form method="post" action="/drought/recompute" style="margin-left:auto;">
       <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
       <button type="submit" class="btn btn-sm btn-danger"
-        onclick="return confirm('Recompute all SPI records from CHIRPS data?')">
-        ↻ Recompute SPI
+        onclick="return confirm('Recalculate all drought index records from CHIRPS data?')">
+        ↻ Recalculate Drought Index
       </button>
     </form>
     {% endif %}
@@ -153,7 +153,7 @@
   <!-- Composite risk gauge -->
   <div class="card risk-card" id="risk-card">
     <div class="gauge-wrap">
-      <div class="gauge-title">Composite Risk Score</div>
+      <div class="gauge-title">Overall Risk Score</div>
       <svg id="risk-gauge" viewBox="0 0 200 125" width="200" height="125" aria-label="Risk gauge">
         <!-- Gray background track -->
         <path d="M 15 110 A 85 85 0 0 0 185 110"
@@ -197,7 +197,7 @@
       <!-- SPI row -->
       <div class="risk-row">
         <div class="risk-row-header">
-          <span class="risk-row-label">SPI Drought index</span>
+          <span class="risk-row-label">Drought Index (SPI)</span>
           <span class="risk-row-pts">{{ risk.spi_pts }} / 40</span>
         </div>
         <div class="risk-bar-bg">
@@ -237,7 +237,7 @@
       <!-- Triggers row -->
       <div class="risk-row">
         <div class="risk-row-header">
-          <span class="risk-row-label">Active trigger alerts</span>
+          <span class="risk-row-label">Active alerts</span>
           <span class="risk-row-pts">{{ risk.trigger_pts }} / 30</span>
         </div>
         <div class="risk-bar-bg">
@@ -253,7 +253,7 @@
       </div>
 
       <div style="font-size:.72rem;color:#d1d5db;margin-top:.25rem;">
-        Max 100 pts · SPI 40 · Seasonal 30 · Triggers 30
+        Max 100 pts · Drought Index (SPI) 40 · Seasonal 30 · Active alerts 30
       </div>
     </div>
   </div>
@@ -282,9 +282,9 @@
     <p class="no-data" style="text-align:center;padding:2rem;">
       No SPI data available for <strong>{{ source }}</strong>.
       {% if user.role == "admin" %}
-      Use the <em>Recompute SPI</em> button after syncing CHIRPS data.
+      Use the <em>Recalculate Drought Index</em> button after syncing CHIRPS data.
       {% else %}
-      Ask an admin to sync CHIRPS data and recompute the drought index.
+      Ask an admin to sync CHIRPS data and recalculate the drought index.
       {% endif %}
     </p>
   </div>
@@ -342,7 +342,7 @@
         {% endif %}
         {% if sf.precip_anomaly_pct is not none %}
         <div style="margin-top:.4rem;font-size:.8rem;color:#374151;">
-          Precip anomaly: <strong>{{ sf.precip_anomaly_pct|int }}% of normal</strong>
+          Rainfall anomaly: <strong>{{ sf.precip_anomaly_pct|int }}% of normal</strong>
         </div>
         {% endif %}
       </div>
@@ -355,7 +355,7 @@
 
   <!-- SPI chart -->
   <div class="card">
-    <div class="chart-title">SPI Time Series — {{ source }}</div>
+    <div class="chart-title">Drought Index (SPI) Time Series — {{ source }}</div>
     <div class="chart-sub">
       {% if baseline_info %}Reference period: {{ baseline_info }}{% endif %}
     </div>
@@ -382,7 +382,7 @@
   <!-- Drought events table -->
   {% if drought_events %}
   <div class="card">
-    <div class="chart-title" style="margin-bottom:1rem;">Drought Events (SPI ≤ −1.0, recent 24 months)</div>
+    <div class="chart-title" style="margin-bottom:1rem;">Drought Events (Drought Index ≤ −1.0, recent 24 months)</div>
     <table>
       <thead>
         <tr>

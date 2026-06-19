@@ -42,24 +42,24 @@
   <span class="brand">IBF App</span>
   <div class="user-info" style="gap:1.5rem;">
     <a href="/forecasts">Forecasts</a>
-    <a href="/observed">Observed</a>
-    <a href="/impacts">Impacts</a>
-    <a href="/triggers">Triggers</a>
-    <a href="/verification">Verification</a>
-    <a href="/alerts">Alerts</a>
-    <a href="/stations">Stations</a>
-    <a href="/sync">Auto-Sync</a>
-    <a href="/ecmwf">ECMWF</a>
-    <a href="/cds">CDS</a>
-    <a href="/glofas">GloFAS</a>
-    <a href="/drought">Drought</a>
-    <a href="/risk">Risk</a>
-    <a href="/ibf">IBF Matrix</a>
-    <a href="/map">Map</a>
-    <a href="/return-period">Return Periods</a>
-    <a href="/reports/operational">Report</a>
-    <a href="/reports/handover">Handover</a>
-    <a href="/seasonal">Seasonal</a>
+    <a href="/observed">Rainfall Data</a>
+    <a href="/impacts">Impact Reports</a>
+    <a href="/triggers">Warning Rules</a>
+    <a href="/verification">Forecast Accuracy</a>
+    <a href="/alerts">Active Alerts</a>
+    <a href="/stations">Weather Stations</a>
+    <a href="/sync">Data Import</a>
+    <a href="/ecmwf">ECMWF Data</a>
+    <a href="/cds">Climate Data</a>
+    <a href="/glofas">River Forecasts</a>
+    <a href="/drought">Drought Monitor</a>
+    <a href="/risk">Risk Overview</a>
+    <a href="/ibf">Risk Matrix</a>
+    <a href="/map">Alert Map</a>
+    <a href="/return-period">Flood History</a>
+    <a href="/reports/operational">Situation Report</a>
+    <a href="/reports/handover">Shift Handover</a>
+    <a href="/seasonal">Seasonal Outlook</a>
     <a href="/bulletin">Bulletin</a>
     <a href="/chat">AI Assistant</a>
     <a href="/help">Help</a>
@@ -75,10 +75,10 @@
       <div style="display:flex; align-items:center; gap:.6rem;">
         <span style="font-size:1.1rem;">⚠️</span>
         <span style="font-weight:700; color:#991b1b; font-size:.95rem;">
-          {{ active_activations | length }} unacknowledged trigger activation{{ 's' if active_activations | length != 1 else '' }}
+          {{ active_activations | length }} unreviewed weather warning{{ 's' if active_activations | length != 1 else '' }}
         </span>
       </div>
-      <a href="/triggers" style="font-size:.85rem; font-weight:600; color:#dc2626;">View triggers →</a>
+      <a href="/triggers" style="font-size:.85rem; font-weight:600; color:#dc2626;">View warnings →</a>
     </div>
     <ul style="margin:.65rem 0 0 1.5rem; font-size:.875rem; color:#7f1d1d;">
       {% for a in active_activations[:5] %}
@@ -127,7 +127,7 @@
       <div style="display:flex;align-items:center;gap:.6rem;">
         <span style="font-size:1.1rem;">⚠️</span>
         <span style="font-weight:700;color:#92400e;font-size:.95rem;">
-          {{ recent_anomalies | length }} anomalous forecast{{ 's' if recent_anomalies | length != 1 else '' }} in the last 7 days
+          {{ recent_anomalies | length }} unusual forecast{{ 's' if recent_anomalies | length != 1 else '' }} in the last 7 days
         </span>
       </div>
       <a href="/forecasts" style="font-size:.85rem;font-weight:600;color:#92400e;">View forecasts →</a>
@@ -206,10 +206,10 @@
         <div style="display:flex;align-items:center;gap:.5rem;">
           <span style="font-size:.9rem;">🔴</span>
           <span style="font-size:.875rem;font-weight:600;color:#991b1b;">
-            {{ active_activations|length }} unacknowledged trigger activation{{ 's' if active_activations|length != 1 else '' }}
+            {{ active_activations|length }} unreviewed weather warning{{ 's' if active_activations|length != 1 else '' }}
           </span>
         </div>
-        <a href="/triggers" style="font-size:.8rem;font-weight:600;color:#dc2626;white-space:nowrap;">Acknowledge →</a>
+        <a href="/triggers" style="font-size:.8rem;font-weight:600;color:#dc2626;white-space:nowrap;">Review →</a>
       </div>
       {% endif %}
 
@@ -261,14 +261,14 @@
 
   <!-- ── Section Overview ──────────────────────────────────────────────────── -->
   <div style="margin-bottom:2rem;">
-    <div class="section-title" style="margin-bottom:1rem;">Section Overview</div>
+    <div class="section-title" style="margin-bottom:1rem;">What's in the System</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.85rem;">
 
       {# Forecasts #}
       <div class="stat-card" style="cursor:pointer;" onclick="location.href='/forecasts'">
         <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#4f46e5;margin-bottom:.5rem;">📊 Forecasts</div>
         <div class="stat-value">{{ stats.total_forecasts }}</div>
-        <div class="stat-label">total uploads</div>
+        <div class="stat-label">weather forecasts loaded</div>
         {% if recent_forecasts %}
         <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">Latest: {{ recent_forecasts[0].uploaded_at.strftime("%d %b") }}</div>
         {% endif %}
@@ -279,7 +279,7 @@
       <div class="stat-card" style="cursor:pointer;" onclick="location.href='/observed'">
         <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0891b2;margin-bottom:.5rem;">🌧 Observed</div>
         <div class="stat-value">{{ section_overview.obs_count }}</div>
-        <div class="stat-label">rainfall records</div>
+        <div class="stat-label">daily rainfall records</div>
         {% if section_overview.obs_latest %}
         <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">Latest: {{ section_overview.obs_latest.obs_date.strftime("%d %b %Y") }}</div>
         {% else %}
@@ -292,7 +292,7 @@
       <div class="stat-card" style="cursor:pointer;" onclick="location.href='/impacts'">
         <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#dc2626;margin-bottom:.5rem;">⚠ Impacts</div>
         <div class="stat-value">{{ stats.total_impacts_unfiltered }}</div>
-        <div class="stat-label">impact records</div>
+        <div class="stat-label">recorded disaster impacts</div>
         {% if recent_impacts %}
         <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">Latest: {{ recent_impacts[0].event_date.strftime("%d %b %Y") }}</div>
         {% endif %}
@@ -301,11 +301,11 @@
 
       {# Triggers #}
       <div class="stat-card" style="cursor:pointer;" onclick="location.href='/triggers'">
-        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7c3aed;margin-bottom:.5rem;">⚡ Triggers</div>
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7c3aed;margin-bottom:.5rem;">⚡ Warning Rules</div>
         <div class="stat-value">{{ section_overview.total_triggers }}</div>
-        <div class="stat-label">configured triggers</div>
+        <div class="stat-label">warning rules set up</div>
         <div style="font-size:.75rem;color:{% if active_activations %}#dc2626{% else %}#9ca3af{% endif %};margin-top:.35rem;">
-          {{ active_activations|length }} active activation{{ 's' if active_activations|length != 1 else '' }}
+          {{ active_activations|length }} active alert{{ 's' if active_activations|length != 1 else '' }}
         </div>
         <a href="/triggers" style="font-size:.78rem;font-weight:600;color:#7c3aed;margin-top:.5rem;display:block;">View →</a>
       </div>
@@ -321,7 +321,7 @@
 
       {# Auto-Sync #}
       <div class="stat-card" style="cursor:pointer;" onclick="location.href='/sync'">
-        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#059669;margin-bottom:.5rem;">🔄 Auto-Sync</div>
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#059669;margin-bottom:.5rem;">🔄 Data Import</div>
         {% if section_overview.sync_cfg and section_overview.sync_cfg.enabled %}
           <div class="stat-value" style="color:#059669">On</div>
           <div class="stat-label">sync enabled</div>
@@ -342,9 +342,9 @@
 
       {# ECMWF #}
       <div class="stat-card" style="cursor:pointer;" onclick="location.href='/ecmwf'">
-        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#2563eb;margin-bottom:.5rem;">🌍 ECMWF</div>
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#2563eb;margin-bottom:.5rem;">🌍 ECMWF Forecasts</div>
         <div class="stat-value">{{ section_overview.ecmwf_count }}</div>
-        <div class="stat-label">IFS HRES records</div>
+        <div class="stat-label">weather forecast records</div>
         {% if section_overview.ecmwf_latest %}
         <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">Latest: {{ section_overview.ecmwf_latest.uploaded_at.strftime("%d %b %Y") }}</div>
         {% else %}
@@ -355,18 +355,18 @@
 
       {# CDS #}
       <div class="stat-card" style="cursor:pointer;" onclick="location.href='/cds'">
-        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0284c7;margin-bottom:.5rem;">☁ CDS</div>
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0284c7;margin-bottom:.5rem;">☁ Climate Data</div>
         <div class="stat-value">{{ section_overview.seasonal_count }}</div>
-        <div class="stat-label">SEAS5 forecasts</div>
-        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">{{ section_overview.spi_count }} ERA5/SPI records</div>
+        <div class="stat-label">seasonal climate forecasts</div>
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">{{ section_overview.spi_count }} historical climate records</div>
         <a href="/cds" style="font-size:.78rem;font-weight:600;color:#0284c7;margin-top:.5rem;display:block;">View →</a>
       </div>
 
       {# GloFAS #}
       <div class="stat-card" style="cursor:pointer;" onclick="location.href='/glofas'">
-        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0369a1;margin-bottom:.5rem;">🌊 GloFAS</div>
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0369a1;margin-bottom:.5rem;">🌊 River Forecasts</div>
         <div class="stat-value">{{ section_overview.glofas_count }}</div>
-        <div class="stat-label">discharge records</div>
+        <div class="stat-label">river flow records</div>
         {% if section_overview.glofas_latest %}
         <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">Latest: {{ section_overview.glofas_latest.forecast_date.strftime("%d %b %Y") }}</div>
         {% else %}
@@ -377,12 +377,12 @@
 
       {# Drought #}
       <div class="stat-card" style="cursor:pointer;" onclick="location.href='/drought'">
-        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#b45309;margin-bottom:.5rem;">🏜 Drought</div>
+        <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#b45309;margin-bottom:.5rem;">🏜 Drought Monitor</div>
         {% if dash_spi_current %}
           {% set spi3 = dash_spi_current.get(3) %}
           {% if spi3 %}
             <div class="stat-value" style="color:{{ spi3.colour }}">{{ spi3.spi }}</div>
-            <div class="stat-label">SPI-3 · {{ spi3.label }}</div>
+            <div class="stat-label">Drought Index (SPI-3) · {{ spi3.label }}</div>
             <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">{{ spi3.month_name }} {{ spi3.year }}</div>
           {% else %}
             <div class="stat-value" style="color:#9ca3af">—</div>
@@ -400,7 +400,7 @@
         <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9333ea;margin-bottom:.5rem;">🎯 Risk</div>
         <div class="stat-value" style="color:{{ risk.colour }}">{{ risk.total }}/100</div>
         <div class="stat-label">composite score · {{ risk.label }}</div>
-        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">SPI: {{ risk.spi_pts }} · Seasonal: {{ risk.seasonal_pts }} · Triggers: {{ risk.trigger_pts }}</div>
+        <div style="font-size:.75rem;color:#9ca3af;margin-top:.35rem;">Drought: {{ risk.spi_pts }} · Seasonal: {{ risk.seasonal_pts }} · Alerts: {{ risk.trigger_pts }}</div>
         <a href="/risk" style="font-size:.78rem;font-weight:600;color:#9333ea;margin-top:.5rem;display:block;">View →</a>
       </div>
 
@@ -454,7 +454,7 @@
       {% endif %}
     </div>
     <div class="stat-card">
-      <div class="stat-label">Forecasts Ingested</div>
+      <div class="stat-label">Forecasts Received</div>
       <div class="stat-value">{{ stats.total_forecasts }}</div>
     </div>
     <div class="stat-card">
@@ -511,9 +511,9 @@
       </div>
       <div style="display:flex;flex-direction:column;gap:.35rem;">
         {% for label, pts, max_pts in [
-            ('SPI', risk.spi_pts, 40),
+            ('Drought', risk.spi_pts, 40),
             ('Seasonal', risk.seasonal_pts, 30),
-            ('Triggers', risk.trigger_pts, 30)
+            ('Alerts', risk.trigger_pts, 30)
         ] %}
         <div style="display:flex;align-items:center;gap:.5rem;">
           <span style="font-size:.72rem;font-weight:600;color:#6b7280;width:56px;">{{ label }}</span>
@@ -590,15 +590,15 @@
   <!-- Charts -->
   <div class="chart-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.25rem;">
     <div class="card" style="grid-column:1/-1;">
-      <div class="section-title">Precipitation Trend — Last 30 Forecasts (mm mean)</div>
+      <div class="section-title">Rainfall Trend — Last 30 Forecasts (average mm)</div>
       <canvas id="precipChart" height="90"></canvas>
     </div>
     <div class="card">
-      <div class="section-title">Impacts by Hazard Type</div>
+      <div class="section-title">Disaster Impacts by Hazard Type</div>
       <canvas id="hazardChart" height="200"></canvas>
     </div>
     <div class="card">
-      <div class="section-title">Forecasts Ingested (last 6 months)</div>
+      <div class="section-title">Forecasts Received (last 6 months)</div>
       <canvas id="monthlyChart" height="200"></canvas>
     </div>
     <div class="card">
@@ -618,7 +618,7 @@
         <tr>
           <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">File</td>
           <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">Uploaded</td>
-          <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">Mean Precip (mm)</td>
+          <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">Avg. Rainfall (mm)</td>
           <td style="color:#9ca3af; font-size:.75rem; text-transform:uppercase; letter-spacing:.05em;">Region</td>
           <td></td>
         </tr>
@@ -719,7 +719,7 @@
       data: {
         labels: precip.labels,
         datasets: [{
-          label: 'Mean precip (mm)',
+          label: 'Average rainfall (mm)',
           data: precip.values,
           borderColor: PURPLE,
           backgroundColor: PURPLE_LIGHT,
