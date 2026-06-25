@@ -48,6 +48,7 @@
   <span class="brand">IBF App</span>
   <div class="nav-links">
     <a href="/dashboard">Dashboard</a>
+    <a href="/shift">Shift View</a>
     <a href="/forecasts" class="active">Forecasts</a>
     <a href="/observed">Rainfall Data</a>
     <a href="/impacts">Impact Reports</a>
@@ -195,32 +196,77 @@
 
   {% if lead_time_stats %}
   <div class="card" style="margin-bottom:1.25rem;">
-    <div class="section-title">Lead-time Breakdown</div>
-    <table style="font-size:.875rem;">
-      <thead>
-        <tr>
-          <th>Lead-time window</th>
-          <th>Min (mm)</th>
-          <th>Mean (mm)</th>
-          <th>Max (mm)</th>
-          <th>Steps</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for key, label in [('d1_5', 'Days 1–5'), ('d6_10', 'Days 6–10'), ('d11_15', 'Days 11–15')] %}
-        {% if lead_time_stats.get(key) %}
-        {% set b = lead_time_stats[key] %}
-        <tr>
-          <td style="font-weight:600;">{{ label }}</td>
-          <td>{{ "%.2f"|format(b.min) }}</td>
-          <td style="font-weight:600;">{{ "%.2f"|format(b.mean) }}</td>
-          <td>{{ "%.2f"|format(b.max) }}</td>
-          <td style="color:#9ca3af;">{{ b.steps }}</td>
-        </tr>
-        {% endif %}
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="section-title">Forecast Uncertainty — Lead-time Breakdown</div>
+    <p style="font-size:.8rem;color:#6b7280;margin:-0.25rem 0 1rem;">Uncertainty range (min–max) and mean value across each forecast window. Wider bands indicate less certainty at longer lead times.</p>
+    <canvas id="lead-time-chart" height="110"></canvas>
+    <script src="/static/chart.umd.min.js"></script>
+    <script>
+    (function () {
+      {% set windows = [('d1_5','Days 1–5'),('d6_10','Days 6–10'),('d11_15','Days 11–15')] %}
+      var labels = [{% for k, lbl in windows %}{% if lead_time_stats.get(k) %}"{{ lbl }}",{% endif %}{% endfor %}];
+      var ranges = [{% for k, lbl in windows %}{% if lead_time_stats.get(k) %}{% set b = lead_time_stats[k] %}[{{ "%.2f"|format(b.min) }}, {{ "%.2f"|format(b.max) }}],{% endif %}{% endfor %}];
+      var means  = [{% for k, lbl in windows %}{% if lead_time_stats.get(k) %}{% set b = lead_time_stats[k] %}{{ "%.2f"|format(b.mean) }},{% endif %}{% endfor %}];
+      var steps  = [{% for k, lbl in windows %}{% if lead_time_stats.get(k) %}{% set b = lead_time_stats[k] %}{{ b.steps }},{% endif %}{% endfor %}];
+
+      new Chart(document.getElementById('lead-time-chart'), {
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              type: 'bar',
+              label: 'Uncertainty range (min–max)',
+              data: ranges,
+              backgroundColor: 'rgba(79,70,229,0.12)',
+              borderColor: 'rgba(79,70,229,0.35)',
+              borderWidth: 1,
+              borderSkipped: false,
+              barPercentage: 0.5,
+            },
+            {
+              type: 'line',
+              label: 'Mean',
+              data: means,
+              borderColor: '#4f46e5',
+              backgroundColor: '#4f46e5',
+              pointRadius: 5,
+              pointHoverRadius: 7,
+              tension: 0.3,
+              borderWidth: 2,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: 'index' },
+          scales: {
+            y: {
+              title: { display: true, text: '{{ val_unit }}', color: '#9ca3af' },
+              grid: { color: '#f3f4f6' },
+              ticks: { color: '#6b7280', font: { size: 11 } },
+            },
+            x: {
+              grid: { display: false },
+              ticks: { color: '#374151', font: { size: 12, weight: '600' } },
+            }
+          },
+          plugins: {
+            legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 16 } },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) {
+                  if (Array.isArray(ctx.raw)) {
+                    return ' Range: ' + ctx.raw[0].toFixed(1) + '–' + ctx.raw[1].toFixed(1) + ' {{ val_unit }}';
+                  }
+                  var idx = ctx.dataIndex;
+                  return ' Mean: ' + ctx.raw.toFixed(1) + ' {{ val_unit }} (' + steps[idx] + ' steps)';
+                }
+              }
+            }
+          }
+        }
+      });
+    })();
+    </script>
   </div>
   {% endif %}
 

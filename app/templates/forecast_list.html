@@ -69,6 +69,7 @@
   <span class="brand">IBF App</span>
   <div class="nav-links">
     <a href="/dashboard">Dashboard</a>
+    <a href="/shift">Shift View</a>
     <a href="/forecasts" class="active">Forecasts</a>
     <a href="/observed">Rainfall Data</a>
     <a href="/impacts">Impact Reports</a>
@@ -156,6 +157,7 @@
           <th>Time range</th>
           <th>Steps</th>
           <th>Avg. Rainfall (mm)</th>
+          <th>Spread</th>
           <th>Spatial extent</th>
           <th></th>
         </tr>
@@ -172,6 +174,13 @@
                          background:#fef3c7;color:#92400e;border-radius:4px;
                          font-size:.68rem;font-weight:700;vertical-align:middle;">
               ⚠ {{ fc.anomaly_score }}σ
+            </span>
+            {% endif %}
+            {% if fc.ensemble_size %}
+            <span style="display:inline-block;margin-left:.3rem;padding:.1rem .35rem;
+                         background:#ede9fe;color:#7c3aed;border-radius:4px;
+                         font-size:.65rem;font-weight:700;vertical-align:middle;">
+              ENS {{ fc.ensemble_size }}
             </span>
             {% endif %}
           </td>
@@ -201,6 +210,23 @@
               {% set pct = ((fc.precip_mean - fc.precip_min) / (fc.precip_max - fc.precip_min + 0.001) * 100) | round | int %}
               <span class="precip-bar" style="width:{{ pct }}%;"></span>
             </span>
+          </td>
+          <td>
+            {% if fc.precip_p75 is not none and fc.precip_p25 is not none %}
+              {% set spread = (fc.precip_p75 - fc.precip_p25) %}
+              {% set sc = "#dcfce7" if spread < 10 else "#fef3c7" if spread < 30 else "#fee2e2" %}
+              {% set tc = "#166534" if spread < 10 else "#92400e" if spread < 30 else "#991b1b" %}
+              <span style="background:{{ sc }};color:{{ tc }};padding:.15rem .5rem;border-radius:4px;font-size:.74rem;font-weight:600;white-space:nowrap;">
+                IQR {{ "%.1f"|format(spread) }} mm
+              </span>
+            {% elif fc.precip_max is not none and fc.precip_min is not none %}
+              {% set spread = fc.precip_max - fc.precip_min %}
+              <span style="background:#f3f4f6;color:#6b7280;padding:.15rem .5rem;border-radius:4px;font-size:.74rem;white-space:nowrap;">
+                ±{{ "%.1f"|format(spread / 2) }} mm
+              </span>
+            {% else %}
+              <span style="color:#9ca3af;">—</span>
+            {% endif %}
           </td>
           <td style="font-size:.8rem;">{{ fc.lat_min }}°–{{ fc.lat_max }}°N, {{ fc.lon_min }}°–{{ fc.lon_max }}°E</td>
           <td><a href="/forecasts/{{ fc.id }}" style="font-size:.8rem;">View</a></td>

@@ -24,6 +24,7 @@ from app.routers import return_period as return_period_router
 from app.routers import stations as stations_router
 from app.routers import verification as verification_router
 from app.routers import help_docs as help_docs_router
+from app.routers import shift as shift_router
 from app.core.llm import ensure_model
 from app.scheduler import apply_schedule, start_scheduler, stop_scheduler
 
@@ -155,6 +156,7 @@ app.include_router(return_period_router.router)
 app.include_router(stations_router.router)
 app.include_router(verification_router.router)
 app.include_router(help_docs_router.router)
+app.include_router(shift_router.router)
 
 
 @app.get("/")

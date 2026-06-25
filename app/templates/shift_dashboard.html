@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+{% block title %}Shift Dashboard — IBF App{% endblock %}
+{% block extra_styles %}
+<style>
+  .main { max-width: 1280px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+
+  /* Status banner */
+  .status-banner {
+    border-radius: 10px; padding: 1rem 1.5rem;
+    display: flex; align-items: center; gap: 1rem;
+    margin-bottom: 1.5rem; font-size: 1rem; font-weight: 600;
+  }
+  .status-banner .icon { font-size: 1.5rem; }
+  .status-banner.danger  { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+  .status-banner.warning { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+  .status-banner.ok      { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+  .status-banner .refresh-info { margin-left: auto; font-weight: 400; font-size: .82rem; color: inherit; opacity: .8; }
+
+  /* Page header */
+  .page-header { display: flex; align-items: baseline; gap: 1rem; margin-bottom: 1.25rem; }
+  .page-header h1 { font-size: 1.4rem; font-weight: 700; }
+  .page-header .timestamp { font-size: .85rem; color: #9ca3af; }
+
+  /* Summary cards */
+  .cards-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  @media (max-width: 900px) { .cards-row { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 500px) { .cards-row { grid-template-columns: 1fr; } }
+
+  .metric-card {
+    background: #fff; border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    padding: 1.1rem 1.25rem;
+  }
+  .metric-card .label {
+    font-size: .72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; color: #9ca3af; margin-bottom: .5rem;
+  }
+  .metric-card .value {
+    font-size: 2rem; font-weight: 800; line-height: 1; margin-bottom: .25rem;
+  }
+  .metric-card .sub { font-size: .8rem; color: #6b7280; }
+
+  /* Risk card colour */
+  .risk-low      { color: #16a34a; }
+  .risk-moderate { color: #d97706; }
+  .risk-high     { color: #dc2626; }
+  .risk-extreme  { color: #7c2d12; }
+
+  /* Alert count card */
+  .alert-zero { color: #16a34a; }
+  .alert-some { color: #dc2626; }
+
+  /* Active alerts table */
+  .section-title {
+    font-size: .78rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; color: #9ca3af; margin-bottom: .85rem;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  th {
+    text-align: left; padding: .55rem .75rem;
+    font-size: .7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; color: #9ca3af; border-bottom: 2px solid #e5e7eb;
+  }
+  td { padding: .65rem .75rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f9fafb; }
+
+  .hazard-dot {
+    display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+    vertical-align: middle; margin-right: .35rem;
+  }
+  .excess-badge {
+    display: inline-block; padding: .15rem .5rem; border-radius: 4px;
+    font-size: .72rem; font-weight: 700;
+    background: #fee2e2; color: #991b1b;
+  }
+  .ack-link {
+    font-size: .8rem; color: #4f46e5; text-decoration: none; font-weight: 500;
+  }
+  .ack-link:hover { text-decoration: underline; }
+
+  /* Data status section */
+  .data-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  @media (max-width: 700px) { .data-grid { grid-template-columns: 1fr; } }
+
+  .data-card {
+    background: #fff; border-radius: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    padding: 1rem 1.25rem;
+  }
+  .data-card .dc-label { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #9ca3af; margin-bottom: .4rem; }
+  .data-card .dc-value { font-size: 1.05rem; font-weight: 700; color: #111; }
+  .data-card .dc-sub { font-size: .78rem; color: #6b7280; margin-top: .2rem; }
+  .data-card .dc-alert { color: #dc2626; font-weight: 600; }
+  .data-card .dc-ok { color: #16a34a; }
+
+  /* Quick actions */
+  .actions-row { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.5rem; }
+  .action-btn {
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .6rem 1.1rem; border-radius: 8px; border: 1px solid #e5e7eb;
+    font-size: .875rem; font-weight: 500; color: #374151;
+    text-decoration: none; background: #fff;
+    transition: background .15s, border-color .15s;
+  }
+  .action-btn:hover { background: #f9fafb; border-color: #d1d5db; }
+  .action-btn.primary { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+  .action-btn.primary:hover { background: #4338ca; border-color: #4338ca; }
+  .action-btn.danger { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+  .action-btn.danger:hover { background: #fee2e2; }
+
+  .empty { color: #9ca3af; text-align: center; padding: 2rem 0; font-size: .9rem; }
+</style>
+{% endblock %}
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/shift" class="active">Shift View</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/observed">Rainfall Data</a>
+    <a href="/impacts">Impact Reports</a>
+    <a href="/triggers">Warning Rules</a>
+    <a href="/verification">Forecast Accuracy</a>
+    <a href="/alerts">Active Alerts</a>
+    <a href="/stations">Weather Stations</a>
+    <a href="/sync">Data Import</a>
+    <a href="/ecmwf">ECMWF Data</a>
+    <a href="/cds">Climate Data</a>
+    <a href="/glofas">River Forecasts</a>
+    <a href="/drought">Drought Monitor</a>
+    <div class="nav-dropdown"><span class="nav-dropdown-toggle">Risk ▾</span><div class="nav-dropdown-menu"><a href="/risk">Risk Overview</a><a href="/ibf">Risk Matrix</a></div></div>
+    <a href="/map">Alert Map</a>
+    <a href="/return-period">Flood History</a>
+    <a href="/reports/operational">Situation Report</a>
+    <a href="/reports/handover">Shift Handover</a>
+    <a href="/seasonal">Seasonal Outlook</a>
+    <a href="/bulletin">Bulletin</a>
+    <a href="/chat">AI Assistant</a>
+    <a href="/help">Help</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    {% if user.role == "admin" %}<a href="/admin/sms" style="color:#7c3aed;font-weight:600">SMS</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+
+  <div class="page-header">
+    <h1>Shift Dashboard</h1>
+    <span class="timestamp">{{ now.strftime("%d %b %Y, %H:%M") }} UTC</span>
+  </div>
+
+  <!-- Status banner -->
+  {% if alert_count > 0 %}
+  <div class="status-banner danger">
+    <span class="icon">⚠</span>
+    <span>{{ alert_count }} active warning{{ 's' if alert_count != 1 }} — immediate attention required</span>
+    <span class="refresh-info">Auto-refreshes in <span id="countdown">120</span>s</span>
+  </div>
+  {% elif data_gaps and data_gaps.any_alert %}
+  <div class="status-banner warning">
+    <span class="icon">⚡</span>
+    <span>Data gap detected — check data sources</span>
+    <span class="refresh-info">Auto-refreshes in <span id="countdown">120</span>s</span>
+  </div>
+  {% else %}
+  <div class="status-banner ok">
+    <span class="icon">✓</span>
+    <span>No active warnings — all clear</span>
+    <span class="refresh-info">Auto-refreshes in <span id="countdown">120</span>s</span>
+  </div>
+  {% endif %}
+
+  <!-- Summary cards -->
+  <div class="cards-row">
+
+    <!-- Risk level -->
+    <div class="metric-card">
+      <div class="label">Risk Level</div>
+      {% set rc = "risk-low" if risk.level == "Low" else "risk-moderate" if risk.level == "Moderate" else "risk-high" if risk.level == "High" else "risk-extreme" %}
+      <div class="value {{ rc }}">{{ risk.total }}</div>
+      <div class="sub {{ rc }}" style="font-weight:600;">{{ risk.level }}</div>
+      <div class="sub" style="margin-top:.35rem;">SPI {{ risk.spi_pts }}pt · Seas {{ risk.seasonal_pts }}pt · Alert {{ risk.trigger_pts }}pt</div>
+    </div>
+
+    <!-- Active warnings -->
+    <div class="metric-card">
+      <div class="label">Active Warnings</div>
+      <div class="value {{ 'alert-zero' if alert_count == 0 else 'alert-some' }}">{{ alert_count }}</div>
+      {% if alert_count == 0 %}
+      <div class="sub dc-ok">No unreviewed warnings</div>
+      {% else %}
+      <div class="sub">
+        {% for a in alerts[:3] %}
+        <span class="hazard-dot" style="background:{{ a.color }};"></span>{{ a.trigger.name if a.trigger else '—' }}<br>
+        {% endfor %}
+        {% if alert_count > 3 %}<span style="color:#9ca3af;">+{{ alert_count - 3 }} more</span>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Data freshness -->
+    <div class="metric-card">
+      <div class="label">Data Freshness</div>
+      <div class="value" style="font-size:1.1rem;margin-bottom:.5rem;">
+        {% if latest_fc %}
+        <span style="color:{% if data_gaps and data_gaps.forecast_alert %}#dc2626{% else %}#111{% endif %};">
+          Fcst: {{ fc_ago }}
+        </span>
+        {% else %}
+        <span style="color:#9ca3af;">No forecasts</span>
+        {% endif %}
+      </div>
+      {% if last_chirps_date %}
+      <div class="sub {% if data_gaps and data_gaps.chirps_alert %}dc-alert{% endif %}">
+        CHIRPS: {{ last_chirps_date.strftime("%d %b") }}
+        {% if data_gaps and data_gaps.chirps_alert %} ({{ data_gaps.chirps_gap_days }}d gap){% endif %}
+      </div>
+      {% else %}
+      <div class="sub" style="color:#9ca3af;">No CHIRPS data</div>
+      {% endif %}
+      {% if next_sync %}
+      <div class="sub" style="margin-top:.25rem;">Next sync: {{ next_sync }}</div>
+      {% endif %}
+    </div>
+
+    <!-- Pending actions -->
+    <div class="metric-card">
+      <div class="label">Pending Actions</div>
+      <div class="value {{ 'alert-some' if total_pending > 0 else 'alert-zero' }}">{{ total_pending }}</div>
+      <div class="sub">
+        {% if alert_count %}<span style="color:#dc2626;">{{ alert_count }} warning{{ 's' if alert_count != 1 }}</span><br>{% endif %}
+        {% if pending_drafts %}<span>{{ pending_drafts }} draft{{ 's' if pending_drafts != 1 }}</span><br>{% endif %}
+        {% if user.role == "admin" and pending_users %}<span>{{ pending_users }} registration{{ 's' if pending_users != 1 }}</span><br>{% endif %}
+        {% if anomalies_24h %}<span style="color:#d97706;">{{ anomalies_24h }} anomal{{ 'ies' if anomalies_24h != 1 else 'y' }} (24h)</span><br>{% endif %}
+        {% if total_pending == 0 %}<span class="dc-ok">Nothing pending</span>{% endif %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Active alerts table -->
+  <div class="card" style="margin-bottom:1.25rem;">
+    <div class="section-title">Active Warnings{% if alert_count %} — ranked by severity{% endif %}</div>
+    {% if alerts %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Warning Rule</th>
+          <th>Hazard</th>
+          <th>Observed Value</th>
+          <th>Threshold</th>
+          <th>Excess</th>
+          <th>Triggered</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in alerts %}
+        <tr>
+          <td style="color:#9ca3af;font-size:.8rem;">{{ loop.index }}</td>
+          <td style="font-weight:600;">
+            {% if a.trigger %}
+            <a href="/triggers/{{ a.trigger.id }}" style="color:#111;text-decoration:none;">{{ a.trigger.name }}</a>
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            <span class="hazard-dot" style="background:{{ a.color }};"></span>
+            <span style="text-transform:capitalize;">{{ a.trigger.hazard_type if a.trigger else '—' }}</span>
+          </td>
+          <td style="font-weight:600;">
+            {{ "%.2f"|format(a.activation.value) }}
+            {% if a.trigger %}<span style="color:#9ca3af;font-size:.75rem;">
+              {{ {"precip_mean":"mm","precip_max":"mm","precip_min":"mm","spi_1":"SPI","spi_3":"SPI","spi_6":"SPI","station_precip_24h":"mm","station_precip_48h":"mm"}.get(a.trigger.variable, "") }}
+            </span>{% endif %}
+          </td>
+          <td style="color:#6b7280;">
+            {% if a.trigger %}
+            {{ {"gt":">","gte":"≥","lt":"<","lte":"≤"}.get(a.trigger.operator,"") }}
+            {{ a.trigger.threshold }}
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% if a.excess_pct is not none %}
+            <span class="excess-badge">+{{ a.excess_pct }}%</span>
+            {% else %}—{% endif %}
+          </td>
+          <td style="color:#6b7280;font-size:.82rem;" title="{{ a.activation.triggered_at }}">
+            {{ a.ago }}
+          </td>
+          <td>
+            <a href="/triggers/{{ a.activation.trigger_id }}" class="ack-link">Review →</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No active warnings — conditions within normal parameters.</div>
+    {% endif %}
+  </div>
+
+  <!-- Data status detail -->
+  <div class="section-title" style="margin-bottom:.75rem;">Data Status</div>
+  <div class="data-grid">
+    <div class="data-card">
+      <div class="dc-label">Latest Forecast</div>
+      {% if latest_fc %}
+      <div class="dc-value {% if data_gaps and data_gaps.forecast_alert %}dc-alert{% else %}dc-ok{% endif %}">
+        {{ latest_fc.uploaded_at.strftime("%d %b %H:%M") }} UTC
+      </div>
+      <div class="dc-sub">{{ latest_fc.source or "manual" }} · {{ latest_fc.precip_mean }} mm avg
+        {% if data_gaps and data_gaps.forecast_alert %}
+        <br><span class="dc-alert">{{ data_gaps.forecast_gap_days }}d gap — no recent data</span>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="dc-value" style="color:#9ca3af;">No forecasts</div>
+      {% endif %}
+    </div>
+
+    <div class="data-card">
+      <div class="dc-label">Latest CHIRPS Observation</div>
+      {% if last_chirps_date %}
+      <div class="dc-value {% if data_gaps and data_gaps.chirps_alert %}dc-alert{% else %}dc-ok{% endif %}">
+        {{ last_chirps_date.strftime("%d %b %Y") }}
+      </div>
+      <div class="dc-sub">
+        {% if data_gaps and data_gaps.chirps_alert %}
+        <span class="dc-alert">{{ data_gaps.chirps_gap_days }}d gap — rainfall data delayed</span>
+        {% else %}
+        <span class="dc-ok">Up to date</span>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="dc-value" style="color:#9ca3af;">No data</div>
+      {% endif %}
+    </div>
+
+    <div class="data-card">
+      <div class="dc-label">Auto-Sync</div>
+      {% if sync_cfg and sync_cfg.enabled %}
+      <div class="dc-value dc-ok">Enabled</div>
+      <div class="dc-sub">
+        Next run: {{ next_sync }}<br>
+        Last: {{ sync_cfg.last_run_at.strftime("%d %b %H:%M") if sync_cfg.last_run_at else "never" }}
+        {% if sync_cfg.last_run_status %}
+        · <span class="{% if sync_cfg.last_run_status == 'ok' %}dc-ok{% elif sync_cfg.last_run_status == 'error' %}dc-alert{% endif %}">
+          {{ sync_cfg.last_run_status }}
+        </span>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="dc-value" style="color:#9ca3af;">Disabled</div>
+      <div class="dc-sub">Manual imports only — <a href="/sync">configure</a></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Quick actions -->
+  <div class="section-title" style="margin-bottom:.75rem;">Quick Actions</div>
+  <div class="actions-row">
+    {% if alert_count %}
+    <a href="/alerts" class="action-btn danger">⚠ View {{ alert_count }} Active Warning{{ 's' if alert_count != 1 }}</a>
+    {% endif %}
+    <a href="/reports/operational" class="action-btn primary">Generate Situation Report</a>
+    <a href="/reports/handover" class="action-btn">Shift Handover</a>
+    <a href="/bulletin" class="action-btn">Bulletin</a>
+    {% if pending_drafts %}
+    <a href="/bulletin/drafts" class="action-btn">{{ pending_drafts }} Draft{{ 's' if pending_drafts != 1 }} pending review</a>
+    {% endif %}
+    <a href="/map" class="action-btn">Alert Map</a>
+    <a href="/forecasts" class="action-btn">Latest Forecasts</a>
+    {% if user.role == "admin" and pending_users %}
+    <a href="/admin/users" class="action-btn">{{ pending_users }} Registration{{ 's' if pending_users != 1 }} pending</a>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+(function () {
+  // Auto-refresh countdown
+  var secs = 120;
+  var el = document.getElementById('countdown');
+  var iv = setInterval(function () {
+    secs--;
+    if (el) el.textContent = secs;
+    if (secs <= 0) { clearInterval(iv); location.reload(); }
+  }, 1000);
+})();
+</script>
+{% endblock %}
