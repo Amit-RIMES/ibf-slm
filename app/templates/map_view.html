@@ -325,6 +325,13 @@
       <div class="layer-spinner" id="spin-impacts" style="display:none;"></div>
       <div class="layer-toggle" id="toggle-impacts"></div>
     </div>
+    <div class="layer-row" onclick="toggleLayer('cap')">
+      <div class="layer-dot" style="background:#ea580c;border:1px solid #fed7aa;"></div>
+      <span class="layer-label">CAP Alerts</span>
+      <span class="layer-count" id="count-cap">—</span>
+      <div class="layer-spinner" id="spin-cap" style="display:none;"></div>
+      <div class="layer-toggle" id="toggle-cap"></div>
+    </div>
   </div>
 </div>
 
@@ -381,10 +388,11 @@ var layers = {
   rainfall: L.layerGroup().addTo(map),
   glofas: L.layerGroup(),      // off by default
   impacts: L.layerGroup(),     // off by default
+  cap: L.layerGroup(),         // off by default
 };
 
-var layerVisible = { triggers: true, rainfall: true, glofas: false, impacts: false };
-var layerLoaded = { triggers: false, rainfall: false, glofas: false, impacts: false };
+var layerVisible = { triggers: true, rainfall: true, glofas: false, impacts: false, cap: false };
+var layerLoaded = { triggers: false, rainfall: false, glofas: false, impacts: false, cap: false };
 
 // ── Color helpers ─────────────────────────────────────────────────────────────
 function rainfallColor(intensity) {
@@ -652,6 +660,7 @@ function toggleLayer(name) {
     if (!layerLoaded[name]) {
       if (name === 'glofas') loadGlofas();
       if (name === 'impacts') loadImpacts();
+      if (name === 'cap') loadCap();
     }
   } else {
     toggleEl.classList.remove('on');
@@ -673,6 +682,45 @@ function togglePanel() {
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') closeInfo();
 });
+
+// ── Load CAP inbound layer ────────────────────────────────────────────────────
+var _capSevColor = { Extreme:'#7f1d1d', Severe:'#dc2626', Moderate:'#f97316', Minor:'#eab308', Unknown:'#6b7280' };
+
+async function loadCap() {
+  if (layerLoaded.cap) return;
+  spinStart('cap');
+  try {
+    var r = await fetch('/map/layers/cap-inbound');
+    var fc = await r.json();
+    var count = 0;
+    fc.features.forEach(function(f) {
+      var p = f.properties;
+      var color = _capSevColor[p.severity] || '#ea580c';
+      var poly = L.geoJSON(f, {
+        style: function() {
+          return { color: color, weight: 2, opacity: 0.9, fillColor: color, fillOpacity: 0.18, dashArray: '6,3' };
+        },
+      });
+      poly.on('click', function() {
+        var exp = p.expires ? ' · Expires ' + p.expires.slice(0,16) + ' UTC' : '';
+        openInfo(
+          '⚠ ' + (p.event || 'CAP Alert'),
+          '<div class="info-row"><div class="info-label">Headline</div><div class="info-val">' + p.headline + '</div></div>' +
+          '<div class="info-row"><div class="info-label">Severity</div><div class="info-val" style="color:' + color + ';font-weight:700;">' + p.severity + '</div></div>' +
+          '<div class="info-row"><div class="info-label">Source</div><div class="info-val">External CAP feed</div></div>' + exp,
+          ''
+        );
+      });
+      poly.addTo(layers.cap);
+      count++;
+    });
+    setCount('cap', count ? count + ' alert' + (count !== 1 ? 's' : '') : 'none');
+    layerLoaded.cap = true;
+  } catch(e) {
+    setCount('cap', 'err');
+  }
+  spinStop('cap');
+}
 
 // ── Initial load ──────────────────────────────────────────────────────────────
 loadTriggers();

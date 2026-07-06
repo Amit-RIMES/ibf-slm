@@ -108,7 +108,7 @@
     </div>
   </div>
 
-  {% if obs.geojson %}
+  {% if obs.geojson and obs.geojson != 'null' %}
   <div class="card">
     <div class="section-title">Precipitation Map</div>
     <div id="map"></div>
@@ -143,7 +143,12 @@
       }),
       onEachFeature: (f, l) => l.bindTooltip(`${f.properties.precip} mm`, {sticky:true}),
     }).addTo(map);
-    map.fitBounds(layer.getBounds(), {padding:[16,16]});
+    const bounds = layer.getBounds();
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, {padding:[16,16]});
+    } else {
+      map.setView([15, 100], 4);
+    }
   </script>
   {% else %}
   <div class="card" style="text-align:center;color:#9ca3af;padding:2rem;">No map data available.</div>

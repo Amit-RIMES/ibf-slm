@@ -242,6 +242,11 @@ async def evaluate_triggers(forecast: ForecastUpload, db: AsyncSession) -> int:
         if email_to_tids:
             enqueue(send_subscriber_alert_emails(fired_rows, email_to_tids))
 
+        # Auto-generate CAP draft for each fired activation
+        from app.core.cap_xml import auto_create_cap
+        for t, act, fc in fired_rows:
+            enqueue(auto_create_cap(act.id, t.id, fc.id if fc else None))
+
     return len(fired_rows)
 
 

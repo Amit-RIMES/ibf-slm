@@ -1,0 +1,396 @@
+{% extends "base.html" %}
+{% block title %}CAP Alerts — IBF App{% endblock %}
+
+{% block extra_styles %}
+<style>
+  nav { background:#fff; border-bottom:1px solid #e5e7eb; padding:.85rem 2rem;
+        display:flex; align-items:center; justify-content:space-between; }
+  nav .brand { font-weight:700; font-size:1.1rem; color:#4f46e5; }
+  nav .nav-links { display:flex; align-items:center; gap:1.5rem; font-size:.875rem; }
+  nav .nav-links a { color:#6b7280; text-decoration:none; }
+  nav .nav-links a.active { color:#4f46e5; font-weight:600; }
+  nav .nav-links a.logout { color:#dc2626; font-weight:500; }
+
+  .main { max-width:1100px; margin:2rem auto; padding:0 1.25rem; }
+  h1 { font-size:1.4rem; font-weight:700; margin-bottom:.25rem; }
+  .sub { color:#6b7280; font-size:.9rem; margin-bottom:2rem; }
+
+  .card { background:#fff; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,.07);
+          padding:1.5rem; margin-bottom:1.5rem; }
+  .section-title { font-size:.78rem; font-weight:700; text-transform:uppercase;
+                   letter-spacing:.06em; color:#9ca3af; margin-bottom:1rem; }
+
+  .feed-link { display:inline-flex; align-items:center; gap:.5rem; padding:.45rem 1rem;
+               background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px;
+               font-size:.85rem; color:#374151; text-decoration:none; font-family:monospace; }
+  .feed-link:hover { background:#f3f4f6; }
+
+  .btn { padding:.45rem 1rem; border:none; border-radius:8px; font-size:.875rem;
+         font-weight:600; cursor:pointer; text-decoration:none; display:inline-block; }
+  .btn-primary { background:#4f46e5; color:#fff; }
+  .btn-green   { background:#059669; color:#fff; }
+  .btn-red     { background:#dc2626; color:#fff; }
+  .btn-gray    { background:#e5e7eb; color:#374151; }
+  .btn-sm      { padding:.3rem .7rem; font-size:.8rem; }
+
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  @media(max-width:600px) { .form-grid { grid-template-columns:1fr; } }
+  .form-group { display:flex; flex-direction:column; gap:.35rem; }
+  .form-group label { font-size:.8rem; font-weight:600; color:#374151; }
+  .form-group input, .form-group select, .form-group textarea {
+    border:1px solid #d1d5db; border-radius:8px; padding:.5rem .75rem;
+    font-size:.875rem; background:#fff; }
+  .form-group textarea { min-height:80px; resize:vertical; }
+  .form-group.full { grid-column:1/-1; }
+
+  table { width:100%; border-collapse:collapse; font-size:.875rem; }
+  th { text-align:left; padding:.5rem .75rem; font-size:.72rem; font-weight:700;
+       text-transform:uppercase; letter-spacing:.06em; color:#9ca3af;
+       border-bottom:1px solid #e5e7eb; }
+  td { padding:.6rem .75rem; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
+  tr:last-child td { border-bottom:none; }
+  tr:hover td { background:#f9fafb; }
+
+  .sev-badge { display:inline-block; padding:.2rem .55rem; border-radius:99px;
+               font-size:.7rem; font-weight:700; color:#fff; }
+  .pub-badge { display:inline-block; padding:.2rem .55rem; border-radius:99px;
+               font-size:.7rem; font-weight:700; }
+  .pub-yes { background:#dcfce7; color:#166534; }
+  .pub-no  { background:#f3f4f6; color:#6b7280; }
+  .type-cancel { color:#dc2626; font-weight:700; }
+
+  .empty { color:#9ca3af; font-size:.9rem; padding:2rem 0; text-align:center; }
+
+  details summary { cursor:pointer; font-weight:600; font-size:.875rem; color:#4f46e5; }
+  details[open] summary { margin-bottom:1rem; }
+
+  .alert-box { padding:.75rem 1rem; border-radius:8px; font-size:.875rem; margin-bottom:1rem; }
+  .alert-success { background:#dcfce7; color:#166534; border:1px solid #bbf7d0; }
+</style>
+{% endblock %}
+
+{% block body %}
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard">Dashboard</a>
+    <a href="/forecasts">Forecasts</a>
+    <a href="/alerts">Active Alerts</a>
+    <a href="/map">Alert Map</a>
+    <a href="/cap" class="active">CAP Alerts</a>
+    {% if user.role == "admin" %}<a href="/admin/users" style="color:#7c3aed;font-weight:600">Admin</a>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
+
+<div class="main">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:.75rem;margin-bottom:1.5rem;">
+    <div>
+      <h1>CAP Alert Integration</h1>
+      <p class="sub">Common Alerting Protocol (CAP 1.2) — outbound feed for WMO SWIC and inbound layer from external sources.</p>
+    </div>
+    <a href="/cap/feed.xml" class="feed-link" target="_blank">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 019 9"/><path d="M4 4a16 16 0 0116 16"/><circle cx="5" cy="19" r="1"/></svg>
+      /cap/feed.xml
+    </a>
+  </div>
+
+  {% if request.query_params.get('saved') %}
+  <div class="alert-box alert-success">Configuration saved.</div>
+  {% endif %}
+
+  <!-- Config card -->
+  <div class="card">
+    <div class="section-title">Publisher Configuration</div>
+    <form method="POST" action="/cap/config">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Sender ID (your organisation's email / URI)</label>
+          <input name="sender_id" value="{{ cfg.sender_id }}" required>
+        </div>
+        <div class="form-group">
+          <label>Sender Name</label>
+          <input name="sender_name" value="{{ cfg.sender_name }}" required>
+        </div>
+        <div class="form-group">
+          <label>Contact Email</label>
+          <input name="contact" type="email" value="{{ cfg.contact or '' }}">
+        </div>
+        <div class="form-group">
+          <label>Public Base URL (used in feed links)</label>
+          <input name="base_url" value="{{ cfg.base_url }}" required placeholder="https://ibf.your-nmhs.org">
+        </div>
+        <div class="form-group">
+          <label>Language</label>
+          <select name="language">
+            {% for lang in ["en-US","en-GB","fr-FR","es-ES","ar-SA","zh-CN","id-ID","th-TH"] %}
+            <option value="{{ lang }}" {% if cfg.language == lang %}selected{% endif %}>{{ lang }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:1.25rem;">
+        <div class="section-title" style="margin-bottom:.75rem;">Inbound CAP Feed</div>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>External CAP Atom Feed URL (e.g. WMO SWIC or MeteoAlarm)</label>
+            <input name="inbound_feed_url" value="{{ cfg.inbound_feed_url or '' }}"
+                   placeholder="https://severeweather.wmo.int/cap/feed.xml">
+          </div>
+          <div class="form-group" style="flex-direction:row;align-items:center;gap:.75rem;">
+            <input type="checkbox" name="inbound_enabled" id="inbound_enabled" value="true"
+                   {% if cfg.inbound_enabled %}checked{% endif %} style="width:auto;">
+            <label for="inbound_enabled" style="font-size:.875rem;font-weight:400;">
+              Show inbound alerts on the Alert Map
+            </label>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:1.25rem;">
+        <button type="submit" class="btn btn-primary">Save Configuration</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- New alert card -->
+  <div class="card">
+    <details>
+      <summary>+ Create Manual CAP Alert</summary>
+      <form method="POST" action="/cap/new">
+        <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Headline</label>
+            <input name="headline" required placeholder="Heavy Rainfall Warning for Northern Thailand">
+          </div>
+          <div class="form-group">
+            <label>Event type</label>
+            <input name="event" required placeholder="Heavy Rainfall Warning">
+          </div>
+          <div class="form-group">
+            <label>Area Description</label>
+            <input name="area_desc" placeholder="Northern Thailand">
+          </div>
+          <div class="form-group">
+            <label>Severity</label>
+            <select name="severity">
+              {% for s in severities %}<option>{{ s }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Urgency</label>
+            <select name="urgency">
+              {% for u in urgencies %}<option>{{ u }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Certainty</label>
+            <select name="certainty">
+              {% for c in certainties %}<option>{{ c }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select name="status">
+              {% for s in statuses %}<option>{{ s }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Onset (UTC)</label>
+            <input name="onset_str" type="datetime-local">
+          </div>
+          <div class="form-group">
+            <label>Expires (UTC)</label>
+            <input name="expires_str" type="datetime-local">
+          </div>
+          <div class="form-group full">
+            <label>Description</label>
+            <textarea name="description" placeholder="Detailed description of the hazard..."></textarea>
+          </div>
+          <div class="form-group full">
+            <label>Instruction / Recommended Actions</label>
+            <textarea name="instruction" placeholder="Take precautionary measures..."></textarea>
+          </div>
+        </div>
+        <div style="margin-top:1rem;">
+          <button type="submit" class="btn btn-primary">Create Draft</button>
+          <span style="margin-left:.75rem;font-size:.8rem;color:#9ca3af;">
+            Saved as draft — publish separately to add to the public feed.
+          </span>
+        </div>
+      </form>
+    </details>
+  </div>
+
+  <!-- Alerts table -->
+  <div class="card">
+    <div class="section-title">CAP Alerts ({{ alerts|length }} total)</div>
+    {% if alerts %}
+    <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr>
+          <th>Identifier</th>
+          <th>Headline</th>
+          <th>Event</th>
+          <th>Severity</th>
+          <th>Type</th>
+          <th>Sent (UTC)</th>
+          <th>Expires</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in alerts %}
+        <tr>
+          <td style="font-family:monospace;font-size:.75rem;color:#6b7280;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            <a href="/cap/alerts/{{ a.identifier }}.xml" target="_blank" style="color:#4f46e5;text-decoration:none;">{{ a.identifier }}</a>
+          </td>
+          <td style="max-width:220px;">
+            <div style="font-weight:600;font-size:.875rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ a.headline }}</div>
+            {% if a.area_desc %}<div style="font-size:.78rem;color:#6b7280;">{{ a.area_desc }}</div>{% endif %}
+          </td>
+          <td style="font-size:.82rem;">{{ a.event }}</td>
+          <td>
+            <span class="sev-badge" style="background:{{ severity_color.get(a.severity, '#6b7280') }};">
+              {{ a.severity }}
+            </span>
+          </td>
+          <td>
+            <span {% if a.msg_type == 'Cancel' %}class="type-cancel"{% endif %} style="font-size:.82rem;">
+              {{ a.msg_type }}
+            </span>
+          </td>
+          <td style="font-size:.8rem;color:#6b7280;white-space:nowrap;">{{ a.sent.strftime("%Y-%m-%d %H:%M") }}</td>
+          <td style="font-size:.8rem;color:#6b7280;white-space:nowrap;">
+            {% if a.expires %}{{ a.expires.strftime("%Y-%m-%d %H:%M") }}{% else %}—{% endif %}
+          </td>
+          <td>
+            <span class="pub-badge {{ 'pub-yes' if a.published else 'pub-no' }}">
+              {{ "Published" if a.published else "Draft" }}
+            </span>
+          </td>
+          <td style="white-space:nowrap;">
+            {% if a.msg_type != 'Cancel' %}
+            <form method="POST" action="/cap/{{ a.id }}/publish" style="display:inline;">
+              <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+              <button type="submit" class="btn btn-sm {{ 'btn-gray' if a.published else 'btn-green' }}">
+                {{ "Unpublish" if a.published else "Publish" }}
+              </button>
+            </form>
+            <button class="btn btn-sm btn-gray"
+              onclick="openEditModal({{ a.id }}, {{ a.headline|tojson }}, {{ (a.description or '')|tojson }},
+                        {{ (a.instruction or '')|tojson }}, {{ a.severity|tojson }},
+                        {{ a.urgency|tojson }}, {{ a.certainty|tojson }}, {{ (a.area_desc or '')|tojson }})">
+              Edit
+            </button>
+            <form method="POST" action="/cap/{{ a.id }}/cancel" style="display:inline;"
+                  onsubmit="return confirm('Issue a Cancel for this alert?')">
+              <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+              <button type="submit" class="btn btn-sm btn-red">Cancel</button>
+            </form>
+            {% else %}
+            <span style="font-size:.78rem;color:#9ca3af;">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p class="empty">No CAP alerts yet. They are created automatically when triggers fire, or manually above.</p>
+    {% endif %}
+  </div>
+
+  <!-- How it works -->
+  <div class="card" style="background:#f9fafb;box-shadow:none;border:1px solid #e5e7eb;">
+    <div class="section-title">How CAP Integration Works</div>
+    <div style="font-size:.875rem;color:#374151;line-height:1.7;">
+      <p><strong>Outbound:</strong> Every time a trigger fires, a CAP 1.2 draft alert is auto-generated.
+      Review and edit it here, then click <em>Publish</em> to add it to the public Atom feed at
+      <a href="/cap/feed.xml" style="color:#4f46e5;">/cap/feed.xml</a>.
+      Register this URL with WMO SWIC or your national CAP aggregator.</p>
+      <p><strong>Individual XML:</strong> Each alert has a direct CAP XML link (click the identifier).
+      The Atom feed links to these so aggregators can ingest the full CAP document.</p>
+      <p><strong>Inbound:</strong> Configure an external Atom feed URL above (e.g. the WMO SWIC feed
+      for your region). When enabled, active alerts appear as an orange layer on the Alert Map,
+      giving duty forecasters regional context from neighbouring countries.</p>
+      <p style="color:#9ca3af;">CAP standard: <em>OASIS Common Alerting Protocol v1.2</em>.
+      WMO SWIC: <a href="https://severeweather.wmo.int" style="color:#4f46e5;" target="_blank">severeweather.wmo.int</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- Edit modal -->
+<div id="edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:2rem;width:560px;max-width:95vw;max-height:90vh;overflow-y:auto;">
+    <div style="font-weight:700;font-size:1.1rem;margin-bottom:1.25rem;">Edit CAP Alert</div>
+    <form method="POST" id="edit-form">
+      <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Headline</label>
+          <input name="headline" id="edit-headline" required>
+        </div>
+        <div class="form-group full">
+          <label>Description</label>
+          <textarea name="description" id="edit-description"></textarea>
+        </div>
+        <div class="form-group full">
+          <label>Instruction</label>
+          <textarea name="instruction" id="edit-instruction"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Severity</label>
+          <select name="severity" id="edit-severity">
+            {% for s in severities %}<option>{{ s }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Urgency</label>
+          <select name="urgency" id="edit-urgency">
+            {% for u in urgencies %}<option>{{ u }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Certainty</label>
+          <select name="certainty" id="edit-certainty">
+            {% for c in certainties %}<option>{{ c }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Area Description</label>
+          <input name="area_desc" id="edit-area">
+        </div>
+      </div>
+      <div style="display:flex;gap:.75rem;margin-top:1.25rem;">
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+        <button type="button" class="btn btn-gray" onclick="closeEditModal()">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openEditModal(id, headline, description, instruction, severity, urgency, certainty, area) {
+  document.getElementById('edit-form').action = '/cap/' + id + '/edit';
+  document.getElementById('edit-headline').value = headline;
+  document.getElementById('edit-description').value = description;
+  document.getElementById('edit-instruction').value = instruction;
+  document.getElementById('edit-severity').value = severity;
+  document.getElementById('edit-urgency').value = urgency;
+  document.getElementById('edit-certainty').value = certainty;
+  document.getElementById('edit-area').value = area;
+  document.getElementById('edit-modal').style.display = 'flex';
+}
+function closeEditModal() {
+  document.getElementById('edit-modal').style.display = 'none';
+}
+document.getElementById('edit-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeEditModal();
+});
+</script>
+{% endblock %}

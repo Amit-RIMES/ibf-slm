@@ -63,13 +63,15 @@ def _build_discharge_geojson(
     threshold: float = 1.0,
 ) -> str:
     """Build GeoJSON showing only river network cells (discharge > threshold m³/s)."""
-    vmin, vmax = float(np.nanmin(values_2d)), float(np.nanmax(values_2d))
-    vrange = max(vmax - threshold, 1.0)
+    river_vals = values_2d[~np.isnan(values_2d) & (values_2d > threshold)]
+    log_min = float(np.log(np.maximum(threshold, river_vals.min()))) if river_vals.size else 0.0
+    log_max = float(np.log(river_vals.max())) if river_vals.size else 1.0
+    log_range = max(log_max - log_min, 1.0)
     dlat = float(abs(lats[1] - lats[0])) / 2 if len(lats) > 1 else 0.1
     dlon = float(abs(lons[1] - lons[0])) / 2 if len(lons) > 1 else 0.1
 
     max_cells = 5000
-    total_river_cells = int(np.sum(~np.isnan(values_2d) & (values_2d > threshold)))
+    total_river_cells = int(river_vals.size)
     step = max(1, total_river_cells // max_cells)
 
     features = []
@@ -83,7 +85,7 @@ def _build_discharge_geojson(
             if count % step != 1:
                 continue
             lat, lon = float(lats[i]), float(lons[j])
-            intensity = min(1.0, (val - threshold) / vrange)
+            intensity = min(1.0, max(0.0, (np.log(val) - log_min) / log_range))
             features.append({
                 "type": "Feature",
                 "properties": {
