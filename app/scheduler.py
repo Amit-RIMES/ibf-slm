@@ -163,7 +163,8 @@ async def _run_alert_escalation() -> None:
                 trigger = trigger_res.scalar_one_or_none()
                 if not trigger:
                     continue
-                hours_unacked = int((datetime.now(timezone.utc) - activation.triggered_at).total_seconds() / 3600)
+                triggered_at = activation.triggered_at if activation.triggered_at.tzinfo else activation.triggered_at.replace(tzinfo=timezone.utc)
+                hours_unacked = int((datetime.now(timezone.utc) - triggered_at).total_seconds() / 3600)
                 enqueue(
                     send_escalation_email(admin_emails, activation, trigger, hours_unacked, settings.APP_BASE_URL)
                 )
