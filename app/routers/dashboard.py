@@ -316,11 +316,65 @@ async def dashboard(
     # Bulletin subscribers
     bulletin_subs = await db.scalar(select(func.count()).select_from(BulletinSubscriber))
 
+    # ── Health bar ────────────────────────────────────────────────────────────
+    now_dt = datetime.now(timezone.utc)
+
+    def _age_str(dt):
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        hrs = (now_dt - dt).total_seconds() / 3600
+        if hrs < 1:
+            return "just now"
+        if hrs < 24:
+            return f"{int(hrs)}h ago"
+        return f"{int(hrs / 24)}d ago"
+
+    def _feed_status(dt, warn_h, alert_h):
+        if dt is None:
+            return "missing"
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        hrs = (now_dt - dt).total_seconds() / 3600
+        if hrs < warn_h:
+            return "ok"
+        if hrs < alert_h:
+            return "warn"
+        return "alert"
+
+    chirps_dt = obs_latest.fetched_at if obs_latest else None
+    glofas_dt = glofas_latest.uploaded_at if glofas_latest else None
+    ecmwf_dt  = ecmwf_latest.uploaded_at if ecmwf_latest else None
+    seas_dt   = latest_seasonal_dash.uploaded_at if latest_seasonal_dash else None
+
+    health_feeds = [
+        {"label": "Observed Rain", "age": _age_str(chirps_dt), "status": _feed_status(chirps_dt, 72,  168), "url": "/observed"},
+        {"label": "River Flow",    "age": _age_str(glofas_dt), "status": _feed_status(glofas_dt, 72,  168), "url": "/glofas"},
+        {"label": "ECMWF",        "age": _age_str(ecmwf_dt),  "status": _feed_status(ecmwf_dt,  72,  120), "url": "/forecasts"},
+        {"label": "Seasonal",     "age": _age_str(seas_dt),   "status": _feed_status(seas_dt,   960, 1680), "url": "/seasonal"},
+    ]
+
+    _hb_statuses = [f["status"] for f in health_feeds]
+    if active_activations or "alert" in _hb_statuses or "missing" in _hb_statuses:
+        _hb_overall = "alert"
+    elif "warn" in _hb_statuses:
+        _hb_overall = "warn"
+    else:
+        _hb_overall = "ok"
+
+    health_bar = {
+        "overall": _hb_overall,
+        "feeds": health_feeds,
+        "active_warnings": len(active_activations),
+    }
+
     return templates.TemplateResponse(
     request,
     "dashboard.html",
     {
             "user": user,
+            "health_bar": health_bar,
             "data_gaps": data_gaps,
             "stats": {
                 "total_users": total_users,

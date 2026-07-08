@@ -88,8 +88,7 @@
     
     <a href="/chat">AI Assistant</a>
     <a href="/help">Help</a>
-    <a href="/admin/users" class="active" style="color:#7c3aed;font-weight:600">Admin</a>
-    <a href="/admin/sms" style="color:#7c3aed;font-weight:600">SMS</a>
+    {% if user.role == "admin" %}<div class="nav-dropdown"><span class="nav-dropdown-toggle" style="color:#7c3aed;font-weight:600">Admin ▾</span><div class="nav-dropdown-menu"><a href="/admin/users">Users</a><a href="/admin/sms">SMS Config</a><a href="/cap">CAP Alerts</a><a href="/sync">Data Import</a><a href="/ecmwf">ECMWF Data</a><a href="/cds">Climate Data</a></div></div>{% endif %}
     <a href="/logout" class="logout">Logout</a>
   </div>
 </nav>

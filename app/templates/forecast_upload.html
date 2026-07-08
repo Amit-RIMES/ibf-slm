@@ -78,7 +78,7 @@
 
 <div class="main">
   <h1>Upload Forecast</h1>
-  <p class="sub">Upload a NetCDF (.nc) file to ingest precipitation forecast data.</p>
+  <p class="sub">Upload a NetCDF (.nc) or GRIB2 (.grib2 / .grib) file to ingest precipitation forecast data.</p>
 
   {% if error %}
   <div class="error">{{ error }}</div>
@@ -87,9 +87,9 @@
   <div class="card">
     <form method="post" enctype="multipart/form-data" id="upload-form">
       <div class="drop-zone" id="drop-zone">
-        <input type="file" name="file" id="file-input" accept=".nc" required />
+        <input type="file" name="file" id="file-input" accept=".nc,.grib2,.grib" required />
         <div class="drop-icon">&#x2601;</div>
-        <div class="drop-label">Drag &amp; drop your .nc file here</div>
+        <div class="drop-label">Drag &amp; drop your .nc or .grib2 file here</div>
         <div class="drop-hint">or click to browse</div>
         <div class="file-chosen" id="file-chosen"></div>
       </div>

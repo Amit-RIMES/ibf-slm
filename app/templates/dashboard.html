@@ -34,6 +34,50 @@
   .badge-admin { background: #ede9fe; color: #6d28d9; }
   .badge-user  { background: #f3f4f6; color: #6b7280; }
   .stat-sub { font-size: .78rem; color: #9ca3af; margin-top: .3rem; }
+
+  /* ── Health bar ── */
+  .health-bar {
+    display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: .6rem 1rem; margin-bottom: 1.25rem; font-size: .8rem;
+  }
+  .hb-overall {
+    display: flex; align-items: center; gap: .4rem;
+    font-weight: 700; padding: .28rem .7rem; border-radius: 6px;
+    white-space: nowrap; margin-right: .25rem;
+  }
+  .hb-overall-ok    { background: #dcfce7; color: #15803d; }
+  .hb-overall-warn  { background: #fef9c3; color: #a16207; }
+  .hb-overall-alert { background: #fee2e2; color: #b91c1c; }
+  .hb-dot {
+    width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+    animation: hb-pulse 2s ease-in-out infinite;
+  }
+  .hb-overall-ok   .hb-dot { background: #16a34a; animation: none; }
+  .hb-overall-warn .hb-dot { background: #ca8a04; }
+  .hb-overall-alert .hb-dot { background: #dc2626; }
+  @keyframes hb-pulse {
+    0%, 100% { opacity: 1; } 50% { opacity: .35; }
+  }
+  .hb-divider { width: 1px; height: 16px; background: #e5e7eb; flex-shrink: 0; }
+  .hb-feeds { display: flex; gap: .4rem; flex-wrap: wrap; }
+  .hb-chip {
+    display: inline-flex; align-items: center; gap: .3rem;
+    padding: .22rem .55rem; border-radius: 5px; text-decoration: none;
+    border: 1px solid transparent; transition: opacity .15s; white-space: nowrap;
+  }
+  .hb-chip:hover { opacity: .72; }
+  .hb-chip-ok      { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+  .hb-chip-warn    { background: #fefce8; border-color: #fde047; color: #854d0e; }
+  .hb-chip-alert   { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+  .hb-chip-missing { background: #f9fafb; border-color: #d1d5db; color: #6b7280; }
+  .hb-chip-name  { font-weight: 600; }
+  .hb-chip-age   { opacity: .8; font-size: .73rem; }
+  .hb-warnings {
+    margin-left: auto; display: flex; align-items: center; gap: .3rem;
+    white-space: nowrap; font-weight: 600; color: #6b7280; font-size: .78rem;
+  }
+  .hb-warnings-active { color: #b91c1c; }
 </style>
 {% endblock %}
 
@@ -170,6 +214,32 @@
 
   <div class="greeting">Hello, {{ user.username }} 👋</div>
   <div class="sub">Here's what's going on today.</div>
+
+  <!-- ── Health bar ──────────────────────────────────────────────────────── -->
+  <div class="health-bar">
+    <div class="hb-overall hb-overall-{{ health_bar.overall }}">
+      <span class="hb-dot"></span>
+      {% if health_bar.overall == "ok" %}All feeds current
+      {% elif health_bar.overall == "warn" %}Feed gap detected
+      {% else %}Action needed{% endif %}
+    </div>
+    <div class="hb-divider"></div>
+    <div class="hb-feeds">
+      {% for feed in health_bar.feeds %}
+      <a href="{{ feed.url }}" class="hb-chip hb-chip-{{ feed.status }}">
+        <span class="hb-chip-name">{{ feed.label }}</span>
+        <span class="hb-chip-age">{{ feed.age or "no data" }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    <div class="hb-warnings {% if health_bar.active_warnings > 0 %}hb-warnings-active{% endif %}">
+      {% if health_bar.active_warnings > 0 %}
+      ⚠ {{ health_bar.active_warnings }} active warning{{ 's' if health_bar.active_warnings != 1 }}
+      {% else %}
+      ✓ No active warnings
+      {% endif %}
+    </div>
+  </div>
 
   <!-- ── Pending Actions widget ───────────────────────────────────────────── -->
   {% set pending_items = [] %}

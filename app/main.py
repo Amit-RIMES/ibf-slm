@@ -70,7 +70,7 @@ _CSP = (
     "default-src 'self'; "
     "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "
     "style-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "
-    "img-src 'self' data: https://*.tile.openstreetmap.org; "
+    "img-src 'self' data: blob: https://*.tile.openstreetmap.org; "
     "connect-src 'self'; "
     "frame-ancestors 'none';"
 )

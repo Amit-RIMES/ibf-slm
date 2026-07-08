@@ -1,7 +1,11 @@
+import io
 import json
+import math
+import os
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+import numpy as np
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +15,7 @@ from app.core.deps import get_current_user
 from app.models.forecast import ForecastUpload
 from app.models.glofas import GlofasRecord
 from app.models.impact import ImpactRecord
+from app.models.observed_rainfall import ObservedRainfall
 from app.models.trigger import Trigger, TriggerActivation
 
 router = APIRouter(prefix="/map")
@@ -223,3 +228,432 @@ async def layer_impacts(request: Request, db: AsyncSession = Depends(get_db)):
     ]
 
     return JSONResponse({"type": "FeatureCollection", "features": features})
+
+
+# ── Precipitation colormap (purple→blue→cyan→green→yellow→orange→red) ─────────
+
+def _precip_rgba(value: float, vmax: float) -> tuple[int, int, int, int]:
+    """Map a precipitation value to an RGBA tuple using a met-standard color ramp."""
+    if vmax <= 0 or value <= 0:
+        return (0, 0, 0, 0)  # transparent
+
+    # Log-scale normalise so low values still get color
+    import math as _m
+    t = _m.log1p(value) / _m.log1p(vmax)
+    t = max(0.0, min(1.0, t))
+
+    # Color stops: (t, R, G, B, A)
+    stops = [
+        (0.00, 70,  0,  130, 0),    # transparent at zero
+        (0.05, 70,  0,  130, 160),  # indigo
+        (0.20, 30,  80,  220, 200), # blue
+        (0.40, 0,  180,  220, 210), # cyan
+        (0.60, 0,  200,   80, 220), # green
+        (0.75, 240, 230,   0, 230), # yellow
+        (0.88, 255, 130,   0, 240), # orange
+        (1.00, 220,   0,   0, 250), # red
+    ]
+
+    for i in range(len(stops) - 1):
+        t0, r0, g0, b0, a0 = stops[i]
+        t1, r1, g1, b1, a1 = stops[i + 1]
+        if t <= t1:
+            f = (t - t0) / (t1 - t0) if t1 > t0 else 0.0
+            r = int(r0 + f * (r1 - r0))
+            g = int(g0 + f * (g1 - g0))
+            b = int(b0 + f * (b1 - b0))
+            a = int(a0 + f * (a1 - a0))
+            return (r, g, b, a)
+
+    return (220, 0, 0, 250)
+
+
+def _build_raster_png(lats: np.ndarray, lons: np.ndarray, grid: np.ndarray,
+                      scale: int = 2) -> tuple[bytes, float, float, float, float]:
+    """Interpolate the forecast grid and render as a transparent RGBA PNG.
+    Returns (png_bytes, lat_min, lat_max, lon_min, lon_max).
+    """
+    from scipy.interpolate import RegularGridInterpolator
+    from scipy.ndimage import distance_transform_edt
+    from PIL import Image
+
+    # 2D nearest-neighbour NaN fill — avoids horizontal/vertical stripes
+    nan_mask = np.isnan(grid)
+    grid_filled = np.copy(grid)
+    if nan_mask.any():
+        _, idx = distance_transform_edt(nan_mask, return_distances=True, return_indices=True)
+        grid_filled = grid[tuple(idx)]
+
+    h, w = len(lats), len(lons)
+    lat_fine = np.linspace(lats[0], lats[-1], h * scale)
+    lon_fine = np.linspace(lons[0], lons[-1], w * scale)
+
+    interp_fn = RegularGridInterpolator(
+        (lats, lons), grid_filled, method="linear", bounds_error=False, fill_value=0.0
+    )
+    lon_g, lat_g = np.meshgrid(lon_fine, lat_fine)
+    values = interp_fn((lat_g, lon_g))
+
+    vmax = float(np.nanmax(values)) if np.nanmax(values) > 0 else 1.0
+
+    # Build RGBA array
+    rgba = np.zeros((len(lat_fine), len(lon_fine), 4), dtype=np.uint8)
+    for i in range(len(lat_fine)):
+        for j in range(len(lon_fine)):
+            rgba[i, j] = _precip_rgba(float(values[i, j]), vmax)
+
+    # Flip vertically: image origin is top-left, geographic origin is bottom-left
+    rgba = np.flipud(rgba)
+
+    img = Image.fromarray(rgba, mode="RGBA")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+
+    return (
+        buf.read(),
+        float(lats.min()), float(lats.max()),
+        float(lons.min()), float(lons.max()),
+    )
+
+
+@router.get("/layers/rainfall-raster")
+async def layer_rainfall_raster(
+    request: Request,
+    lead: str = Query(default="total", description="Lead time: total|d1_5|d6_10|d11_15"),
+    fc_id: int = Query(default=None, description="Specific forecast ID; omit for latest"),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    if fc_id is not None:
+        fc = (await db.execute(
+            select(ForecastUpload).where(ForecastUpload.id == fc_id)
+        )).scalars().first()
+    else:
+        fc = (await db.execute(
+            select(ForecastUpload)
+            .where(ForecastUpload.geojson.isnot(None))
+            .where(or_(ForecastUpload.variable == "tp", ForecastUpload.variable.is_(None)))
+            .order_by(ForecastUpload.uploaded_at.desc())
+            .limit(1)
+        )).scalars().first()
+
+    if not fc:
+        return JSONResponse({"error": "no data"}, status_code=404)
+
+    try:
+        geojson = json.loads(fc.geojson)
+        lats, lons, grid = _extract_grid(geojson)
+    except Exception:
+        return JSONResponse({"error": "parse error"}, status_code=500)
+
+    if len(lats) < 2 or len(lons) < 2:
+        return JSONResponse({"error": "insufficient grid"}, status_code=500)
+
+    # Apply lead-time scalar multiplier if requested and stats are available
+    if lead != "total" and fc.lead_time_stats:
+        try:
+            lt = json.loads(fc.lead_time_stats)
+            bucket = lt.get(lead)
+            if bucket:
+                total_mean = float(fc.precip_mean) if fc.precip_mean else 1.0
+                bucket_mean = float(bucket.get("mean", total_mean))
+                ratio = bucket_mean / total_mean if total_mean > 0 else 1.0
+                grid = grid * ratio
+        except Exception:
+            pass
+
+    try:
+        png_bytes, lat_min, lat_max, lon_min, lon_max = _build_raster_png(lats, lons, grid, scale=3)
+    except Exception as exc:
+        import logging; logging.getLogger(__name__).error("raster render failed: %s", exc)
+        return JSONResponse({"error": "render failed"}, status_code=500)
+
+    headers = {
+        "X-Lat-Min": str(lat_min),
+        "X-Lat-Max": str(lat_max),
+        "X-Lon-Min": str(lon_min),
+        "X-Lon-Max": str(lon_max),
+        "X-Forecast-Id": str(fc.id),
+        "X-Source": fc.source or "",
+        "X-Uploaded-At": fc.uploaded_at.isoformat(),
+        "X-Precip-Max": str(fc.precip_max or 0),
+        "Cache-Control": "no-cache",
+        "Access-Control-Expose-Headers": "X-Lat-Min,X-Lat-Max,X-Lon-Min,X-Lon-Max,X-Forecast-Id,X-Source,X-Uploaded-At,X-Precip-Max",
+    }
+    return StreamingResponse(io.BytesIO(png_bytes), media_type="image/png", headers=headers)
+
+
+@router.get("/layers/observed-raster")
+async def layer_observed_raster(
+    request: Request,
+    obs_id: int = Query(..., description="ObservedRainfall record ID"),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    obs = (await db.execute(
+        select(ObservedRainfall).where(ObservedRainfall.id == obs_id)
+    )).scalars().first()
+
+    if not obs or not obs.geojson:
+        return JSONResponse({"error": "no data"}, status_code=404)
+
+    try:
+        geojson = json.loads(obs.geojson)
+        lats, lons, grid = _extract_grid(geojson)
+    except Exception:
+        return JSONResponse({"error": "parse error"}, status_code=500)
+
+    if len(lats) < 2 or len(lons) < 2:
+        return JSONResponse({"error": "insufficient grid"}, status_code=500)
+
+    try:
+        png_bytes, lat_min, lat_max, lon_min, lon_max = _build_raster_png(lats, lons, grid, scale=3)
+    except Exception as exc:
+        import logging; logging.getLogger(__name__).error("observed raster render failed: %s", exc)
+        return JSONResponse({"error": "render failed"}, status_code=500)
+
+    headers = {
+        "X-Lat-Min": str(lat_min), "X-Lat-Max": str(lat_max),
+        "X-Lon-Min": str(lon_min), "X-Lon-Max": str(lon_max),
+        "X-Precip-Max": str(obs.precip_max or 0),
+        "Cache-Control": "no-cache",
+        "Access-Control-Expose-Headers": "X-Lat-Min,X-Lat-Max,X-Lon-Min,X-Lon-Max,X-Precip-Max",
+    }
+    return StreamingResponse(io.BytesIO(png_bytes), media_type="image/png", headers=headers)
+
+
+# ── Helpers shared by zonal + interpolation layers ───────────────────────────
+
+def _pip(lat: float, lon: float, ring: list) -> bool:
+    """Ray-casting point-in-polygon. ring is [[lon, lat], ...]."""
+    n, inside, j = len(ring), False, len(ring) - 1
+    for i in range(n):
+        xi, yi = ring[i][0], ring[i][1]
+        xj, yj = ring[j][0], ring[j][1]
+        if (yi > lat) != (yj > lat):
+            if lon < (xj - xi) * (lat - yi) / (yj - yi) + xi:
+                inside = not inside
+        j = i
+    return inside
+
+
+def _point_in_feature(lat: float, lon: float, geom: dict) -> bool:
+    """Test a point against a GeoJSON Polygon or MultiPolygon geometry."""
+    gtype = geom["type"]
+    if gtype == "Polygon":
+        rings = geom["coordinates"]
+        if not _pip(lat, lon, rings[0]):
+            return False
+        for hole in rings[1:]:
+            if _pip(lat, lon, hole):
+                return False
+        return True
+    if gtype == "MultiPolygon":
+        for poly in geom["coordinates"]:
+            if not _pip(lat, lon, poly[0]):
+                continue
+            inside_hole = any(_pip(lat, lon, h) for h in poly[1:])
+            if not inside_hole:
+                return True
+    return False
+
+
+_COUNTRIES_PATH = os.path.join(os.path.dirname(__file__), "..", "static", "countries.geojson")
+_countries_cache: dict | None = None
+
+def _load_countries() -> dict:
+    global _countries_cache
+    if _countries_cache is None:
+        with open(_COUNTRIES_PATH) as f:
+            _countries_cache = json.load(f)
+    return _countries_cache
+
+
+def _extract_grid(geojson: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Extract sorted unique lat/lon axes and 2D value grid from a FeatureCollection.
+    Supports both Point features and Polygon cell features (uses centroid).
+    """
+    pts = []
+    for feat in geojson.get("features", []):
+        geom = feat.get("geometry", {})
+        gtype = geom.get("type", "")
+        coords = geom.get("coordinates", [])
+        if gtype == "Point":
+            lon, lat = coords[0], coords[1]
+        elif gtype == "Polygon":
+            # Use centroid of the bounding box of the outer ring
+            ring = coords[0]
+            lons_r = [c[0] for c in ring]
+            lats_r = [c[1] for c in ring]
+            lon = (min(lons_r) + max(lons_r)) / 2
+            lat = (min(lats_r) + max(lats_r)) / 2
+        else:
+            continue
+        val = feat["properties"].get("precip", feat["properties"].get("discharge", 0.0)) or 0.0
+        pts.append((round(lat, 4), round(lon, 4), float(val)))
+
+    lats_u = sorted({p[0] for p in pts})
+    lons_u = sorted({p[1] for p in pts})
+    lat_idx = {v: i for i, v in enumerate(lats_u)}
+    lon_idx = {v: i for i, v in enumerate(lons_u)}
+
+    grid = np.full((len(lats_u), len(lons_u)), np.nan)
+    for lat, lon, val in pts:
+        grid[lat_idx[lat], lon_idx[lon]] = val
+
+    return np.array(lats_u), np.array(lons_u), grid
+
+
+# ── Spatial interpolation layer ───────────────────────────────────────────────
+
+@router.get("/layers/interpolated")
+async def layer_interpolated(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    fc = (await db.execute(
+        select(ForecastUpload)
+        .where(ForecastUpload.geojson.isnot(None))
+        .where(or_(ForecastUpload.variable == "tp", ForecastUpload.variable.is_(None)))
+        .order_by(ForecastUpload.uploaded_at.desc())
+        .limit(1)
+    )).scalars().first()
+
+    if not fc:
+        return JSONResponse({"type": "FeatureCollection", "features": [], "meta": None})
+
+    try:
+        geojson = json.loads(fc.geojson)
+        lats, lons, grid = _extract_grid(geojson)
+    except Exception:
+        return JSONResponse({"type": "FeatureCollection", "features": [], "meta": None})
+
+    if len(lats) < 2 or len(lons) < 2:
+        return JSONResponse(geojson)
+
+    from scipy.interpolate import RegularGridInterpolator
+
+    # Fill NaN holes row-wise before interpolating
+    grid_filled = np.copy(grid)
+    for i in range(grid_filled.shape[0]):
+        row = grid_filled[i]
+        valid = ~np.isnan(row)
+        if valid.any():
+            grid_filled[i] = np.interp(np.arange(len(row)), np.where(valid)[0], row[valid])
+
+    # Upsample 2× using bilinear interpolation
+    interp_fn = RegularGridInterpolator(
+        (lats, lons), grid_filled, method="linear", bounds_error=False, fill_value=None
+    )
+    lat_fine = np.linspace(lats[0], lats[-1], len(lats) * 2)
+    lon_fine = np.linspace(lons[0], lons[-1], len(lons) * 2)
+    lon_grid, lat_grid = np.meshgrid(lon_fine, lat_fine)
+    values_fine = interp_fn((lat_grid, lon_grid))
+
+    features = []
+    for i, lat in enumerate(lat_fine):
+        for j, lon in enumerate(lon_fine):
+            val = float(values_fine[i, j])
+            if math.isnan(val):
+                continue
+            features.append({
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [round(lon, 4), round(lat, 4)]},
+                "properties": {"precip": round(val, 2)},
+            })
+
+    return JSONResponse({
+        "type": "FeatureCollection",
+        "features": features,
+        "meta": {
+            "forecast_id": fc.id,
+            "source": fc.source,
+            "uploaded_at": fc.uploaded_at.isoformat(),
+            "precip_max": fc.precip_max,
+            "interpolated": True,
+        },
+    })
+
+
+# ── Zonal statistics layer ────────────────────────────────────────────────────
+
+@router.get("/layers/zonal")
+async def layer_zonal(request: Request, db: AsyncSession = Depends(get_db)):
+    user = await get_current_user(request, db)
+    if not user:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    fc = (await db.execute(
+        select(ForecastUpload)
+        .where(ForecastUpload.geojson.isnot(None))
+        .where(or_(ForecastUpload.variable == "tp", ForecastUpload.variable.is_(None)))
+        .order_by(ForecastUpload.uploaded_at.desc())
+        .limit(1)
+    )).scalars().first()
+
+    if not fc:
+        return JSONResponse({"type": "FeatureCollection", "features": [], "meta": None})
+
+    try:
+        geojson = json.loads(fc.geojson)
+        countries = _load_countries()
+    except Exception:
+        return JSONResponse({"type": "FeatureCollection", "features": [], "meta": None})
+
+    pts = []
+    for feat in geojson.get("features", []):
+        lon, lat = feat["geometry"]["coordinates"]
+        val = feat["properties"].get("precip", 0.0) or 0.0
+        pts.append((lat, lon, float(val)))
+
+    if not pts:
+        return JSONResponse({"type": "FeatureCollection", "features": [], "meta": None})
+
+    global_max = max(v for _, _, v in pts) or 1.0
+
+    features = []
+    for country in countries.get("features", []):
+        geom = country.get("geometry")
+        props = country.get("properties", {})
+        if not geom:
+            continue
+
+        vals = [v for lat, lon, v in pts if _point_in_feature(lat, lon, geom)]
+        if not vals:
+            continue
+
+        mean_val = round(sum(vals) / len(vals), 2)
+        max_val = round(max(vals), 2)
+        intensity = round(min(mean_val / global_max, 1.0), 4)
+
+        features.append({
+            "type": "Feature",
+            "geometry": geom,
+            "properties": {
+                "name": props.get("name") or props.get("NAME") or props.get("ADMIN") or "Unknown",
+                "iso": props.get("iso_a2") or props.get("ISO_A2") or "",
+                "precip_mean": mean_val,
+                "precip_max": max_val,
+                "n_cells": len(vals),
+                "intensity": intensity,
+            },
+        })
+
+    return JSONResponse({
+        "type": "FeatureCollection",
+        "features": features,
+        "meta": {
+            "forecast_id": fc.id,
+            "source": fc.source,
+            "uploaded_at": fc.uploaded_at.isoformat(),
+            "precip_max": fc.precip_max,
+        },
+    })

@@ -282,9 +282,11 @@
 
 <script src="/static/leaflet.js"></script>
 <script>
-  const geojson = {{ forecast.geojson | safe }};
-  const precipMax = {{ forecast.precip_max }};
-  const precipMin = {{ forecast.precip_min }};
+  const fcId = {{ forecast.id }};
+  const latMin = {{ forecast.lat_min }};
+  const latMax = {{ forecast.lat_max }};
+  const lonMin = {{ forecast.lon_min }};
+  const lonMax = {{ forecast.lon_max }};
 
   const map = L.map('map');
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -292,33 +294,22 @@
     opacity: 0.6,
   }).addTo(map);
 
-  function precipColor(intensity) {
-    // white → light blue → deep blue
-    const r = Math.round(239 - intensity * 200);
-    const g = Math.round(246 - intensity * 170);
-    const b = Math.round(255 - intensity * 85);
-    return `rgb(${r},${g},${b})`;
+  map.fitBounds([[latMin, lonMin], [latMax, lonMax]], { padding: [20, 20] });
+
+  async function loadRaster(lead) {
+    if (window._rasterOverlay) { map.removeLayer(window._rasterOverlay); }
+    const r = await fetch('/map/layers/rainfall-raster?fc_id=' + fcId + '&lead=' + (lead || 'total'));
+    if (!r.ok) return;
+    const lMin = parseFloat(r.headers.get('X-Lat-Min'));
+    const lMax = parseFloat(r.headers.get('X-Lat-Max'));
+    const nMin = parseFloat(r.headers.get('X-Lon-Min'));
+    const nMax = parseFloat(r.headers.get('X-Lon-Max'));
+    if (isNaN(lMin) || isNaN(lMax) || isNaN(nMin) || isNaN(nMax)) return;
+    const buf = await r.arrayBuffer();
+    const url = URL.createObjectURL(new Blob([buf], {type: 'image/png'}));
+    window._rasterOverlay = L.imageOverlay(url, [[lMin, nMin], [lMax, nMax]], { opacity: 0.85 }).addTo(map);
   }
 
-  const layer = L.geoJSON(geojson, {
-    style: feature => ({
-      fillColor: precipColor(feature.properties.intensity),
-      fillOpacity: 0.75,
-      weight: 0,
-      color: 'transparent',
-    }),
-    onEachFeature: (feature, layer) => {
-      const unit = "{{ val_unit }}";
-      const prop = feature.properties.discharge ?? feature.properties.precip;
-      layer.bindTooltip(`${prop} ${unit}`, { sticky: true });
-    },
-  }).addTo(map);
-
-  const bounds = layer.getBounds();
-  if (bounds.isValid()) {
-    map.fitBounds(bounds, { padding: [20, 20] });
-  } else {
-    map.setView([15, 100], 4);
-  }
+  loadRaster('total');
 </script>
 {% endblock %}

@@ -27,22 +27,62 @@ from app.routers.triggers import evaluate_triggers
 PORTAL_BASE = "https://open-data.rimes.int"
 
 COUNTRY_NAMES = {
-    "ae": "United Arab Emirates", "af": "Afghanistan",  "ao": "Angola",
-    "bd": "Bangladesh",           "bf": "Burkina Faso", "bt": "Bhutan",
-    "bw": "Botswana",             "cd": "DR Congo",     "cg": "Congo",
-    "cm": "Cameroon",             "dj": "Djibouti",     "fj": "Fiji",
-    "in": "India",                "jm": "Jamaica",      "ke": "Kenya",
-    "kh": "Cambodia",             "km": "Comoros",      "la": "Laos",
-    "lk": "Sri Lanka",            "ls": "Lesotho",      "mg": "Madagascar",
-    "mm": "Myanmar",              "mn": "Mongolia",     "mu": "Mauritius",
-    "mv": "Maldives",             "mw": "Malawi",       "mz": "Mozambique",
-    "na": "Namibia",              "ng": "Nigeria",      "np": "Nepal",
-    "pg": "Papua New Guinea",     "ph": "Philippines",  "pk": "Pakistan",
-    "sc": "Seychelles",           "so": "Somalia",      "sz": "Eswatini",
-    "td": "Chad",                 "th": "Thailand",     "tl": "Timor-Leste",
-    "to": "Tonga",                "tz": "Tanzania",     "ws": "Samoa",
-    "ye": "Yemen",                "za": "South Africa", "zm": "Zambia",
-    "zw": "Zimbabwe",
+    # South Asia
+    "af": "Afghanistan",           "bd": "Bangladesh",            "bt": "Bhutan",
+    "in": "India",                 "lk": "Sri Lanka",             "mv": "Maldives",
+    "np": "Nepal",                 "pk": "Pakistan",
+    # South-East Asia
+    "bn": "Brunei",                "id": "Indonesia",             "kh": "Cambodia",
+    "la": "Laos",                  "mm": "Myanmar",               "my": "Malaysia",
+    "ph": "Philippines",           "sg": "Singapore",             "th": "Thailand",
+    "tl": "Timor-Leste",           "vn": "Vietnam",
+    # East Asia
+    "cn": "China",                 "jp": "Japan",                 "kp": "North Korea",
+    "kr": "South Korea",           "mn": "Mongolia",              "tw": "Taiwan",
+    # Central Asia
+    "kg": "Kyrgyzstan",            "kz": "Kazakhstan",            "tj": "Tajikistan",
+    "tm": "Turkmenistan",          "uz": "Uzbekistan",
+    # West Asia / Middle East
+    "ae": "United Arab Emirates",  "bh": "Bahrain",               "cy": "Cyprus",
+    "iq": "Iraq",                  "ir": "Iran",                  "il": "Israel",
+    "jo": "Jordan",                "kw": "Kuwait",                "lb": "Lebanon",
+    "om": "Oman",                  "ps": "Palestine",             "qa": "Qatar",
+    "sa": "Saudi Arabia",          "sy": "Syria",                 "tr": "Turkey",
+    "ye": "Yemen",
+    # Caucasus
+    "am": "Armenia",               "az": "Azerbaijan",            "ge": "Georgia",
+    # North Africa
+    "dz": "Algeria",               "eg": "Egypt",                 "ly": "Libya",
+    "ma": "Morocco",               "mr": "Mauritania",            "sd": "Sudan",
+    "tn": "Tunisia",
+    # East Africa
+    "bi": "Burundi",               "dj": "Djibouti",              "er": "Eritrea",
+    "et": "Ethiopia",              "ke": "Kenya",                 "km": "Comoros",
+    "mg": "Madagascar",            "mu": "Mauritius",             "mz": "Mozambique",
+    "rw": "Rwanda",                "sc": "Seychelles",            "so": "Somalia",
+    "ss": "South Sudan",           "tz": "Tanzania",              "ug": "Uganda",
+    # Southern Africa
+    "bw": "Botswana",              "ls": "Lesotho",               "mw": "Malawi",
+    "na": "Namibia",               "sz": "Eswatini",              "za": "South Africa",
+    "zm": "Zambia",                "zw": "Zimbabwe",
+    # West Africa
+    "bf": "Burkina Faso",          "bj": "Benin",                 "ci": "Côte d'Ivoire",
+    "cv": "Cape Verde",            "gh": "Ghana",                 "gm": "Gambia",
+    "gn": "Guinea",                "gw": "Guinea-Bissau",         "lr": "Liberia",
+    "ml": "Mali",                  "mr": "Mauritania",            "ne": "Niger",
+    "ng": "Nigeria",               "sl": "Sierra Leone",          "sn": "Senegal",
+    "st": "São Tomé & Príncipe",   "tg": "Togo",
+    # Central Africa
+    "ao": "Angola",                "cd": "DR Congo",              "cf": "Central African Rep.",
+    "cg": "Congo",                 "cm": "Cameroon",              "ga": "Gabon",
+    "gq": "Equatorial Guinea",     "td": "Chad",
+    # Pacific (current RIMES members)
+    "fj": "Fiji",                  "fm": "Micronesia",            "ki": "Kiribati",
+    "mh": "Marshall Islands",      "nr": "Nauru",                 "pg": "Papua New Guinea",
+    "pw": "Palau",                 "sb": "Solomon Islands",       "to": "Tonga",
+    "tv": "Tuvalu",                "vu": "Vanuatu",               "ws": "Samoa",
+    # Other RIMES partners
+    "jm": "Jamaica",
 }
 
 SOURCES = [
@@ -413,21 +453,40 @@ async def upload_forecast(
     if not user:
         return RedirectResponse("/login")
 
-    if not file.filename.endswith(".nc"):
+    fname = file.filename or ""
+    is_grib = fname.endswith(".grib2") or fname.endswith(".grib")
+    if not (fname.endswith(".nc") or is_grib):
         return templates.TemplateResponse(
     request,
     "forecast_upload.html",
-    {"user": user, "error": "Only .nc (NetCDF) files are supported."},
+    {"user": user, "error": "Only .nc (NetCDF) or .grib2 / .grib files are supported."},
 )
 
     contents = await file.read()
+    suffix = ".grib2" if is_grib else ".nc"
 
     try:
-        with tempfile.NamedTemporaryFile(suffix=".nc", delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
             tmp.write(contents)
             tmp_path = tmp.name
 
-        stats = _process_netcdf(tmp_path)
+        if is_grib:
+            from app.core.ecmwf_opendata import _process_grib
+            raw = _process_grib(
+                tmp_path,
+                source_label="manual",
+                lat_min=-90.0, lat_max=90.0,
+                lon_min=-180.0, lon_max=180.0,
+                is_ensemble=False,
+            )
+            if raw is None:
+                raise ValueError("Could not parse GRIB2 file. Check that it contains a supported variable.")
+            # Strip fields that _process_grib auto-generates (handled by upload endpoint)
+            for k in ("filename", "source", "variable", "uploaded_at"):
+                raw.pop(k, None)
+            stats = raw
+        else:
+            stats = _process_netcdf(tmp_path)
     except Exception as exc:
         return templates.TemplateResponse(
     request,

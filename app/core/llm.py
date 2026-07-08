@@ -9,6 +9,7 @@ Change via OLLAMA_MODEL in .env. To switch models:
 import calendar
 import json
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 from typing import AsyncGenerator
 
@@ -89,7 +90,23 @@ def _ensure_aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
+_context_cache: dict = {"text": None, "ts": 0.0}
+_CONTEXT_TTL = 120  # seconds — rebuild DB context at most once every 2 minutes
+
+
 async def build_context(db: AsyncSession) -> str:
+    """Pull all current app data and format as a structured plain-text context block.
+    Result is cached for _CONTEXT_TTL seconds to avoid redundant DB queries on every message."""
+    now = time.monotonic()
+    if _context_cache["text"] and (now - _context_cache["ts"]) < _CONTEXT_TTL:
+        return _context_cache["text"]
+    result = await _build_context(db)
+    _context_cache["text"] = result
+    _context_cache["ts"] = now
+    return result
+
+
+async def _build_context(db: AsyncSession) -> str:
     """Pull all current app data and format as a structured plain-text context block."""
     now = datetime.now(timezone.utc)
     cutoff_30d = now - timedelta(days=30)
@@ -408,7 +425,7 @@ async def stream_chat(
     system = SYSTEM_PROMPT.format(context=context)
 
     messages = [{"role": "system", "content": system}]
-    for turn in history[-12:]:  # keep last 12 turns
+    for turn in history[-8:]:  # keep last 8 turns
         messages.append({"role": turn["role"], "content": turn["content"]})
     messages.append({"role": "user", "content": message})
 
@@ -416,9 +433,10 @@ async def stream_chat(
         "model": settings.OLLAMA_MODEL,
         "messages": messages,
         "stream": True,
+        "keep_alive": "1h",         # keep model loaded in RAM between messages
         "options": {
             "temperature": 0.3,     # lower = more factual, less creative
-            "num_ctx": 8192,        # context window — gemma4:e4b default; increase for longer contexts
+            "num_ctx": 4096,        # reduced for faster prefill; 4096 is sufficient for most queries
         },
     }
 

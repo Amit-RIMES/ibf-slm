@@ -25,9 +25,6 @@
   .stat-row .value { font-weight:600; }
 
   #map { height:420px; border-radius:8px; }
-  .legend { display:flex; align-items:center; gap:.5rem; margin-top:.6rem; font-size:.78rem; color:#6b7280; }
-  .legend-bar { flex:1; height:8px; border-radius:4px;
-    background:linear-gradient(to right, #e0f2fe, #0284c7, #1e3a5f); }
   .badge-prelim { background:#fff7ed; color:#c2410c; font-size:.78rem; font-weight:700;
     padding:.2rem .6rem; border-radius:999px; }
   .badge-final  { background:#f0fdf4; color:#166534; font-size:.78rem; font-weight:700;
@@ -112,43 +109,40 @@
   <div class="card">
     <div class="section-title">Precipitation Map</div>
     <div id="map"></div>
-    <div class="legend">
-      <span>0 mm</span>
-      <div class="legend-bar"></div>
-      <span>≥80 mm</span>
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 4px 2px;font-size:.75rem;color:#64748b;">
+      <span>Precipitation (mm/day):</span>
+      <div style="width:180px;height:11px;border-radius:3px;background:linear-gradient(to right,#46008260,#1e50dc,#00b4dc,#00c850,#f0e600,#ff8200,#dc0000);flex-shrink:0;"></div>
+      <div style="display:flex;gap:10px;">
+        <span>1</span><span>10</span><span>30</span><span>70</span><span>150</span><span>250+</span>
+      </div>
     </div>
   </div>
 
   <script src="/static/leaflet.js"></script>
   <script>
-    const geojson = {{ obs.geojson | safe }};
+    const obsId   = {{ obs.id }};
+    const latMin  = {{ obs.lat_min }};
+    const latMax  = {{ obs.lat_max }};
+    const lonMin  = {{ obs.lon_min }};
+    const lonMax  = {{ obs.lon_max }};
+
     const map = L.map('map');
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors', opacity: 0.5
     }).addTo(map);
+    map.fitBounds([[latMin, lonMin], [latMax, lonMax]], {padding:[16,16]});
 
-    function precipColor(intensity) {
-      const r = Math.round(224 - intensity * 205);
-      const g = Math.round(242 - intensity * 110);
-      const b = Math.round(254 - intensity * 63);
-      return `rgb(${r},${g},${b})`;
-    }
-
-    const layer = L.geoJSON(geojson, {
-      style: f => ({
-        fillColor: precipColor(f.properties.intensity),
-        fillOpacity: 0.78,
-        weight: 0,
-        color: 'transparent',
-      }),
-      onEachFeature: (f, l) => l.bindTooltip(`${f.properties.precip} mm`, {sticky:true}),
-    }).addTo(map);
-    const bounds = layer.getBounds();
-    if (bounds.isValid()) {
-      map.fitBounds(bounds, {padding:[16,16]});
-    } else {
-      map.setView([15, 100], 4);
-    }
+    fetch('/map/layers/observed-raster?obs_id=' + obsId).then(async r => {
+      if (!r.ok) return;
+      const lMin = parseFloat(r.headers.get('X-Lat-Min'));
+      const lMax = parseFloat(r.headers.get('X-Lat-Max'));
+      const nMin = parseFloat(r.headers.get('X-Lon-Min'));
+      const nMax = parseFloat(r.headers.get('X-Lon-Max'));
+      if (isNaN(lMin) || isNaN(lMax) || isNaN(nMin) || isNaN(nMax)) return;
+      const buf = await r.arrayBuffer();
+      const url = URL.createObjectURL(new Blob([buf], {type: 'image/png'}));
+      L.imageOverlay(url, [[lMin, nMin], [lMax, nMax]], {opacity: 0.85}).addTo(map);
+    });
   </script>
   {% else %}
   <div class="card" style="text-align:center;color:#9ca3af;padding:2rem;">No map data available.</div>

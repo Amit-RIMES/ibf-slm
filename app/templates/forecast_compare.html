@@ -42,9 +42,6 @@
   .map-card .map-filename { font-size: .78rem; color: #9ca3af; margin-bottom: .75rem;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .leaflet-map { height: 360px; border-radius: 8px; }
-  .legend { margin-top: .65rem; display: flex; align-items: center; gap: .5rem; font-size: .78rem; color: #6b7280; }
-  .legend-bar { flex: 1; height: 10px; border-radius: 5px;
-    background: linear-gradient(to right, #eff6ff, #3b82f6, #1e3a8a); }
   .legend-note { font-size: .72rem; color: #9ca3af; margin-top: .35rem; }
 </style>
 {% endblock %}
@@ -166,73 +163,49 @@
       <h3>Forecast A</h3>
       <div class="map-filename">{{ fc_a.filename }}</div>
       <div id="map-a" class="leaflet-map"></div>
-      <div class="legend">
-        <span>{{ global_min }} mm</span>
-        <div class="legend-bar"></div>
-        <span>{{ global_max }} mm</span>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:.5rem;font-size:.75rem;color:#64748b;">
+        <span>Precip (mm/day):</span>
+        <div style="width:160px;height:10px;border-radius:3px;background:linear-gradient(to right,#46008260,#1e50dc,#00b4dc,#00c850,#f0e600,#ff8200,#dc0000);flex-shrink:0;"></div>
+        <div style="display:flex;gap:8px;"><span>1</span><span>10</span><span>30</span><span>70</span><span>150</span><span>250+</span></div>
       </div>
-      <div class="legend-note">Shared colour scale across both maps</div>
     </div>
     <div class="map-card">
       <h3>Forecast B</h3>
       <div class="map-filename">{{ fc_b.filename }}</div>
       <div id="map-b" class="leaflet-map"></div>
-      <div class="legend">
-        <span>{{ global_min }} mm</span>
-        <div class="legend-bar"></div>
-        <span>{{ global_max }} mm</span>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:.5rem;font-size:.75rem;color:#64748b;">
+        <span>Precip (mm/day):</span>
+        <div style="width:160px;height:10px;border-radius:3px;background:linear-gradient(to right,#46008260,#1e50dc,#00b4dc,#00c850,#f0e600,#ff8200,#dc0000);flex-shrink:0;"></div>
+        <div style="display:flex;gap:8px;"><span>1</span><span>10</span><span>30</span><span>70</span><span>150</span><span>250+</span></div>
       </div>
-      <div class="legend-note">Shared colour scale across both maps</div>
     </div>
   </div>
 </div>
 
 <script src="/static/leaflet.js"></script>
 <script>
-  const geojsonA = {{ fc_a.geojson | safe }};
-  const geojsonB = {{ fc_b.geojson | safe }};
-  const gMin = {{ global_min }};
-  const gMax = {{ global_max }};
-  const gRange = gMax - gMin || 1;
+  const fcAId = {{ fc_a.id }};
+  const fcBId = {{ fc_b.id }};
 
-  function precipColor(mm) {
-    const t = Math.max(0, Math.min(1, (mm - gMin) / gRange));
-    const r = Math.round(239 - t * 200);
-    const g = Math.round(246 - t * 170);
-    const b = Math.round(255 - t * 85);
-    return `rgb(${r},${g},${b})`;
-  }
-
-  function buildLayer(geojson) {
-    return L.geoJSON(geojson, {
-      style: f => ({
-        fillColor: precipColor(f.properties.precip),
-        fillOpacity: 0.75,
-        weight: 0,
-        color: 'transparent',
-      }),
-      onEachFeature: (f, layer) => {
-        layer.bindTooltip(`${f.properties.precip} mm`, { sticky: true });
-      },
-    });
-  }
-
-  function initMap(id, geojson) {
-    const map = L.map(id);
+  async function initMap(mapId, fcId, latMin, latMax, lonMin, lonMax) {
+    const map = L.map(mapId);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors', opacity: 0.6,
     }).addTo(map);
-    const layer = buildLayer(geojson).addTo(map);
-    const bounds = layer.getBounds();
-    if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [16, 16] });
-    } else {
-      map.setView([15, 100], 4);
-    }
-    return map;
+    map.fitBounds([[latMin, lonMin], [latMax, lonMax]], { padding: [16, 16] });
+
+    const r = await fetch('/map/layers/rainfall-raster?fc_id=' + fcId);
+    if (!r.ok) return;
+    const lMin = parseFloat(r.headers.get('X-Lat-Min'));
+    const lMax = parseFloat(r.headers.get('X-Lat-Max'));
+    const nMin = parseFloat(r.headers.get('X-Lon-Min'));
+    const nMax = parseFloat(r.headers.get('X-Lon-Max'));
+    if (isNaN(lMin) || isNaN(lMax) || isNaN(nMin) || isNaN(nMax)) return;
+    const buf = await r.arrayBuffer();
+    L.imageOverlay(URL.createObjectURL(new Blob([buf], {type: 'image/png'})), [[lMin, nMin], [lMax, nMax]], { opacity: 0.85 }).addTo(map);
   }
 
-  initMap('map-a', geojsonA);
-  initMap('map-b', geojsonB);
+  initMap('map-a', fcAId, {{ fc_a.lat_min }}, {{ fc_a.lat_max }}, {{ fc_a.lon_min }}, {{ fc_a.lon_max }});
+  initMap('map-b', fcBId, {{ fc_b.lat_min }}, {{ fc_b.lat_max }}, {{ fc_b.lon_min }}, {{ fc_b.lon_max }});
 </script>
 {% endblock %}
