@@ -281,14 +281,53 @@ def _precip_rgba(value: float, vmax: float) -> tuple[int, int, int, int]:
     return (220, 0, 0, 250)
 
 
+def _discharge_rgba(value: float, vmax: float) -> tuple[int, int, int, int]:
+    """River discharge colormap: transparent → light cyan → blue → deep navy."""
+    if vmax <= 0 or value <= 0:
+        return (0, 0, 0, 0)
+
+    import math as _m
+    t = _m.log1p(value) / _m.log1p(vmax)
+    t = max(0.0, min(1.0, t))
+
+    # Color stops (t, R, G, B, A)
+    stops = [
+        (0.00, 180, 235, 255,   0),   # transparent
+        (0.08, 180, 235, 255, 160),   # very light cyan
+        (0.25,  80, 200, 240, 200),   # cyan
+        (0.45,  20, 130, 210, 215),   # sky blue
+        (0.65,  10,  70, 160, 225),   # medium blue
+        (0.82,   5,  35, 110, 235),   # deep blue
+        (1.00,   2,  12,  55, 245),   # near-black navy
+    ]
+
+    for i in range(len(stops) - 1):
+        t0, r0, g0, b0, a0 = stops[i]
+        t1, r1, g1, b1, a1 = stops[i + 1]
+        if t <= t1:
+            f = (t - t0) / (t1 - t0) if t1 > t0 else 0.0
+            return (
+                int(r0 + f * (r1 - r0)),
+                int(g0 + f * (g1 - g0)),
+                int(b0 + f * (b1 - b0)),
+                int(a0 + f * (a1 - a0)),
+            )
+
+    return (2, 12, 55, 245)
+
+
 def _build_raster_png(lats: np.ndarray, lons: np.ndarray, grid: np.ndarray,
-                      scale: int = 2) -> tuple[bytes, float, float, float, float]:
+                      scale: int = 2, rgba_fn=None) -> tuple[bytes, float, float, float, float]:
     """Interpolate the forecast grid and render as a transparent RGBA PNG.
     Returns (png_bytes, lat_min, lat_max, lon_min, lon_max).
+    rgba_fn(value, vmax) → (R,G,B,A); defaults to _precip_rgba.
     """
     from scipy.interpolate import RegularGridInterpolator
     from scipy.ndimage import distance_transform_edt
     from PIL import Image
+
+    if rgba_fn is None:
+        rgba_fn = _precip_rgba
 
     # 2D nearest-neighbour NaN fill — avoids horizontal/vertical stripes
     nan_mask = np.isnan(grid)
@@ -309,13 +348,11 @@ def _build_raster_png(lats: np.ndarray, lons: np.ndarray, grid: np.ndarray,
 
     vmax = float(np.nanmax(values)) if np.nanmax(values) > 0 else 1.0
 
-    # Build RGBA array
     rgba = np.zeros((len(lat_fine), len(lon_fine), 4), dtype=np.uint8)
     for i in range(len(lat_fine)):
         for j in range(len(lon_fine)):
-            rgba[i, j] = _precip_rgba(float(values[i, j]), vmax)
+            rgba[i, j] = rgba_fn(float(values[i, j]), vmax)
 
-    # Flip vertically: image origin is top-left, geographic origin is bottom-left
     rgba = np.flipud(rgba)
 
     img = Image.fromarray(rgba, mode="RGBA")
@@ -442,6 +479,58 @@ async def layer_observed_raster(
         "X-Precip-Max": str(obs.precip_max or 0),
         "Cache-Control": "no-cache",
         "Access-Control-Expose-Headers": "X-Lat-Min,X-Lat-Max,X-Lon-Min,X-Lon-Max,X-Precip-Max",
+    }
+    return StreamingResponse(io.BytesIO(png_bytes), media_type="image/png", headers=headers)
+
+
+@router.get("/layers/glofas-raster")
+async def layer_glofas_raster(
+    request: Request,
+    rec_id: int = Query(default=None, description="GlofasRecord ID; omit for latest"),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await get_current_user(request, db)
+    if not user:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    if rec_id is not None:
+        rec = (await db.execute(
+            select(GlofasRecord).where(GlofasRecord.id == rec_id)
+        )).scalars().first()
+    else:
+        rec = (await db.execute(
+            select(GlofasRecord)
+            .where(GlofasRecord.geojson.isnot(None))
+            .order_by(GlofasRecord.forecast_date.desc())
+            .limit(1)
+        )).scalars().first()
+
+    if not rec or not rec.geojson:
+        return JSONResponse({"error": "no data"}, status_code=404)
+
+    try:
+        geojson = json.loads(rec.geojson)
+        lats, lons, grid = _extract_grid(geojson)
+    except Exception:
+        return JSONResponse({"error": "parse error"}, status_code=500)
+
+    if len(lats) < 2 or len(lons) < 2:
+        return JSONResponse({"error": "insufficient grid"}, status_code=500)
+
+    try:
+        png_bytes, lat_min, lat_max, lon_min, lon_max = _build_raster_png(
+            lats, lons, grid, scale=2, rgba_fn=_discharge_rgba
+        )
+    except Exception as exc:
+        import logging; logging.getLogger(__name__).error("glofas raster render failed: %s", exc)
+        return JSONResponse({"error": "render failed"}, status_code=500)
+
+    headers = {
+        "X-Lat-Min": str(lat_min), "X-Lat-Max": str(lat_max),
+        "X-Lon-Min": str(lon_min), "X-Lon-Max": str(lon_max),
+        "X-Discharge-Max": str(rec.discharge_max or 0),
+        "Cache-Control": "no-cache",
+        "Access-Control-Expose-Headers": "X-Lat-Min,X-Lat-Max,X-Lon-Min,X-Lon-Max,X-Discharge-Max",
     }
     return StreamingResponse(io.BytesIO(png_bytes), media_type="image/png", headers=headers)
 

@@ -33,10 +33,6 @@
   @media (max-width: 640px) { .grid-2 { grid-template-columns: 1fr; } }
 
   #map { height: 480px; border-radius: 8px; }
-  .legend { margin-top: .75rem; display: flex; align-items: center; gap: .5rem;
-    font-size: .8rem; color: #6b7280; }
-  .legend-bar { flex: 1; height: 12px; border-radius: 6px;
-    background: linear-gradient(to right, #ecfdf5, #059669, #064e3b); }
 
   table { width: 100%; border-collapse: collapse; font-size: .875rem; }
   th { text-align: left; padding: .5rem .75rem; font-size: .72rem; font-weight: 700;
@@ -118,10 +114,11 @@
   <div class="card">
     <div class="section-title">River Flow Map (model ensemble mean, m³/s)</div>
     <div id="map"></div>
-    <div class="legend">
-      <span>Low</span>
-      <div class="legend-bar"></div>
-      <span>High river flow</span>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:.6rem;font-size:.75rem;color:#64748b;">
+      <span>Discharge (m³/s):</span>
+      <div style="width:200px;height:11px;border-radius:3px;flex-shrink:0;
+                  background:linear-gradient(to right,#b4ebff,#50c8f0,#1482d2,#0a468f,#020c37);"></div>
+      <div style="display:flex;gap:10px;"><span>1</span><span>10</span><span>100</span><span>1 k</span><span>10 k+</span></div>
     </div>
   </div>
   {% endif %}
@@ -180,47 +177,28 @@
 {% if latest and latest.geojson %}
 <script src="/static/leaflet.js"></script>
 <script>
-  const geojson = {{ latest.geojson | safe }};
-
   const map = L.map('map');
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors',
     opacity: 0.6,
   }).addTo(map);
 
-  // Log-scale normalization so low-flow rivers (1–100 m³/s) are still visible
-  // alongside large rivers (10,000+ m³/s)
-  const allDischarges = geojson.features.map(f => f.properties.discharge).filter(d => d > 0);
-  const logMax = allDischarges.length ? Math.log(Math.max.apply(null, allDischarges)) : 1;
-  const logMin = allDischarges.length ? Math.log(Math.max(1, Math.min.apply(null, allDischarges))) : 0;
-  const logRange = Math.max(logMax - logMin, 1);
+  // Default to the region covered by the latest record
+  const latMid = ({{ latest.lat_min }} + {{ latest.lat_max }}) / 2;
+  const lonMid = ({{ latest.lon_min }} + {{ latest.lon_max }}) / 2;
+  map.setView([latMid, lonMid], 5);
 
-  function dischargeColor(discharge) {
-    const t = discharge > 0
-      ? Math.min(1, Math.max(0, (Math.log(discharge) - logMin) / logRange))
-      : 0;
-    // pale blue-green → teal → dark green
-    const r = Math.round(219 - t * 185);
-    const g = Math.round(234 - t * 120);
-    const b = Math.round(254 - t * 195);
-    return `rgb(${r},${g},${b})`;
-  }
-
-  const layer = L.geoJSON(geojson, {
-    style: feature => ({
-      fillColor: dischargeColor(feature.properties.discharge),
-      fillOpacity: 0.85,
-      weight: 0,
-      color: 'transparent',
-    }),
-    onEachFeature: (feature, layer) => {
-      layer.bindTooltip(`${feature.properties.discharge} m³/s`, { sticky: true });
-    },
-  }).addTo(map);
-
-  // The GloFAS data can span half the globe; fitBounds would zoom to ~level 2
-  // where 0.05° cells are sub-pixel. Default to the RIMES region (SE/South Asia).
-  map.setView([15, 100], 6);
+  fetch('/map/layers/glofas-raster').then(async r => {
+    if (!r.ok) return;
+    const lMin = parseFloat(r.headers.get('X-Lat-Min'));
+    const lMax = parseFloat(r.headers.get('X-Lat-Max'));
+    const nMin = parseFloat(r.headers.get('X-Lon-Min'));
+    const nMax = parseFloat(r.headers.get('X-Lon-Max'));
+    if (isNaN(lMin) || isNaN(lMax) || isNaN(nMin) || isNaN(nMax)) return;
+    const buf = await r.arrayBuffer();
+    const url = URL.createObjectURL(new Blob([buf], {type: 'image/png'}));
+    L.imageOverlay(url, [[lMin, nMin], [lMax, nMax]], {opacity: 0.88}).addTo(map);
+  });
 </script>
 {% endif %}
 {% endblock %}

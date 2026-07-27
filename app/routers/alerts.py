@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.alert_recipient import AlertRecipient
+from app.models.forecast import ForecastUpload
 from app.models.trigger import Trigger, TriggerActivation
 
 _HAZARD_COLORS = {
@@ -57,18 +58,14 @@ async def _get_active_alerts(db: AsyncSession) -> list[dict]:
 
 
 async def _build_heatmap(db: AsyncSession, days: int) -> tuple[list, int]:
-    """Return (heatmap_points, total_count) for activations in the window.
-
-    Each point is [lat, lon, intensity] where intensity is the normalised count
-    at that trigger's centroid.  Activations on triggers with no geographic scope
-    are skipped.
-    """
+    """Return (heatmap_points, total_count) for activations in the window."""
     now = datetime.now(timezone.utc)
     cutoff = (now - timedelta(days=days)) if days > 0 else None
 
     q = (
-        select(TriggerActivation, Trigger)
+        select(TriggerActivation, Trigger, ForecastUpload)
         .join(Trigger, TriggerActivation.trigger_id == Trigger.id)
+        .outerjoin(ForecastUpload, TriggerActivation.forecast_id == ForecastUpload.id)
         .order_by(TriggerActivation.triggered_at.desc())
     )
     if cutoff:
@@ -77,22 +74,27 @@ async def _build_heatmap(db: AsyncSession, days: int) -> tuple[list, int]:
     result = await db.execute(q)
     rows = result.all()
 
-    # Accumulate counts per centroid (rounded to 2dp to merge near-identical points)
     centroid_counts: dict[tuple, int] = {}
-    for act, trig in rows:
+    for act, trig, fc in rows:
         lat = lon = None
+        # 1. Prefer trigger's own scope polygon
         if trig.scope_polygon:
             try:
                 ring = json.loads(trig.scope_polygon)
-                lons = [p[0] for p in ring]
-                lats = [p[1] for p in ring]
-                lat = sum(lats) / len(lats)
-                lon = sum(lons) / len(lons)
+                lons_r = [p[0] for p in ring]
+                lats_r = [p[1] for p in ring]
+                lat = sum(lats_r) / len(lats_r)
+                lon = sum(lons_r) / len(lons_r)
             except Exception:
                 pass
-        elif trig.scope_lat_min is not None and trig.scope_lat_max is not None:
+        # 2. Trigger bbox scope
+        if lat is None and trig.scope_lat_min is not None and trig.scope_lat_max is not None:
             lat = (trig.scope_lat_min + trig.scope_lat_max) / 2
             lon = (trig.scope_lon_min + trig.scope_lon_max) / 2
+        # 3. Fall back to the forecast bbox centroid
+        if lat is None and fc is not None and fc.lat_min is not None:
+            lat = (fc.lat_min + fc.lat_max) / 2
+            lon = (fc.lon_min + fc.lon_max) / 2
 
         if lat is None:
             continue
