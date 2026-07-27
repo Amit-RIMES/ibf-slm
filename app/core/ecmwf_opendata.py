@@ -413,10 +413,10 @@ def _process_wind10_grib(
 # ── Public API ────────────────────────────────────────────────────────────────
 
 async def fetch_ecmwf_forecast(
-    lat_min: float = 0.0,
-    lat_max: float = 35.0,
-    lon_min: float = 60.0,
-    lon_max: float = 155.0,
+    lat_min: float = -90.0,
+    lat_max: float = 90.0,
+    lon_min: float = -180.0,
+    lon_max: float = 180.0,
     run_time: int = 0,
     use_ensemble: bool = False,
     target_date: Optional[str] = None,

@@ -185,10 +185,10 @@ def _seas5_to_seasonal_records(
 async def fetch_seas5(
     api_url: str,
     api_key: str,
-    lat_min: float = 0.0,
-    lat_max: float = 35.0,
-    lon_min: float = 60.0,
-    lon_max: float = 155.0,
+    lat_min: float = -90.0,
+    lat_max: float = 90.0,
+    lon_min: float = -180.0,
+    lon_max: float = 180.0,
     lead_months: int = 6,
     issue_date: Optional[date] = None,
 ) -> list[dict]:

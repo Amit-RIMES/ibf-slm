@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.scope import allowed_country_names, country_condition
 from app.models.impact import ImpactRecord
 from app.models.risk_history import RiskScoreRecord
 from app.models.spi import SPIRecord
@@ -165,11 +166,11 @@ async def risk_map(request: Request, db: AsyncSession = Depends(get_db)):
     active_trigger_ids = {r[0] for r in active_ids_r.all()}
 
     # Recent impacts grouped by country (last 365 days worth, no date filter for simplicity)
-    country_rows = (await db.execute(
-        select(ImpactRecord.country, func.count().label("cnt"))
-        .group_by(ImpactRecord.country)
-        .order_by(func.count().desc())
-    )).all()
+    country_stmt = select(ImpactRecord.country, func.count().label("cnt")).group_by(ImpactRecord.country)
+    scope_cond = country_condition(ImpactRecord.country, allowed_country_names(user))
+    if scope_cond is not None:
+        country_stmt = country_stmt.where(scope_cond)
+    country_rows = (await db.execute(country_stmt.order_by(func.count().desc()))).all()
     country_stats = [{"country": r.country, "count": r.cnt} for r in country_rows if r.country]
 
     # Build GeoJSON features for map
@@ -238,8 +239,10 @@ async def risk_country(request: Request, db: AsyncSession = Depends(get_db)):
     if not user:
         return RedirectResponse("/login", status_code=303)
 
+    scope_cond = country_condition(ImpactRecord.country, allowed_country_names(user))
+
     # Aggregate impact stats per country
-    agg_rows = (await db.execute(
+    agg_stmt = (
         select(
             ImpactRecord.country,
             func.count().label("events"),
@@ -252,28 +255,37 @@ async def risk_country(request: Request, db: AsyncSession = Depends(get_db)):
         .where(ImpactRecord.country.isnot(None))
         .group_by(ImpactRecord.country)
         .order_by(func.count().desc())
-    )).all()
+    )
+    if scope_cond is not None:
+        agg_stmt = agg_stmt.where(scope_cond)
+    agg_rows = (await db.execute(agg_stmt)).all()
 
     # Most common hazard per country
-    hazard_rows = (await db.execute(
+    hazard_stmt = (
         select(ImpactRecord.country, ImpactRecord.hazard_type, func.count().label("cnt"))
         .where(ImpactRecord.country.isnot(None))
         .group_by(ImpactRecord.country, ImpactRecord.hazard_type)
         .order_by(ImpactRecord.country, func.count().desc())
-    )).all()
+    )
+    if scope_cond is not None:
+        hazard_stmt = hazard_stmt.where(scope_cond)
+    hazard_rows = (await db.execute(hazard_stmt)).all()
     top_hazard: dict[str, str] = {}
     for r in hazard_rows:
         if r.country not in top_hazard:
             top_hazard[r.country] = r.hazard_type or "other"
 
     # Active trigger alert count per country via linked impacts
-    active_impact_rows = (await db.execute(
+    active_impact_stmt = (
         select(ImpactRecord.country, func.count().label("cnt"))
         .join(TriggerActivation, ImpactRecord.trigger_activation_id == TriggerActivation.id)
         .where(TriggerActivation.status == "active")
         .where(ImpactRecord.country.isnot(None))
         .group_by(ImpactRecord.country)
-    )).all()
+    )
+    if scope_cond is not None:
+        active_impact_stmt = active_impact_stmt.where(scope_cond)
+    active_impact_rows = (await db.execute(active_impact_stmt)).all()
     active_by_country = {r.country: r.cnt for r in active_impact_rows}
 
     HAZARD_COLORS = {
@@ -310,7 +322,7 @@ async def risk_country(request: Request, db: AsyncSession = Depends(get_db)):
             })
 
     # Also add impact points from ImpactRecord.lat/lon for records with valid coordinates
-    coord_impacts = (await db.execute(
+    coord_impacts_stmt = (
         select(ImpactRecord.lat, ImpactRecord.lon, ImpactRecord.country,
                ImpactRecord.hazard_type, ImpactRecord.affected_population)
         .where(ImpactRecord.lat.isnot(None))
@@ -319,7 +331,10 @@ async def risk_country(request: Request, db: AsyncSession = Depends(get_db)):
         .where(ImpactRecord.lon.between(-180, 180))
         .order_by(desc(ImpactRecord.event_date))
         .limit(500)
-    )).all()
+    )
+    if scope_cond is not None:
+        coord_impacts_stmt = coord_impacts_stmt.where(scope_cond)
+    coord_impacts = (await db.execute(coord_impacts_stmt)).all()
 
     impact_points = [
         {

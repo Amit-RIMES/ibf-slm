@@ -386,8 +386,8 @@
 <script>
 // ── Map init ──────────────────────────────────────────────────────────────────
 var map = L.map('map', {
-  center: [15, 100],
-  zoom: 4,
+  center: [10, 10],
+  zoom: 2,
   zoomControl: true,
   attributionControl: true,
 });
@@ -449,12 +449,15 @@ function spinStop(name)  { document.getElementById('spin-' + name).style.display
 function setCount(name, val) { document.getElementById('count-' + name).textContent = val; }
 
 // ── Load triggers ─────────────────────────────────────────────────────────────
+var _fittedInitialView = false;
+
 async function loadTriggers() {
   spinStart('triggers');
   try {
     var r = await fetch('/map/layers/triggers');
     var fc = await r.json();
     var count = 0;
+    var allBounds = [];
     fc.features.forEach(function(f) {
       var p = f.properties;
       var isAlert = p.is_alert;
@@ -473,10 +476,19 @@ async function loadTriggers() {
       });
       poly.on('click', function() { showTriggerInfo(p); });
       poly.addTo(layers.triggers);
+      if (poly.getBounds && poly.getBounds().isValid()) {
+        allBounds.push(poly.getBounds());
+      }
       count++;
     });
     setCount('triggers', count + ' zone' + (count !== 1 ? 's' : ''));
     layerLoaded.triggers = true;
+
+    if (!_fittedInitialView && allBounds.length) {
+      var combined = allBounds.reduce(function(acc, b) { return acc ? acc.extend(b) : b; }, null);
+      map.fitBounds(combined, { padding: [40, 40], maxZoom: 6 });
+      _fittedInitialView = true;
+    }
   } catch(e) {
     setCount('triggers', 'err');
   }

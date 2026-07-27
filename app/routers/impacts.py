@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import log_action
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.scope import allowed_country_names, country_condition
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
 from app.models.trigger import TriggerActivation
@@ -28,6 +29,21 @@ COUNTRY_LIST = sorted(COUNTRY_NAMES.values())
 
 
 PAGE_SIZE = 20
+
+
+def _in_scope(user, country_value: str | None) -> bool:
+    names = allowed_country_names(user)
+    if names is None:
+        return True
+    return (country_value or "").lower() in {n.lower() for n in names}
+
+
+def _visible_countries(user) -> list[str]:
+    names = allowed_country_names(user)
+    if names is None:
+        return COUNTRY_LIST
+    allowed_lower = {n.lower() for n in names}
+    return [c for c in COUNTRY_LIST if c.lower() in allowed_lower]
 
 
 def _build_page_range(current: int, total_pages: int) -> list:
@@ -80,6 +96,9 @@ async def impact_list(
             filters.append(ImpactRecord.event_date <= date_type.fromisoformat(date_to))
         except ValueError:
             date_to = ""
+    scope_cond = country_condition(ImpactRecord.country, allowed_country_names(user))
+    if scope_cond is not None:
+        filters.append(scope_cond)
 
     base = select(ImpactRecord)
     if filters:
@@ -142,7 +161,11 @@ async def impact_analytics(request: Request, db: AsyncSession = Depends(get_db))
     if not user:
         return RedirectResponse("/login", status_code=303)
 
-    all_r = await db.execute(select(ImpactRecord).order_by(ImpactRecord.event_date))
+    analytics_stmt = select(ImpactRecord).order_by(ImpactRecord.event_date)
+    scope_cond = country_condition(ImpactRecord.country, allowed_country_names(user))
+    if scope_cond is not None:
+        analytics_stmt = analytics_stmt.where(scope_cond)
+    all_r = await db.execute(analytics_stmt)
     records = all_r.scalars().all()
 
     if not records:
@@ -278,6 +301,9 @@ async def impact_export(
             filters.append(ImpactRecord.event_date <= date_type.fromisoformat(date_to))
         except ValueError:
             pass
+    scope_cond = country_condition(ImpactRecord.country, allowed_country_names(user))
+    if scope_cond is not None:
+        filters.append(scope_cond)
 
     stmt = select(ImpactRecord)
     if filters:
@@ -345,7 +371,7 @@ async def impact_new_page(request: Request, db: AsyncSession = Depends(get_db), 
     {
             "user": user, "forecasts": forecasts,
             "activations": activations, "hazard_types": HAZARD_TYPES,
-            "countries": COUNTRY_LIST,
+            "countries": _visible_countries(user),
             "prefill_activation_id": activation or None,
             "prefill_forecast_id": prefill_forecast_id,
         },
@@ -393,8 +419,11 @@ async def impact_create(
     "impact_form.html",
     {"user": user, "impact": None, "error": msg,
              "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES,
-             "countries": COUNTRY_LIST},
+             "countries": _visible_countries(user)},
 )
+
+    if not _in_scope(user, country):
+        return _err("You do not have access to create impact records for this country.")
 
     lat_val = _float(lat)
     lon_val = _float(lon)
@@ -639,7 +668,7 @@ async def impact_detail(impact_id: int, request: Request, db: AsyncSession = Dep
 
     result = await db.execute(select(ImpactRecord).where(ImpactRecord.id == impact_id))
     impact = result.scalar_one_or_none()
-    if not impact:
+    if not impact or not _in_scope(user, impact.country):
         return RedirectResponse("/impacts")
 
     return templates.TemplateResponse(
@@ -656,7 +685,7 @@ async def impact_duplicate_page(impact_id: int, request: Request, db: AsyncSessi
         return RedirectResponse("/login")
     result = await db.execute(select(ImpactRecord).where(ImpactRecord.id == impact_id))
     impact = result.scalar_one_or_none()
-    if not impact:
+    if not impact or not _in_scope(user, impact.country):
         return RedirectResponse("/impacts")
     forecasts, activations = await _load_form_data(db)
     return templates.TemplateResponse(
@@ -664,7 +693,7 @@ async def impact_duplicate_page(impact_id: int, request: Request, db: AsyncSessi
         {
             "user": user, "impact": impact, "is_duplicate": True,
             "forecasts": forecasts, "activations": activations,
-            "hazard_types": HAZARD_TYPES, "countries": COUNTRY_LIST,
+            "hazard_types": HAZARD_TYPES, "countries": _visible_countries(user),
         },
     )
 
@@ -677,7 +706,7 @@ async def impact_edit_page(impact_id: int, request: Request, db: AsyncSession = 
 
     result = await db.execute(select(ImpactRecord).where(ImpactRecord.id == impact_id))
     impact = result.scalar_one_or_none()
-    if not impact:
+    if not impact or not _in_scope(user, impact.country):
         return RedirectResponse("/impacts")
 
     forecasts, activations = await _load_form_data(db)
@@ -688,7 +717,7 @@ async def impact_edit_page(impact_id: int, request: Request, db: AsyncSession = 
     {
             "user": user, "impact": impact,
             "forecasts": forecasts, "activations": activations,
-            "hazard_types": HAZARD_TYPES, "countries": COUNTRY_LIST,
+            "hazard_types": HAZARD_TYPES, "countries": _visible_countries(user),
         },
 )
 
@@ -719,7 +748,7 @@ async def impact_update(
 
     result = await db.execute(select(ImpactRecord).where(ImpactRecord.id == impact_id))
     impact = result.scalar_one_or_none()
-    if not impact:
+    if not impact or not _in_scope(user, impact.country) or not _in_scope(user, country):
         return RedirectResponse("/impacts")
 
     def _int(v: str) -> Optional[int]:
@@ -742,7 +771,7 @@ async def impact_update(
     "impact_form.html",
     {"user": user, "impact": impact, "error": "Latitude must be a number.",
              "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES,
-             "countries": COUNTRY_LIST},
+             "countries": _visible_countries(user)},
 )
     if lon.strip() and lon_val is None:
         return templates.TemplateResponse(
@@ -750,7 +779,7 @@ async def impact_update(
     "impact_form.html",
     {"user": user, "impact": impact, "error": "Longitude must be a number.",
              "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES,
-             "countries": COUNTRY_LIST},
+             "countries": _visible_countries(user)},
 )
     if lat_val is not None and not (-90 <= lat_val <= 90):
         return templates.TemplateResponse(
@@ -758,7 +787,7 @@ async def impact_update(
     "impact_form.html",
     {"user": user, "impact": impact, "error": "Latitude must be between -90 and 90.",
              "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES,
-             "countries": COUNTRY_LIST},
+             "countries": _visible_countries(user)},
 )
     if lon_val is not None and not (-180 <= lon_val <= 180):
         return templates.TemplateResponse(
@@ -766,7 +795,7 @@ async def impact_update(
     "impact_form.html",
     {"user": user, "impact": impact, "error": "Longitude must be between -180 and 180.",
              "forecasts": [], "activations": [], "hazard_types": HAZARD_TYPES,
-             "countries": COUNTRY_LIST},
+             "countries": _visible_countries(user)},
 )
 
     impact.event_name = event_name
@@ -797,7 +826,7 @@ async def impact_delete(impact_id: int, request: Request, db: AsyncSession = Dep
 
     result = await db.execute(select(ImpactRecord).where(ImpactRecord.id == impact_id))
     impact = result.scalar_one_or_none()
-    if impact:
+    if impact and _in_scope(user, impact.country):
         ename = impact.event_name
         await db.delete(impact)
         await db.commit()

@@ -31,10 +31,11 @@ class Settings(BaseSettings):
     # CHIRPS observed rainfall ingestion
     CHIRPS_ENABLED: bool = True
     CHIRPS_LOOKBACK_DAYS: int = 7     # how many days back to fetch on each run
-    CHIRPS_LAT_MIN: float = 0.0
-    CHIRPS_LAT_MAX: float = 35.0
-    CHIRPS_LON_MIN: float = 60.0
-    CHIRPS_LON_MAX: float = 155.0
+    # CHIRPS only has data for 50°S-50°N; latitude is clamped to that native extent.
+    CHIRPS_LAT_MIN: float = -50.0
+    CHIRPS_LAT_MAX: float = 50.0
+    CHIRPS_LON_MIN: float = -180.0
+    CHIRPS_LON_MAX: float = 180.0
 
     # Data gap alerting
     DATA_GAP_CHIRPS_DAYS: int = 3       # alert if no new CHIRPS for this many days

@@ -33,7 +33,7 @@ async def _get_or_create_config(db: AsyncSession) -> CdsConfig:
         cfg = CdsConfig(
             id=1,
             api_url="https://cds.climate.copernicus.eu/api/v2",
-            lat_min=0.0, lat_max=35.0, lon_min=60.0, lon_max=155.0,
+            lat_min=-90.0, lat_max=90.0, lon_min=-180.0, lon_max=180.0,
         )
         db.add(cfg)
         await db.commit()
@@ -104,10 +104,10 @@ async def update_config(
     request: Request,
     api_key: str = Form(default=""),
     api_url: str = Form(default="https://cds.climate.copernicus.eu/api/v2"),
-    lat_min: float = Form(0.0),
-    lat_max: float = Form(35.0),
-    lon_min: float = Form(60.0),
-    lon_max: float = Form(155.0),
+    lat_min: float = Form(-90.0),
+    lat_max: float = Form(90.0),
+    lon_min: float = Form(-180.0),
+    lon_max: float = Form(180.0),
     seas5_enabled: str = Form(default="off"),
     seas5_sync_hour: int = Form(8),
     seas5_sync_minute: int = Form(0),

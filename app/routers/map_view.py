@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.scope import allowed_country_names, allowed_sources, country_condition
 from app.models.forecast import ForecastUpload
 from app.models.glofas import GlofasRecord
 from app.models.impact import ImpactRecord
@@ -44,15 +45,18 @@ async def map_view(request: Request, db: AsyncSession = Depends(get_db)):
     if not user:
         return RedirectResponse("/login", status_code=303)
 
+    scope = allowed_sources(user)
+    scope_names = allowed_country_names(user)
+
     active_count = len((await db.execute(
         select(TriggerActivation).where(TriggerActivation.status == "active")
     )).scalars().all())
 
+    latest_fc_stmt = select(ForecastUpload).where(ForecastUpload.geojson.isnot(None))
+    if scope is not None:
+        latest_fc_stmt = latest_fc_stmt.where(ForecastUpload.source.in_(scope))
     latest_fc = (await db.execute(
-        select(ForecastUpload)
-        .where(ForecastUpload.geojson.isnot(None))
-        .order_by(ForecastUpload.uploaded_at.desc())
-        .limit(1)
+        latest_fc_stmt.order_by(ForecastUpload.uploaded_at.desc()).limit(1)
     )).scalars().first()
 
     latest_glofas = (await db.execute(
@@ -62,10 +66,11 @@ async def map_view(request: Request, db: AsyncSession = Depends(get_db)):
         .limit(1)
     )).scalars().first()
 
-    impact_count = len((await db.execute(
-        select(ImpactRecord)
-        .where(ImpactRecord.lat.isnot(None))
-    )).scalars().all())
+    impact_stmt = select(ImpactRecord).where(ImpactRecord.lat.isnot(None))
+    impact_scope_cond = country_condition(ImpactRecord.country, scope_names)
+    if impact_scope_cond is not None:
+        impact_stmt = impact_stmt.where(impact_scope_cond)
+    impact_count = len((await db.execute(impact_stmt)).scalars().all())
 
     return templates.TemplateResponse(request, "map_view.html", {
         "user": user,
@@ -137,12 +142,16 @@ async def layer_rainfall(request: Request, db: AsyncSession = Depends(get_db)):
     if not user:
         return JSONResponse({"error": "unauthorized"}, status_code=401)
 
-    fc = (await db.execute(
+    rainfall_stmt = (
         select(ForecastUpload)
         .where(ForecastUpload.geojson.isnot(None))
         .where(or_(ForecastUpload.variable == "tp", ForecastUpload.variable.is_(None)))
-        .order_by(ForecastUpload.uploaded_at.desc())
-        .limit(1)
+    )
+    scope = allowed_sources(user)
+    if scope is not None:
+        rainfall_stmt = rainfall_stmt.where(ForecastUpload.source.in_(scope))
+    fc = (await db.execute(
+        rainfall_stmt.order_by(ForecastUpload.uploaded_at.desc()).limit(1)
     )).scalars().first()
 
     if not fc:
@@ -199,12 +208,16 @@ async def layer_impacts(request: Request, db: AsyncSession = Depends(get_db)):
     if not user:
         return JSONResponse({"error": "unauthorized"}, status_code=401)
 
-    impacts = (await db.execute(
+    impacts_stmt = (
         select(ImpactRecord)
         .where(ImpactRecord.lat.isnot(None))
         .where(ImpactRecord.lon.isnot(None))
-        .order_by(ImpactRecord.event_date.desc())
-        .limit(300)
+    )
+    scope_cond = country_condition(ImpactRecord.country, allowed_country_names(user))
+    if scope_cond is not None:
+        impacts_stmt = impacts_stmt.where(scope_cond)
+    impacts = (await db.execute(
+        impacts_stmt.order_by(ImpactRecord.event_date.desc()).limit(300)
     )).scalars().all()
 
     features = [
@@ -328,20 +341,24 @@ async def layer_rainfall_raster(
     if not user:
         return JSONResponse({"error": "unauthorized"}, status_code=401)
 
+    scope = allowed_sources(user)
     if fc_id is not None:
         fc = (await db.execute(
             select(ForecastUpload).where(ForecastUpload.id == fc_id)
         )).scalars().first()
     else:
-        fc = (await db.execute(
+        rr_stmt = (
             select(ForecastUpload)
             .where(ForecastUpload.geojson.isnot(None))
             .where(or_(ForecastUpload.variable == "tp", ForecastUpload.variable.is_(None)))
-            .order_by(ForecastUpload.uploaded_at.desc())
-            .limit(1)
+        )
+        if scope is not None:
+            rr_stmt = rr_stmt.where(ForecastUpload.source.in_(scope))
+        fc = (await db.execute(
+            rr_stmt.order_by(ForecastUpload.uploaded_at.desc()).limit(1)
         )).scalars().first()
 
-    if not fc:
+    if not fc or (scope is not None and fc.source not in scope):
         return JSONResponse({"error": "no data"}, status_code=404)
 
     try:
@@ -519,12 +536,16 @@ async def layer_interpolated(request: Request, db: AsyncSession = Depends(get_db
     if not user:
         return JSONResponse({"error": "unauthorized"}, status_code=401)
 
-    fc = (await db.execute(
+    interp_stmt = (
         select(ForecastUpload)
         .where(ForecastUpload.geojson.isnot(None))
         .where(or_(ForecastUpload.variable == "tp", ForecastUpload.variable.is_(None)))
-        .order_by(ForecastUpload.uploaded_at.desc())
-        .limit(1)
+    )
+    scope = allowed_sources(user)
+    if scope is not None:
+        interp_stmt = interp_stmt.where(ForecastUpload.source.in_(scope))
+    fc = (await db.execute(
+        interp_stmt.order_by(ForecastUpload.uploaded_at.desc()).limit(1)
     )).scalars().first()
 
     if not fc:
@@ -591,12 +612,16 @@ async def layer_zonal(request: Request, db: AsyncSession = Depends(get_db)):
     if not user:
         return JSONResponse({"error": "unauthorized"}, status_code=401)
 
-    fc = (await db.execute(
+    zonal_stmt = (
         select(ForecastUpload)
         .where(ForecastUpload.geojson.isnot(None))
         .where(or_(ForecastUpload.variable == "tp", ForecastUpload.variable.is_(None)))
-        .order_by(ForecastUpload.uploaded_at.desc())
-        .limit(1)
+    )
+    scope = allowed_sources(user)
+    if scope is not None:
+        zonal_stmt = zonal_stmt.where(ForecastUpload.source.in_(scope))
+    fc = (await db.execute(
+        zonal_stmt.order_by(ForecastUpload.uploaded_at.desc()).limit(1)
     )).scalars().first()
 
     if not fc:

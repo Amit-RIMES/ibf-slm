@@ -19,10 +19,10 @@ class CdsConfig(Base):
     )
 
     # Shared bounding box for all CDS datasets
-    lat_min: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
-    lat_max: Mapped[float] = mapped_column(Float, default=35.0, nullable=False)
-    lon_min: Mapped[float] = mapped_column(Float, default=60.0, nullable=False)
-    lon_max: Mapped[float] = mapped_column(Float, default=155.0, nullable=False)
+    lat_min: Mapped[float] = mapped_column(Float, default=-90.0, nullable=False)
+    lat_max: Mapped[float] = mapped_column(Float, default=90.0, nullable=False)
+    lon_min: Mapped[float] = mapped_column(Float, default=-180.0, nullable=False)
+    lon_max: Mapped[float] = mapped_column(Float, default=180.0, nullable=False)
 
     # SEAS5 seasonal forecasts
     seas5_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

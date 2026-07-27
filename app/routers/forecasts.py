@@ -20,6 +20,7 @@ from app.core.audit import log_action
 from app.core.background import enqueue
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.scope import allowed_sources
 from app.models.forecast import ForecastUpload
 from app.models.user import User
 from app.routers.triggers import evaluate_triggers
@@ -69,7 +70,7 @@ COUNTRY_NAMES = {
     "bf": "Burkina Faso",          "bj": "Benin",                 "ci": "Côte d'Ivoire",
     "cv": "Cape Verde",            "gh": "Ghana",                 "gm": "Gambia",
     "gn": "Guinea",                "gw": "Guinea-Bissau",         "lr": "Liberia",
-    "ml": "Mali",                  "mr": "Mauritania",            "ne": "Niger",
+    "ml": "Mali",                  "ne": "Niger",
     "ng": "Nigeria",               "sl": "Sierra Leone",          "sn": "Senegal",
     "st": "São Tomé & Príncipe",   "tg": "Togo",
     # Central Africa
@@ -83,6 +84,41 @@ COUNTRY_NAMES = {
     "tv": "Tuvalu",                "vu": "Vanuatu",               "ws": "Samoa",
     # Other RIMES partners
     "jm": "Jamaica",
+    # Europe
+    "al": "Albania",               "ad": "Andorra",               "at": "Austria",
+    "by": "Belarus",               "be": "Belgium",               "ba": "Bosnia and Herzegovina",
+    "bg": "Bulgaria",              "hr": "Croatia",               "cz": "Czechia",
+    "dk": "Denmark",               "ee": "Estonia",               "fi": "Finland",
+    "fr": "France",                "de": "Germany",               "gr": "Greece",
+    "va": "Holy See (Vatican City State)", "hu": "Hungary",       "is": "Iceland",
+    "ie": "Ireland",               "it": "Italy",                 "lv": "Latvia",
+    "li": "Liechtenstein",         "lt": "Lithuania",             "lu": "Luxembourg",
+    "mt": "Malta",                 "md": "Moldova",               "mc": "Monaco",
+    "me": "Montenegro",            "nl": "Netherlands",           "mk": "North Macedonia",
+    "no": "Norway",                "pl": "Poland",                "pt": "Portugal",
+    "ro": "Romania",               "ru": "Russian Federation",    "sm": "San Marino",
+    "rs": "Serbia",                "sk": "Slovakia",              "si": "Slovenia",
+    "es": "Spain",                 "se": "Sweden",                "ch": "Switzerland",
+    "ua": "Ukraine",               "gb": "United Kingdom",
+    # North America
+    "ca": "Canada",                "us": "United States",
+    # Central America & Caribbean
+    "ag": "Antigua and Barbuda",   "bs": "Bahamas",               "bb": "Barbados",
+    "bz": "Belize",                "cr": "Costa Rica",            "cu": "Cuba",
+    "dm": "Dominica",              "do": "Dominican Republic",    "sv": "El Salvador",
+    "gd": "Grenada",               "gt": "Guatemala",             "ht": "Haiti",
+    "hn": "Honduras",              "mx": "Mexico",                "ni": "Nicaragua",
+    "pa": "Panama",                "kn": "Saint Kitts and Nevis", "lc": "Saint Lucia",
+    "vc": "Saint Vincent and the Grenadines", "tt": "Trinidad and Tobago",
+    # South America
+    "ar": "Argentina",             "bo": "Bolivia",               "br": "Brazil",
+    "cl": "Chile",                 "co": "Colombia",              "ec": "Ecuador",
+    "gy": "Guyana",                "py": "Paraguay",              "pe": "Peru",
+    "sr": "Suriname",              "uy": "Uruguay",               "ve": "Venezuela",
+    # Australia & New Zealand
+    "au": "Australia",             "nz": "New Zealand",
+    # North Africa (addl.)
+    "eh": "Western Sahara",
 }
 
 SOURCES = [
@@ -346,6 +382,10 @@ async def forecast_list(
     if source:
         filters.append(ForecastUpload.source == source)
 
+    scope = allowed_sources(user)
+    if scope is not None:
+        filters.append(ForecastUpload.source.in_(scope))
+
     base = select(ForecastUpload)
     if filters:
         from sqlalchemy import and_
@@ -359,13 +399,15 @@ async def forecast_list(
     result = await db.execute(stmt)
     forecasts = result.scalars().all()
 
+    visible_sources = SOURCES if scope is None else [s for s in SOURCES if s["value"] in scope]
+
     return templates.TemplateResponse(
     request,
     "forecast_list.html",
     {
             "user": user, "forecasts": forecasts,
             "q": q, "date_from": date_from, "date_to": date_to, "source": source,
-            "sources": SOURCES,
+            "sources": visible_sources,
             "page": page, "total": total, "total_pages": total_pages,
             "page_size": PAGE_SIZE, "page_range": _build_page_range(page, total_pages),
         },
@@ -404,6 +446,9 @@ async def forecast_export(
             pass
     if source:
         filters.append(ForecastUpload.source == source)
+    scope = allowed_sources(user)
+    if scope is not None:
+        filters.append(ForecastUpload.source.in_(scope))
     if filters:
         stmt = stmt.where(and_(*filters))
     stmt = stmt.order_by(desc(ForecastUpload.uploaded_at))
@@ -533,10 +578,13 @@ async def import_page(request: Request, db: AsyncSession = Depends(get_db)):
         dates = []
         portal_error = f"Could not reach RIMES portal: {exc}"
 
+    scope = allowed_sources(user)
+    visible_sources = SOURCES if scope is None else [s for s in SOURCES if s["value"] in scope]
+
     return templates.TemplateResponse(
     request,
     "forecast_import.html",
-    {"user": user, "sources": SOURCES,
+    {"user": user, "sources": visible_sources,
          "dates": dates, "portal_error": portal_error, "portal_base": PORTAL_BASE},
 )
 
@@ -643,6 +691,10 @@ async def import_forecast(
     if not source_entry or not re.fullmatch(r"\d{8}", date):
         return RedirectResponse("/forecasts/import")
 
+    scope = allowed_sources(user)
+    if scope is not None and source not in scope:
+        return RedirectResponse("/forecasts/import")
+
     try:
         forecast = await do_import(source, date, db)
         await _log_import(db, user.id, forecast)
@@ -678,12 +730,15 @@ async def forecast_drift(
         "manual": "Manual upload",
         **{s["value"]: s["label"] for s in SOURCES},
     }
+    scope = allowed_sources(user)
+
     from sqlalchemy import func as sqlfunc
-    db_sources_result = await db.execute(
-        select(ForecastUpload.source, sqlfunc.count(ForecastUpload.id))
-        .where(ForecastUpload.source.isnot(None))
-        .group_by(ForecastUpload.source)
+    db_sources_stmt = select(ForecastUpload.source, sqlfunc.count(ForecastUpload.id)).where(
+        ForecastUpload.source.isnot(None)
     )
+    if scope is not None:
+        db_sources_stmt = db_sources_stmt.where(ForecastUpload.source.in_(scope))
+    db_sources_result = await db.execute(db_sources_stmt.group_by(ForecastUpload.source))
     drift_sources = [
         {"value": src, "label": _source_label.get(src, src), "count": cnt}
         for src, cnt in sorted(db_sources_result.all(), key=lambda r: _source_label.get(r[0], r[0]))
@@ -692,7 +747,7 @@ async def forecast_drift(
     # Show last 14 forecasts for the selected source (same-source drift view)
     forecasts_for_source = []
     drift_rows = []  # enriched rows with delta_mean, delta_pct
-    if source:
+    if source and (scope is None or source in scope):
         result = await db.execute(
             select(ForecastUpload)
             .where(ForecastUpload.source == source)
@@ -751,6 +806,10 @@ async def forecast_compare(
     if not fc_a or not fc_b:
         return RedirectResponse("/forecasts")
 
+    scope = allowed_sources(user)
+    if scope is not None and (fc_a.source not in scope or fc_b.source not in scope):
+        return RedirectResponse("/forecasts")
+
     global_min = min(fc_a.precip_min, fc_b.precip_min)
     global_max = max(fc_a.precip_max, fc_b.precip_max)
 
@@ -786,6 +845,7 @@ async def forecast_calendar(
 
     year_start = _dt(year, 1, 1, tzinfo=_tz.utc)
     year_end   = _dt(year + 1, 1, 1, tzinfo=_tz.utc)
+    scope = allowed_sources(user)
 
     # Daily upload counts (optionally filtered by source)
     count_stmt = (
@@ -801,6 +861,8 @@ async def forecast_calendar(
     )
     if source:
         count_stmt = count_stmt.where(ForecastUpload.source == source)
+    if scope is not None:
+        count_stmt = count_stmt.where(ForecastUpload.source.in_(scope))
     day_counts = {
         _date.fromisoformat(row.day): row.cnt
         for row in (await db.execute(count_stmt)).all()
@@ -818,6 +880,8 @@ async def forecast_calendar(
         )
         .distinct()
     )
+    if scope is not None:
+        src_stmt = src_stmt.where(ForecastUpload.source.in_(scope))
     src_rows = (await db.execute(src_stmt)).all()
     src_days: dict[str, set] = {}
     for row in src_rows:
@@ -882,6 +946,10 @@ async def forecast_detail(forecast_id: int, request: Request, db: AsyncSession =
     if not forecast:
         return RedirectResponse("/dashboard")
 
+    scope = allowed_sources(user)
+    if scope is not None and forecast.source not in scope:
+        return RedirectResponse("/forecasts")
+
     import json as _json
     lead_time_stats = _json.loads(forecast.lead_time_stats) if forecast.lead_time_stats else None
     exceedance = _json.loads(forecast.exceedance_json) if forecast.exceedance_json else None
@@ -905,7 +973,8 @@ async def delete_forecast(forecast_id: int, request: Request, db: AsyncSession =
 
     result = await db.execute(select(ForecastUpload).where(ForecastUpload.id == forecast_id))
     forecast = result.scalar_one_or_none()
-    if forecast:
+    scope = allowed_sources(user)
+    if forecast and (scope is None or forecast.source in scope):
         filename = forecast.filename
         await db.delete(forecast)
         await db.commit()

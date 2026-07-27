@@ -30,7 +30,7 @@ async def _get_or_create_config(db: AsyncSession) -> EcmwfConfig:
         cfg = EcmwfConfig(
             id=1, enabled=False, use_ensemble=False,
             run_time=0, sync_hour=10, sync_minute=0,
-            lat_min=0.0, lat_max=35.0, lon_min=60.0, lon_max=155.0,
+            lat_min=-90.0, lat_max=90.0, lon_min=-180.0, lon_max=180.0,
         )
         db.add(cfg)
         await db.commit()
@@ -80,10 +80,10 @@ async def update_config(
     run_time: int = Form(0),
     sync_hour: int = Form(10),
     sync_minute: int = Form(0),
-    lat_min: float = Form(0.0),
-    lat_max: float = Form(35.0),
-    lon_min: float = Form(60.0),
-    lon_max: float = Form(155.0),
+    lat_min: float = Form(-90.0),
+    lat_max: float = Form(90.0),
+    lon_min: float = Form(-180.0),
+    lon_max: float = Form(180.0),
     db: AsyncSession = Depends(get_db),
 ):
     import json as _json

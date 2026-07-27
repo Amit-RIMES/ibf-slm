@@ -13,6 +13,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.core.gaps import check_data_gaps
 from app.core.risk import compute_risk_score
+from app.core.scope import allowed_country_names, allowed_sources, country_condition
 from app.core.spi import TIMESCALES, spi_category
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
@@ -62,6 +63,9 @@ async def dashboard(
         except ValueError:
             date_to = ""
 
+    scope = allowed_sources(user)
+    scope_names = allowed_country_names(user)
+
     # Impact filters (hazard + country + date) — used for stat counter, hazard chart, recent table
     impact_filters = []
     if dt_from:
@@ -72,26 +76,38 @@ async def dashboard(
         impact_filters.append(ImpactRecord.hazard_type == hazard)
     if country:
         impact_filters.append(ImpactRecord.country.ilike(f"%{country}%"))
+    scope_cond = country_condition(ImpactRecord.country, scope_names)
+    if scope_cond is not None:
+        impact_filters.append(scope_cond)
 
     total_users = await db.scalar(select(func.count()).select_from(User).where(User.is_active == True))  # noqa: E712
     pending_count = await db.scalar(select(func.count()).select_from(User).where(User.is_active == False))  # noqa: E712
     admin_count = await db.scalar(select(func.count()).select_from(User).where(User.role == "admin", User.is_active == True))  # noqa: E712
-    total_forecasts = await db.scalar(select(func.count()).select_from(ForecastUpload))
+
+    total_forecasts_stmt = select(func.count()).select_from(ForecastUpload)
+    if scope is not None:
+        total_forecasts_stmt = total_forecasts_stmt.where(ForecastUpload.source.in_(scope))
+    total_forecasts = await db.scalar(total_forecasts_stmt)
 
     impacts_count_stmt = select(func.count()).select_from(ImpactRecord)
     if impact_filters:
         impacts_count_stmt = impacts_count_stmt.where(and_(*impact_filters))
     total_impacts = await db.scalar(impacts_count_stmt)
-    total_impacts_unfiltered = await db.scalar(select(func.count()).select_from(ImpactRecord))
+
+    total_impacts_unfiltered_stmt = select(func.count()).select_from(ImpactRecord)
+    if scope_cond is not None:
+        total_impacts_unfiltered_stmt = total_impacts_unfiltered_stmt.where(scope_cond)
+    total_impacts_unfiltered = await db.scalar(total_impacts_unfiltered_stmt)
 
     recent_users_result = await db.execute(
         select(User).order_by(desc(User.created_at)).limit(5)
     )
     recent_users = recent_users_result.scalars().all()
 
-    recent_forecasts_result = await db.execute(
-        select(ForecastUpload).order_by(desc(ForecastUpload.uploaded_at)).limit(5)
-    )
+    recent_forecasts_stmt = select(ForecastUpload).order_by(desc(ForecastUpload.uploaded_at)).limit(5)
+    if scope is not None:
+        recent_forecasts_stmt = recent_forecasts_stmt.where(ForecastUpload.source.in_(scope))
+    recent_forecasts_result = await db.execute(recent_forecasts_stmt)
     recent_forecasts = recent_forecasts_result.scalars().all()
 
     recent_impacts_stmt = select(ImpactRecord).order_by(desc(ImpactRecord.event_date)).limit(10)
@@ -143,6 +159,8 @@ async def dashboard(
         hazard_chart_filters.append(ImpactRecord.event_date < (dt_to - timedelta(days=1)).date())
     if country:
         hazard_chart_filters.append(ImpactRecord.country.ilike(f"%{country}%"))
+    if scope_cond is not None:
+        hazard_chart_filters.append(scope_cond)
     hazard_stmt = select(ImpactRecord.hazard_type, func.count().label("cnt")).group_by(ImpactRecord.hazard_type)
     if hazard_chart_filters:
         hazard_stmt = hazard_stmt.where(and_(*hazard_chart_filters))
@@ -202,6 +220,8 @@ async def dashboard(
         source_stmt = source_stmt.where(ForecastUpload.uploaded_at >= dt_from)
     if dt_to:
         source_stmt = source_stmt.where(ForecastUpload.uploaded_at < dt_to)
+    if scope is not None:
+        source_stmt = source_stmt.where(ForecastUpload.source.in_(scope))
     source_rows = (await db.execute(source_stmt)).all()
     source_chart = {
         "labels": [source_label_map.get(r.source or "", "Unknown") for r in source_rows],

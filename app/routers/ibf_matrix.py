@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.scope import allowed_country_names, allowed_sources, country_condition
 from app.models.forecast import ForecastUpload
 from app.models.impact import ImpactRecord
 from app.models.trigger import Trigger, TriggerActivation
@@ -117,11 +118,17 @@ async def ibf_matrix(request: Request, db: AsyncSession = Depends(get_db)):
     )).scalars().all()
     recent_ids = {a.trigger_id for a in recent_acts}
 
-    latest_fc = (await db.execute(
-        select(ForecastUpload).order_by(ForecastUpload.uploaded_at.desc()).limit(1)
-    )).scalars().first()
+    latest_fc_stmt = select(ForecastUpload).order_by(ForecastUpload.uploaded_at.desc())
+    scope = allowed_sources(user)
+    if scope is not None:
+        latest_fc_stmt = latest_fc_stmt.where(ForecastUpload.source.in_(scope))
+    latest_fc = (await db.execute(latest_fc_stmt.limit(1))).scalars().first()
 
-    all_impacts = (await db.execute(select(ImpactRecord))).scalars().all()
+    impacts_stmt = select(ImpactRecord)
+    scope_cond = country_condition(ImpactRecord.country, allowed_country_names(user))
+    if scope_cond is not None:
+        impacts_stmt = impacts_stmt.where(scope_cond)
+    all_impacts = (await db.execute(impacts_stmt)).scalars().all()
     impacts_by_hazard: dict = {}
     for imp in all_impacts:
         impacts_by_hazard.setdefault(imp.hazard_type or "other", []).append(imp)

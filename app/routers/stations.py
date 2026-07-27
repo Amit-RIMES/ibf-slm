@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.scope import allowed_country_names, country_condition
 from app.core.station_ingest import parse_csv
 from app.core.station_triggers import evaluate_station_triggers
 from app.models.station import Station, StationObservation
@@ -48,11 +49,16 @@ async def stations_list(
     if not user:
         return RedirectResponse("/login", status_code=303)
 
+    scope_names = allowed_country_names(user)
+    scope_cond = country_condition(Station.country, scope_names)
+
     q = select(Station).order_by(Station.country, Station.name)
     if country:
         q = q.where(Station.country == country)
     if active_only:
         q = q.where(Station.is_active == True)  # noqa: E712
+    if scope_cond is not None:
+        q = q.where(scope_cond)
 
     stations_r = await db.execute(q)
     stations = stations_r.scalars().all()
@@ -80,9 +86,10 @@ async def stations_list(
     obs_counts: dict[str, int] = {row[0]: row[1] for row in count_r.all()}
 
     # Distinct countries for filter
-    countries_r = await db.execute(
-        select(Station.country).distinct().where(Station.country != None)  # noqa: E711
-    )
+    countries_stmt = select(Station.country).distinct().where(Station.country != None)  # noqa: E711
+    if scope_cond is not None:
+        countries_stmt = countries_stmt.where(scope_cond)
+    countries_r = await db.execute(countries_stmt)
     countries = sorted(r[0] for r in countries_r.all() if r[0])
 
     return templates.TemplateResponse(
@@ -262,7 +269,11 @@ async def station_compare(
         variable = "precip_mm"
 
     # Load all stations for the selector
-    all_stations_r = await db.execute(select(Station).order_by(Station.name))
+    all_stations_stmt = select(Station).order_by(Station.name)
+    scope_cond = country_condition(Station.country, allowed_country_names(user))
+    if scope_cond is not None:
+        all_stations_stmt = all_stations_stmt.where(scope_cond)
+    all_stations_r = await db.execute(all_stations_stmt)
     all_stations = all_stations_r.scalars().all()
 
     selected_ids = [s.strip() for s in ids.split(",") if s.strip()][:5]  # max 5 stations
@@ -326,6 +337,10 @@ async def station_detail(
 
     station = await db.scalar(select(Station).where(Station.station_id == sid))
     if not station:
+        return RedirectResponse("/stations", status_code=303)
+
+    scope_names = allowed_country_names(user)
+    if scope_names is not None and (station.country or "").lower() not in {n.lower() for n in scope_names}:
         return RedirectResponse("/stations", status_code=303)
 
     q = (
@@ -452,6 +467,11 @@ async def station_export_csv(
     if not user:
         return RedirectResponse("/login", status_code=303)
 
+    station = await db.scalar(select(Station).where(Station.station_id == sid))
+    scope_names = allowed_country_names(user)
+    if scope_names is not None and (not station or (station.country or "").lower() not in {n.lower() for n in scope_names}):
+        return RedirectResponse("/stations", status_code=303)
+
     obs_r = await db.execute(
         select(StationObservation)
         .where(StationObservation.station_id == sid)
@@ -497,9 +517,11 @@ async def map_layer_stations(
     if not user:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
-    stations_r = await db.execute(
-        select(Station).where(Station.is_active == True)  # noqa: E712
-    )
+    stations_stmt = select(Station).where(Station.is_active == True)  # noqa: E712
+    scope_cond = country_condition(Station.country, allowed_country_names(user))
+    if scope_cond is not None:
+        stations_stmt = stations_stmt.where(scope_cond)
+    stations_r = await db.execute(stations_stmt)
     stations = stations_r.scalars().all()
 
     # Latest obs per station
