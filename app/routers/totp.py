@@ -101,8 +101,11 @@ async def totp_disable(
 
 @router.get("/verify", response_class=HTMLResponse)
 async def totp_verify_page(request: Request):
-    pending = request.session.get("totp_pending_user_id") if hasattr(request, "session") else None
-    if not pending:
+    pending_token = request.cookies.get("totp_pending")
+    if not pending_token:
+        return RedirectResponse("/login")
+    from app.core.security import decode_access_token
+    if not decode_access_token(pending_token):
         return RedirectResponse("/login")
     return templates.TemplateResponse(request, "totp_verify.html", {})
 

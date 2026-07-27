@@ -724,7 +724,19 @@ async def layer_zonal(request: Request, db: AsyncSession = Depends(get_db)):
 
     pts = []
     for feat in geojson.get("features", []):
-        lon, lat = feat["geometry"]["coordinates"]
+        geom = feat.get("geometry", {})
+        gtype = geom.get("type", "")
+        coords = geom.get("coordinates", [])
+        if gtype == "Point":
+            lon, lat = coords[0], coords[1]
+        elif gtype == "Polygon":
+            ring = coords[0]
+            lons_r = [c[0] for c in ring]
+            lats_r = [c[1] for c in ring]
+            lon = (min(lons_r) + max(lons_r)) / 2
+            lat = (min(lats_r) + max(lats_r)) / 2
+        else:
+            continue
         val = feat["properties"].get("precip", 0.0) or 0.0
         pts.append((lat, lon, float(val)))
 
