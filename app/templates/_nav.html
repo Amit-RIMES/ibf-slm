@@ -1,0 +1,23 @@
+<nav>
+  <span class="brand">IBF App</span>
+  <div class="nav-links">
+    <a href="/dashboard"{% if request.url.path.startswith('/dashboard') %} class="active"{% endif %}>Dashboard</a>
+    <a href="/forecasts"{% if request.url.path.startswith('/forecasts') %} class="active"{% endif %}>Forecasts</a>
+    <a href="/observed"{% if request.url.path.startswith('/observed') %} class="active"{% endif %}>Rainfall Data</a>
+    <a href="/impacts"{% if request.url.path.startswith('/impacts') %} class="active"{% endif %}>Impact Reports</a>
+    <a href="/triggers"{% if request.url.path.startswith('/triggers') %} class="active"{% endif %}>Warning Rules</a>
+    <a href="/verification"{% if request.url.path.startswith('/verification') %} class="active"{% endif %}>Forecast Accuracy</a>
+    <a href="/alerts"{% if request.url.path.startswith('/alerts') %} class="active"{% endif %}>Active Alerts</a>
+    <a href="/stations"{% if request.url.path.startswith('/stations') %} class="active"{% endif %}>Weather Stations</a>
+    <a href="/glofas"{% if request.url.path.startswith('/glofas') %} class="active"{% endif %}>River Forecasts</a>
+    <a href="/drought"{% if request.url.path.startswith('/drought') %} class="active"{% endif %}>Drought Monitor</a>
+    <a href="/map"{% if request.url.path.startswith('/map') %} class="active"{% endif %}>Alert Map</a>
+    <a href="/return-period"{% if request.url.path.startswith('/return-period') %} class="active"{% endif %}>Flood History</a>
+    <div class="nav-dropdown"><span class="nav-dropdown-toggle{% if request.url.path.startswith(('/reports', '/bulletin')) %} active{% endif %}">Reports ▾</span><div class="nav-dropdown-menu"><a href="/reports/operational"{% if request.url.path.startswith('/reports/operational') %} class="active"{% endif %}>Situation Report</a><a href="/reports/handover"{% if request.url.path.startswith('/reports/handover') %} class="active"{% endif %}>Shift Handover</a><a href="/bulletin"{% if request.url.path.startswith('/bulletin') %} class="active"{% endif %}>Bulletin</a></div></div>
+    <a href="/seasonal"{% if request.url.path.startswith('/seasonal') %} class="active"{% endif %}>Seasonal Outlook</a>
+    <a href="/chat"{% if request.url.path.startswith('/chat') %} class="active"{% endif %}>AI Assistant</a>
+    <a href="/help"{% if request.url.path.startswith('/help') %} class="active"{% endif %}>Help</a>
+    {% if user.role == "admin" %}<div class="nav-dropdown"><span class="nav-dropdown-toggle{% if request.url.path.startswith(('/admin/users', '/admin/sms', '/cap', '/sync', '/ecmwf', '/cds')) %} active{% endif %}" style="color:#7c3aed;font-weight:600">Admin ▾</span><div class="nav-dropdown-menu"><a href="/admin/users"{% if request.url.path.startswith('/admin/users') %} class="active"{% endif %}>Users</a><a href="/admin/sms"{% if request.url.path.startswith('/admin/sms') %} class="active"{% endif %}>SMS Config</a><a href="/cap"{% if request.url.path.startswith('/cap') %} class="active"{% endif %}>CAP Alerts</a><a href="/sync"{% if request.url.path.startswith('/sync') %} class="active"{% endif %}>Data Import</a><a href="/ecmwf"{% if request.url.path.startswith('/ecmwf') %} class="active"{% endif %}>ECMWF Data</a><a href="/cds"{% if request.url.path.startswith('/cds') %} class="active"{% endif %}>Climate Data</a></div></div>{% endif %}
+    <a href="/logout" class="logout">Logout</a>
+  </div>
+</nav>
