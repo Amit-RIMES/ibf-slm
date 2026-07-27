@@ -9,4 +9,5 @@ dist/
 .pytest_cache/
 *.db
 *.sqlite3
+*.log
 Folder Structure.txt
