@@ -285,6 +285,70 @@
     }
     .pub-footer a { color: var(--ink-faint); }
 
+    /* ── Country search sheet ─────────────────────────────────────────── */
+    .picker-trigger {
+      font: inherit; font-size: .9rem; font-weight: 600;
+      padding: .8rem 1rem; border-radius: 14px;
+      border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-soft);
+      width: 100%; cursor: pointer; text-align: left;
+      display: flex; align-items: center; gap: .6rem;
+    }
+    .picker-trigger svg { flex-shrink: 0; width: 18px; height: 18px; stroke: var(--ink-faint); fill: none; stroke-width: 2; }
+    .search-overlay {
+      position: fixed; inset: 0; z-index: 800;
+      background: rgba(0,0,0,0); pointer-events: none;
+      transition: background .22s;
+    }
+    .search-overlay.open { background: rgba(0,0,0,.45); pointer-events: all; }
+    .search-sheet {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: var(--surface); border-radius: 20px 20px 0 0;
+      padding: 0 0 env(safe-area-inset-bottom, 0px);
+      display: flex; flex-direction: column; max-height: 72vh;
+      transform: translateY(100%);
+      transition: transform .28s cubic-bezier(.4,0,.2,1);
+    }
+    .search-overlay.open .search-sheet { transform: translateY(0); }
+    .search-handle {
+      width: 36px; height: 4px; background: var(--line); border-radius: 2px;
+      margin: .75rem auto .5rem; flex-shrink: 0;
+    }
+    .search-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 1rem .75rem; flex-shrink: 0;
+    }
+    .search-title { font-size: .9rem; font-weight: 800; }
+    .search-close {
+      background: var(--line); border: none; cursor: pointer;
+      width: 28px; height: 28px; border-radius: 50%;
+      font-size: 1.1rem; line-height: 1; color: var(--ink-soft);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .search-wrap { margin: 0 1rem .65rem; position: relative; flex-shrink: 0; }
+    .search-wrap svg {
+      position: absolute; left: .7rem; top: 50%; transform: translateY(-50%);
+      width: 16px; height: 16px; stroke: var(--ink-faint); fill: none; stroke-width: 2;
+      pointer-events: none;
+    }
+    .search-input {
+      font: inherit; font-size: .9rem; width: 100%;
+      padding: .65rem .75rem .65rem 2.25rem;
+      border: 1.5px solid var(--line); border-radius: 12px;
+      background: var(--ground); color: var(--ink); outline: none;
+      -webkit-appearance: none;
+    }
+    .search-input:focus { border-color: var(--accent); }
+    .search-results { overflow-y: auto; flex: 1; padding: 0 .5rem .5rem; }
+    .result-item {
+      display: block; width: 100%; font: inherit; font-size: .875rem;
+      text-align: left; padding: .7rem .75rem;
+      background: none; border: none; cursor: pointer;
+      color: var(--ink); border-radius: 10px;
+    }
+    .result-item:hover, .result-item:focus { background: var(--ground); outline: none; }
+    .result-item.current { color: var(--accent); font-weight: 700; background: var(--accent-bg); }
+    .no-results { font-size: .85rem; color: var(--ink-faint); padding: 1rem .75rem; }
+
     @media (prefers-color-scheme: dark) {
       [data-theme="dark"] body { background: #080e0d; }
     }
@@ -298,25 +362,9 @@
   <div class="topbar">
     <div class="brand">RIMES <em>Alerts</em></div>
     <div class="loc-form">
-      {% if has_country %}
-      <form method="get" action="/status" style="display:contents">
-        <input type="hidden" name="lang" value="{{ lang }}">
-        <select class="loc-chip" name="country" onchange="this.form.submit()" aria-label="Country">
-          {% for iso2, name in country_list %}
-          <option value="{{ iso2 }}" {% if iso2 == country_iso2 %}selected{% endif %}>{{ name }}</option>
-          {% endfor %}
-        </select>
-      </form>
-      {% else %}
-      <form method="get" action="/status" style="display:contents">
-        <select class="loc-chip" name="country" onchange="this.form.submit()" aria-label="Country">
-          <option value="" selected disabled>Choose country</option>
-          {% for iso2, name in country_list %}
-          <option value="{{ iso2 }}">{{ name }}</option>
-          {% endfor %}
-        </select>
-      </form>
-      {% endif %}
+      <button class="loc-chip" type="button" onclick="openSearch()" aria-haspopup="listbox">
+        {% if has_country %}{{ country_name }}{% else %}Choose country{% endif %} ▾
+      </button>
     </div>
   </div>
 
@@ -329,16 +377,10 @@
         Select your country to see current flood, storm, drought, and other
         hazard risk — in plain language, no login needed.
       </div>
-      <form method="get" action="/status">
-        <select class="picker-lg" name="country" required>
-          <option value="" disabled selected>Select your country</option>
-          {% for iso2, name in country_list %}
-          <option value="{{ iso2 }}">{{ name }}</option>
-          {% endfor %}
-        </select>
-        <div style="height:.65rem"></div>
-        <button class="btn-primary" type="submit">View conditions</button>
-      </form>
+      <button class="picker-trigger" type="button" onclick="openSearch()">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Search for your country
+      </button>
     </div>
     <div class="pub-footer">
       Powered by <strong>RIMES IBF System</strong> &nbsp;·&nbsp;
@@ -484,6 +526,86 @@
   {% endif %}<!-- /has_country -->
 
 </div><!-- /shell -->
+
+<!-- ── Country search sheet ───────────────────────────────────────────── -->
+<div class="search-overlay" id="search-overlay" onclick="handleOverlayClick(event)" aria-hidden="true">
+  <div class="search-sheet" role="dialog" aria-label="Choose country" aria-modal="true">
+    <div class="search-handle"></div>
+    <div class="search-head">
+      <span class="search-title">Choose country</span>
+      <button class="search-close" onclick="closeSearch()" type="button" aria-label="Close">&#x2715;</button>
+    </div>
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input class="search-input" id="search-input" type="search"
+        placeholder="Search 197 countries…" autocomplete="off" autocorrect="off" spellcheck="false" />
+    </div>
+    <div class="search-results" id="search-results" role="listbox"></div>
+  </div>
+</div>
+
+<script>
+const COUNTRIES = {{ country_list | tojson }};
+const CURRENT_LANG = {{ lang | tojson }};
+const CURRENT_ISO = {% if has_country %}{{ country_iso2 | tojson }}{% else %}''{% endif %};
+
+function openSearch() {
+  var overlay = document.getElementById('search-overlay');
+  overlay.classList.add('open');
+  overlay.removeAttribute('aria-hidden');
+  var input = document.getElementById('search-input');
+  input.value = '';
+  renderResults('');
+  setTimeout(function() {
+    input.focus();
+    var cur = document.querySelector('#search-results .result-item.current');
+    if (cur) cur.scrollIntoView({ block: 'nearest' });
+  }, 60);
+}
+
+function closeSearch() {
+  var overlay = document.getElementById('search-overlay');
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function handleOverlayClick(e) {
+  if (e.target === e.currentTarget) closeSearch();
+}
+
+function renderResults(query) {
+  var q = query.toLowerCase().trim();
+  var filtered = q
+    ? COUNTRIES.filter(function(c) { return c[1].toLowerCase().indexOf(q) !== -1; })
+    : COUNTRIES;
+  var ul = document.getElementById('search-results');
+  ul.innerHTML = '';
+  if (filtered.length === 0) {
+    ul.innerHTML = '<div class="no-results">No countries match "' + query.replace(/</g,'&lt;') + '"</div>';
+    return;
+  }
+  filtered.forEach(function(c) {
+    var iso = c[0], name = c[1];
+    var btn = document.createElement('button');
+    btn.className = 'result-item' + (iso === CURRENT_ISO ? ' current' : '');
+    btn.setAttribute('role', 'option');
+    btn.setAttribute('aria-selected', iso === CURRENT_ISO ? 'true' : 'false');
+    btn.textContent = name;
+    btn.type = 'button';
+    btn.onclick = function() {
+      window.location.href = '/status?country=' + encodeURIComponent(iso) + '&lang=' + encodeURIComponent(CURRENT_LANG);
+    };
+    ul.appendChild(btn);
+  });
+}
+
+document.getElementById('search-input').addEventListener('input', function() {
+  renderResults(this.value);
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeSearch();
+});
+</script>
 
 {% if has_country %}
 <script src="/static/leaflet.js"></script>
