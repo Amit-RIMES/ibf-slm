@@ -535,6 +535,60 @@ async def layer_glofas_raster(
     return StreamingResponse(io.BytesIO(png_bytes), media_type="image/png", headers=headers)
 
 
+# ── Public raster endpoints (no auth — data is globally public) ──────────────
+
+@router.get("/layers/public-glofas-raster")
+async def public_glofas_raster(db: AsyncSession = Depends(get_db)):
+    rec = (await db.execute(
+        select(GlofasRecord)
+        .where(GlofasRecord.geojson.isnot(None))
+        .order_by(GlofasRecord.forecast_date.desc())
+        .limit(1)
+    )).scalars().first()
+    if not rec or not rec.geojson:
+        return JSONResponse({"error": "no data"}, status_code=404)
+    try:
+        geojson = json.loads(rec.geojson)
+        lats, lons, grid = _extract_grid(geojson)
+        png_bytes, lat_min, lat_max, lon_min, lon_max = _build_raster_png(
+            lats, lons, grid, scale=2, rgba_fn=_discharge_rgba
+        )
+    except Exception:
+        return JSONResponse({"error": "render failed"}, status_code=500)
+    headers = {
+        "X-Lat-Min": str(lat_min), "X-Lat-Max": str(lat_max),
+        "X-Lon-Min": str(lon_min), "X-Lon-Max": str(lon_max),
+        "Cache-Control": "public, max-age=1800",
+        "Access-Control-Expose-Headers": "X-Lat-Min,X-Lat-Max,X-Lon-Min,X-Lon-Max",
+    }
+    return StreamingResponse(io.BytesIO(png_bytes), media_type="image/png", headers=headers)
+
+
+@router.get("/layers/public-rain-raster")
+async def public_rain_raster(db: AsyncSession = Depends(get_db)):
+    obs = (await db.execute(
+        select(ObservedRainfall)
+        .where(ObservedRainfall.geojson.isnot(None))
+        .order_by(ObservedRainfall.obs_date.desc())
+        .limit(1)
+    )).scalars().first()
+    if not obs or not obs.geojson:
+        return JSONResponse({"error": "no data"}, status_code=404)
+    try:
+        geojson = json.loads(obs.geojson)
+        lats, lons, grid = _extract_grid(geojson)
+        png_bytes, lat_min, lat_max, lon_min, lon_max = _build_raster_png(lats, lons, grid, scale=3)
+    except Exception:
+        return JSONResponse({"error": "render failed"}, status_code=500)
+    headers = {
+        "X-Lat-Min": str(lat_min), "X-Lat-Max": str(lat_max),
+        "X-Lon-Min": str(lon_min), "X-Lon-Max": str(lon_max),
+        "Cache-Control": "public, max-age=1800",
+        "Access-Control-Expose-Headers": "X-Lat-Min,X-Lat-Max,X-Lon-Min,X-Lon-Max",
+    }
+    return StreamingResponse(io.BytesIO(png_bytes), media_type="image/png", headers=headers)
+
+
 # ── Helpers shared by zonal + interpolation layers ───────────────────────────
 
 def _pip(lat: float, lon: float, ring: list) -> bool:

@@ -831,6 +831,8 @@ const countryName = {{ country_name | tojson }};
 const fallbackCentroid = {{ fallback_centroid_json | safe }};
 const ALL_HAZARDS = {{ all_hazards | tojson }};
 const RISK_COLORS = { low:'#6f9a3c', moderate:'#d9a62e', high:'#d97b29', extreme:'#c0392b' };
+const SPI_VALUE = {{ spi_data.value if spi_data else 'null' }};
+const SPI_COLOR = {{ spi_data.color | tojson if spi_data else 'null' }};
 
 /* ── Tab switching ─────────────────────────────────────────────── */
 let mapReady = false;
@@ -850,7 +852,7 @@ function showTab(tab) {
   if (scroll) scroll.scrollTop = 0;
 }
 
-/* ── Alerts preview map ────────────────────────────────────────── */
+/* ── Alerts preview map (river discharge + rainfall + drought + hazard markers) */
 let alertsMap = null;
 function initAlertsMap() {
   if (alertsMap) return;
@@ -858,6 +860,7 @@ function initAlertsMap() {
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 18 }).addTo(alertsMap);
   setTimeout(function(){ alertsMap.invalidateSize(); }, 50);
 
+  /* ── Country + admin boundaries ── */
   fetch('/static/countries.geojson').then(function(r) { return r.json(); }).then(function(gj) {
     L.geoJSON(gj, { style: { color: '#4a7a6a', weight: 0.6, fillOpacity: 0 } }).addTo(alertsMap);
 
@@ -865,8 +868,11 @@ function initAlertsMap() {
     var centroid = null;
 
     if (mine) {
+      /* Drought tint: fill country polygon with SPI colour when dry (SPI < -1) */
+      var droughtFill    = (SPI_COLOR && SPI_VALUE !== null && SPI_VALUE < -1.0) ? SPI_COLOR : '#0f6e7a';
+      var droughtOpacity = (SPI_COLOR && SPI_VALUE !== null && SPI_VALUE < -1.0) ? 0.22 : 0.08;
       var hl = L.geoJSON(mine, {
-        style: { color: '#0f6e7a', weight: 2, fillColor: '#0f6e7a', fillOpacity: 0.1 }
+        style: { color: '#0f6e7a', weight: 2, fillColor: droughtFill, fillOpacity: droughtOpacity }
       }).addTo(alertsMap);
       var lb = hl.getBounds();
       alertsMap.fitBounds(lb, { padding: [16, 16] });
@@ -892,6 +898,26 @@ function initAlertsMap() {
 
   fetch('/static/admin1_states.geojson').then(function(r) { return r.json(); }).then(function(gj) {
     L.geoJSON(gj, { style: { color: '#8aada8', weight: 0.4, dashArray: '3 3', fillOpacity: 0 } }).addTo(alertsMap);
+  }).catch(function(){});
+
+  /* ── Rainfall raster (CHIRPS 7-day, zIndex 150) ── */
+  fetch('/map/layers/public-rain-raster').then(async function(r) {
+    if (!r.ok) return;
+    var lMin = parseFloat(r.headers.get('X-Lat-Min')), lMax = parseFloat(r.headers.get('X-Lat-Max'));
+    var nMin = parseFloat(r.headers.get('X-Lon-Min')), nMax = parseFloat(r.headers.get('X-Lon-Max'));
+    if (isNaN(lMin) || isNaN(lMax) || isNaN(nMin) || isNaN(nMax)) return;
+    var url = URL.createObjectURL(new Blob([await r.arrayBuffer()], {type:'image/png'}));
+    L.imageOverlay(url, [[lMin,nMin],[lMax,nMax]], {opacity:0.55, zIndex:150}).addTo(alertsMap);
+  }).catch(function(){});
+
+  /* ── GloFAS river-discharge raster (zIndex 200, on top of rainfall) ── */
+  fetch('/map/layers/public-glofas-raster').then(async function(r) {
+    if (!r.ok) return;
+    var lMin = parseFloat(r.headers.get('X-Lat-Min')), lMax = parseFloat(r.headers.get('X-Lat-Max'));
+    var nMin = parseFloat(r.headers.get('X-Lon-Min')), nMax = parseFloat(r.headers.get('X-Lon-Max'));
+    if (isNaN(lMin) || isNaN(lMax) || isNaN(nMin) || isNaN(nMax)) return;
+    var url = URL.createObjectURL(new Blob([await r.arrayBuffer()], {type:'image/png'}));
+    L.imageOverlay(url, [[lMin,nMin],[lMax,nMax]], {opacity:0.70, zIndex:200}).addTo(alertsMap);
   }).catch(function(){});
 }
 
