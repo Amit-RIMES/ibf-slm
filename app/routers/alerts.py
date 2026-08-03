@@ -382,6 +382,7 @@ async def public_status(
             "copy": copy,
             "hero": hero,
             "hazard_cards": other_cards,
+            "all_hazards": hazard_cards,
             "regional_advisories": regional,
             "has_geometry": has_geometry,
             "fallback_centroid_json": json.dumps(fallback_centroid) if fallback_centroid else "null",

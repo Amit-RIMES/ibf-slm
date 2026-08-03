@@ -305,27 +305,11 @@
       box-shadow: var(--shadow-card);
       margin-bottom: .5rem;
     }
-    .map-preview-bg {
-      height: 130px;
-      background: linear-gradient(160deg, #cfe0da, #b8d2cc);
-      position: relative; overflow: hidden;
+    #alerts-map {
+      height: 210px;
+      background: var(--ground-deep);
+      border-radius: 0;
     }
-    .map-preview-bg::after {
-      content: '';
-      position: absolute; inset: 0;
-      background: radial-gradient(circle at 55% 55%, rgba(15,110,122,.22) 0%, transparent 65%);
-    }
-    .map-preview-label {
-      position: absolute; bottom: .55rem; left: .75rem;
-      font-size: .68rem; font-weight: 700;
-      color: rgba(18,38,42,.65);
-      z-index: 1;
-    }
-    .map-preview-bg-icon {
-      position: absolute; right: 1rem; top: 50%; transform: translateY(-50%);
-      opacity: .18;
-    }
-    .map-preview-bg-icon svg { width: 56px; height: 56px; stroke: #0f6e7a; fill: none; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
     .legend-strip {
       display: flex; gap: .3rem; align-items: center;
       padding: .55rem .75rem;
@@ -653,12 +637,7 @@
       <!-- Map preview card -->
       <div class="section-label" style="margin-top:1rem">{{ copy.ui.section_risk_map }}</div>
       <div class="map-card">
-        <div class="map-preview-bg">
-          <span class="map-preview-label">{{ country_name }}</span>
-          <span class="map-preview-bg-icon">
-            <svg viewBox="0 0 24 24"><path d="M9 20l-5-2V6l5-2 6 2 5-2v14l-5 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>
-          </span>
-        </div>
+        <div id="alerts-map"></div>
         <div class="legend-strip">
           <span style="background:var(--risk-low)"></span>
           <span style="background:var(--risk-moderate)"></span>
@@ -850,6 +829,8 @@ document.addEventListener('keydown', function(e) {
 <script>
 const countryName = {{ country_name | tojson }};
 const fallbackCentroid = {{ fallback_centroid_json | safe }};
+const ALL_HAZARDS = {{ all_hazards | tojson }};
+const RISK_COLORS = { low:'#6f9a3c', moderate:'#d9a62e', high:'#d97b29', extreme:'#c0392b' };
 
 /* ── Tab switching ─────────────────────────────────────────────── */
 let mapReady = false;
@@ -863,6 +844,65 @@ function showTab(tab) {
   if (tab === 'map' && !mapReady) { initMap(); mapReady = true; }
   var scroll = document.getElementById('main-scroll');
   if (scroll) scroll.scrollTop = 0;
+}
+
+/* ── Alerts preview map ────────────────────────────────────────── */
+let alertsMap = null;
+function initAlertsMap() {
+  if (alertsMap) return;
+  alertsMap = L.map('alerts-map', { zoomControl: false, attributionControl: false, scrollWheelZoom: false });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 18 }).addTo(alertsMap);
+
+  fetch('/static/countries.geojson').then(function(r) { return r.json(); }).then(function(gj) {
+    L.geoJSON(gj, { style: { color: '#4a7a6a', weight: 0.6, fillOpacity: 0 } }).addTo(alertsMap);
+
+    var mine = gj.features.find(function(f) { return f.properties.name === countryName; });
+    var centroid = null;
+
+    if (mine) {
+      var hl = L.geoJSON(mine, {
+        style: { color: '#0f6e7a', weight: 2, fillColor: '#0f6e7a', fillOpacity: 0.1 }
+      }).addTo(alertsMap);
+      var lb = hl.getBounds();
+      alertsMap.fitBounds(lb, { padding: [16, 16] });
+      centroid = [(lb.getSouth() + lb.getNorth()) / 2, (lb.getWest() + lb.getEast()) / 2];
+
+      if (ALL_HAZARDS.length > 0) {
+        var latSpan = lb.getNorth() - lb.getSouth();
+        var lngSpan = lb.getEast() - lb.getWest();
+        var r = Math.max(Math.min(latSpan, lngSpan) * 0.22, 0.4);
+        placeHazardMarkers(centroid, r);
+      }
+    } else if (fallbackCentroid) {
+      centroid = fallbackCentroid;
+      alertsMap.setView(centroid, 5);
+      if (ALL_HAZARDS.length > 0) placeHazardMarkers(centroid, 0.5);
+    } else {
+      alertsMap.setView([10, 85], 3);
+    }
+  }).catch(function() {
+    if (fallbackCentroid) { alertsMap.setView(fallbackCentroid, 5); }
+    else { alertsMap.setView([10, 85], 3); }
+  });
+
+  fetch('/static/admin1_states.geojson').then(function(r) { return r.json(); }).then(function(gj) {
+    L.geoJSON(gj, { style: { color: '#8aada8', weight: 0.4, dashArray: '3 3', fillOpacity: 0 } }).addTo(alertsMap);
+  }).catch(function(){});
+}
+
+function placeHazardMarkers(centroid, r) {
+  var n = ALL_HAZARDS.length;
+  ALL_HAZARDS.forEach(function(h, i) {
+    var angle = (2 * Math.PI * i / n) - Math.PI / 2;
+    var lat = centroid[0] + r * Math.sin(angle);
+    var lng = centroid[1] + r * Math.cos(angle);
+    var color = RISK_COLORS[h.level] || '#6b7280';
+    L.circleMarker([lat, lng], {
+      radius: 10, color: '#fff', weight: 2,
+      fillColor: color, fillOpacity: 0.92
+    }).addTo(alertsMap)
+      .bindTooltip('<b>' + h.hazard_name + '</b><br>' + h.level_label, { sticky: true });
+  });
 }
 
 /* ── Leaflet map ───────────────────────────────────────────────── */
@@ -917,10 +957,13 @@ function initMap() {
   }).catch(function(){});
 }
 
-/* Pre-load map in background so it's ready when user taps Map tab */
+/* Alerts tab is active on load — init its map immediately */
+initAlertsMap();
+
+/* Pre-load Map tab in background */
 setTimeout(function() {
   if (!mapReady) { initMap(); mapReady = true; }
-}, 800);
+}, 1200);
 
 /* ── Freshness counter ─────────────────────────────────────────── */
 (function() {
