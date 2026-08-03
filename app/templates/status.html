@@ -349,6 +349,20 @@
     .result-item.current { color: var(--accent); font-weight: 700; background: var(--accent-bg); }
     .no-results { font-size: .85rem; color: var(--ink-faint); padding: 1rem .75rem; }
 
+    /* ── Toast ────────────────────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: calc(var(--nav-h) + 1rem);
+      left: 50%; transform: translateX(-50%) translateY(6px);
+      background: var(--ink); color: var(--surface);
+      padding: .45rem 1rem; border-radius: 999px;
+      font-size: .78rem; font-weight: 700;
+      opacity: 0; pointer-events: none;
+      transition: opacity .18s, transform .18s;
+      z-index: 900; white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
     @media (prefers-color-scheme: dark) {
       [data-theme="dark"] body { background: #080e0d; }
     }
@@ -362,6 +376,11 @@
   <div class="topbar">
     <div class="brand">RIMES <em>Alerts</em></div>
     <div class="loc-form">
+      {% if has_country %}
+      <button class="icon-btn" type="button" onclick="shareOrCopy()" aria-label="Share this page">
+        <svg style="width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
+      </button>
+      {% endif %}
       <button class="loc-chip" type="button" onclick="openSearch()" aria-haspopup="listbox">
         {% if has_country %}{{ country_name }}{% else %}Choose country{% endif %} ▾
       </button>
@@ -665,7 +684,31 @@ function initMap() {
 /* Init map immediately on Alerts tab (default active) */
 initMap();
 mapReady = true;
+
+/* ── Share / copy link ─────────────────────────────────────────── */
+function shareOrCopy() {
+  var url = window.location.href;
+  var title = 'RIMES Alerts — ' + countryName;
+  var text = 'Current hazard conditions for ' + countryName + '.';
+  if (navigator.share) {
+    navigator.share({ title: title, text: text, url: url }).catch(function() {});
+  } else {
+    navigator.clipboard.writeText(url).then(function() {
+      showToast('Link copied');
+    }).catch(function() {
+      showToast('Copy: ' + url);
+    });
+  }
+}
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(function() { t.classList.remove('show'); }, 2200);
+}
 </script>
 {% endif %}
+<div class="toast" id="toast"></div>
 </body>
 </html>
