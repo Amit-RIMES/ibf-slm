@@ -414,7 +414,7 @@
 
     <!-- Tab: Alerts ───────────────────────────────────────────────── -->
     <div class="tab-panel active" id="panel-alerts">
-      <div class="stamp">{{ updated_at }} · refreshes every 5 min</div>
+      <div class="stamp" id="freshness-stamp">{{ updated_at }} · refreshes every 5 min</div>
 
       {% if hero %}
       <div class="hero level-{{ hero.level }}">
@@ -436,8 +436,8 @@
       {% else %}
       <div class="hero level-clear">
         <span class="risk-badge"><span class="dot"></span> All clear</span>
-        <div class="hero-hazard">No active hazards</div>
-        <div class="hero-text">Conditions are currently calm. Monitored hazards for {{ country_name }} are shown below.</div>
+        <div class="hero-hazard">Conditions are calm</div>
+        <div class="hero-text">No active hazard warnings for {{ country_name }} right now. Stay alert — conditions can change quickly. Check back during any severe weather.</div>
         <div class="hero-updated">{{ country_name }} · {{ updated_at }}</div>
       </div>
       {% endif %}
@@ -467,6 +467,11 @@
 
       <div class="section-label">Risk map</div>
       <div id="status-map"></div>
+      <div id="map-legend" hidden style="display:flex;align-items:center;gap:6px;padding:5px 2px 0;font-size:.7rem;color:var(--ink-faint);">
+        <span>River discharge:</span>
+        <div style="width:100px;height:8px;border-radius:2px;background:linear-gradient(to right,#b4ebff,#50c8f0,#1482d2,#0a468f,#020c37);flex-shrink:0;"></div>
+        <span>low</span><span style="margin-left:auto">high</span>
+      </div>
       {% if not has_geometry %}
       <div class="map-note">Detailed boundary unavailable for {{ country_name }} — showing approximate location.</div>
       {% endif %}
@@ -679,11 +684,40 @@ function initMap() {
   fetch('/static/admin1_states.geojson').then(r => r.json()).then(function(gj) {
     L.geoJSON(gj, { style: { color: '#6a9a8a', weight: 0.5, dashArray: '3 3', fillOpacity: 0 } }).addTo(map);
   }).catch(function(){});
+
+  fetch('/map/layers/glofas-raster').then(async function(r) {
+    if (!r.ok) return;
+    const lMin = parseFloat(r.headers.get('X-Lat-Min'));
+    const lMax = parseFloat(r.headers.get('X-Lat-Max'));
+    const nMin = parseFloat(r.headers.get('X-Lon-Min'));
+    const nMax = parseFloat(r.headers.get('X-Lon-Max'));
+    if (isNaN(lMin) || isNaN(lMax) || isNaN(nMin) || isNaN(nMax)) return;
+    const buf = await r.arrayBuffer();
+    const url = URL.createObjectURL(new Blob([buf], {type: 'image/png'}));
+    L.imageOverlay(url, [[lMin, nMin], [lMax, nMax]], {opacity: 0.82}).addTo(map);
+    document.getElementById('map-legend').hidden = false;
+  }).catch(function(){});
 }
 
 /* Init map immediately on Alerts tab (default active) */
 initMap();
 mapReady = true;
+
+/* ── Freshness counter ─────────────────────────────────────────── */
+(function() {
+  var raw = {{ updated_at | tojson }};
+  var ts = new Date(raw.replace(' UTC', 'Z').replace(' ', 'T'));
+  function tick() {
+    var diffMin = Math.round((Date.now() - ts.getTime()) / 60000);
+    var el = document.getElementById('freshness-stamp');
+    if (!el) return;
+    if (diffMin < 1)       el.textContent = 'Just updated · refreshes every 5 min';
+    else if (diffMin === 1) el.textContent = 'Updated 1 min ago · refreshes every 5 min';
+    else                   el.textContent = 'Updated ' + diffMin + ' min ago · refreshes every 5 min';
+  }
+  tick();
+  setInterval(tick, 30000);
+})();
 
 /* ── Share / copy link ─────────────────────────────────────────── */
 function shareOrCopy() {
