@@ -756,7 +756,8 @@ PUBLIC_ACTION_TIPS: dict[str, dict[str, list[str]]] = {
 
 PUBLIC_STATUS_UI: dict[str, dict[str, str]] = {
     "en": {
-        "tab_alerts": "Alerts", "tab_prepare": "Prepare", "tab_language": "Language",
+        "tab_alerts": "Alerts", "tab_map": "Map", "tab_prepare": "Prepare", "tab_language": "Language",
+        "view_map_cta": "View full map →",
         "section_risk_map": "Risk map", "section_what_to_do": "What to do now",
         "section_other_conditions": "Other conditions",
         "all_clear_badge": "All clear", "all_clear_heading": "Conditions are calm",
@@ -779,7 +780,8 @@ PUBLIC_STATUS_UI: dict[str, dict[str, str]] = {
         "landing_search": "Search for your country",
     },
     "fr": {
-        "tab_alerts": "Alertes", "tab_prepare": "Se préparer", "tab_language": "Langue",
+        "tab_alerts": "Alertes", "tab_map": "Carte", "tab_prepare": "Se préparer", "tab_language": "Langue",
+        "view_map_cta": "Voir la carte →",
         "section_risk_map": "Carte des risques", "section_what_to_do": "Que faire maintenant",
         "section_other_conditions": "Autres conditions",
         "all_clear_badge": "Tout va bien", "all_clear_heading": "Les conditions sont calmes",
@@ -802,7 +804,8 @@ PUBLIC_STATUS_UI: dict[str, dict[str, str]] = {
         "landing_search": "Rechercher votre pays",
     },
     "es": {
-        "tab_alerts": "Alertas", "tab_prepare": "Prepararse", "tab_language": "Idioma",
+        "tab_alerts": "Alertas", "tab_map": "Mapa", "tab_prepare": "Prepararse", "tab_language": "Idioma",
+        "view_map_cta": "Ver mapa completo →",
         "section_risk_map": "Mapa de riesgos", "section_what_to_do": "Qué hacer ahora",
         "section_other_conditions": "Otras condiciones",
         "all_clear_badge": "Sin alertas", "all_clear_heading": "Las condiciones son tranquilas",
@@ -825,7 +828,8 @@ PUBLIC_STATUS_UI: dict[str, dict[str, str]] = {
         "landing_search": "Buscar su país",
     },
     "pt": {
-        "tab_alerts": "Alertas", "tab_prepare": "Preparar", "tab_language": "Idioma",
+        "tab_alerts": "Alertas", "tab_map": "Mapa", "tab_prepare": "Preparar", "tab_language": "Idioma",
+        "view_map_cta": "Ver mapa completo →",
         "section_risk_map": "Mapa de riscos", "section_what_to_do": "O que fazer agora",
         "section_other_conditions": "Outras condições",
         "all_clear_badge": "Sem alertas", "all_clear_heading": "As condições estão calmas",
@@ -848,7 +852,8 @@ PUBLIC_STATUS_UI: dict[str, dict[str, str]] = {
         "landing_search": "Pesquisar o seu país",
     },
     "id": {
-        "tab_alerts": "Peringatan", "tab_prepare": "Persiapan", "tab_language": "Bahasa",
+        "tab_alerts": "Peringatan", "tab_map": "Peta", "tab_prepare": "Persiapan", "tab_language": "Bahasa",
+        "view_map_cta": "Lihat peta lengkap →",
         "section_risk_map": "Peta risiko", "section_what_to_do": "Yang harus dilakukan sekarang",
         "section_other_conditions": "Kondisi lainnya",
         "all_clear_badge": "Aman", "all_clear_heading": "Kondisi sedang tenang",
