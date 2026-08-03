@@ -2,7 +2,7 @@
 <html lang="{{ lang }}">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta http-equiv="refresh" content="300" />
   <script>
     (function(){
@@ -16,277 +16,530 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --ground: #f2f6f4; --surface: #fff; --ink: #12262a; --ink-soft: #5b6c6e; --ink-faint: #93a0a1;
-      --line: #e2e9e6; --accent: #0f6e7a; --accent-soft: #e1f0ef;
-      --risk-low: #6f9a3c; --risk-low-soft: #eaf3df;
-      --risk-moderate: #d9a62e; --risk-moderate-soft: #fbf1d9;
-      --risk-high: #d97b29; --risk-high-soft: #fbe8d6;
-      --risk-extreme: #c0392b; --risk-extreme-soft: #f8dcd8;
+      --ground:   #f0f4f2;
+      --surface:  #ffffff;
+      --ink:      #111d1b;
+      --ink-soft: #566260;
+      --ink-faint:#8fa09e;
+      --line:     #e0e8e5;
+      --accent:   #0a6b76;
+      --accent-bg:#e3f3f4;
+      --nav-h:    64px;
+      --top-h:    56px;
+      --risk-low:       #5a8a2c; --risk-low-bg:       #eaf3df;
+      --risk-moderate:  #c99020; --risk-moderate-bg:  #faf2d8;
+      --risk-high:      #c96a1a; --risk-high-bg:      #fae4d4;
+      --risk-extreme:   #b02a20; --risk-extreme-bg:   #f8dbd8;
     }
     [data-theme="dark"] {
-      --ground: #0d1a1c; --surface: #14262a; --ink: #eaf1f0; --ink-soft: #a9bcbc; --ink-faint: #7f9394;
-      --line: #24393c; --accent: #3fb8c4; --accent-soft: #17383d;
+      --ground:   #0c1a18; --surface: #132420; --ink: #e8f0ee;
+      --ink-soft: #8fa09e; --ink-faint:#5a706e; --line: #1e3330;
+      --accent:   #34b8c4; --accent-bg:#103438;
     }
-    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--ground); color: var(--ink); min-height: 100vh; }
 
+    html, body { height: 100%; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: #c8d8d4; /* outer gutter on desktop */
+      color: var(--ink);
+    }
+
+    /* ── App shell: phone-width card centred on desktop ───────────────── */
+    .shell {
+      max-width: 480px;
+      min-height: 100dvh;
+      margin: 0 auto;
+      background: var(--ground);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      box-shadow: 0 0 60px rgba(0,0,0,.18);
+    }
+
+    /* ── Top bar ──────────────────────────────────────────────────────── */
     .topbar {
-      background: var(--surface); border-bottom: 1px solid var(--line);
-      padding: .85rem 1.25rem; display: flex; align-items: center; justify-content: space-between;
-      flex-wrap: wrap; gap: .6rem; position: sticky; top: 0; z-index: 500;
+      height: var(--top-h);
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1rem;
+      position: sticky;
+      top: 0;
+      z-index: 500;
+      flex-shrink: 0;
     }
-    .brand { font-size: 1.05rem; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
-    .brand span { color: var(--accent); }
-    .topbar-controls { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-    select.picker {
-      font: inherit; font-size: .82rem; font-weight: 600; color: var(--accent);
-      background: var(--accent-soft); border: none; border-radius: 999px;
-      padding: .4rem .9rem; cursor: pointer;
+    .brand {
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: -.01em;
+      color: var(--ink);
+    }
+    .brand em { color: var(--accent); font-style: normal; }
+
+    .loc-form { display: flex; align-items: center; gap: .4rem; }
+    .loc-chip {
+      font: inherit;
+      font-size: .78rem;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--accent-bg);
+      border: none;
+      border-radius: 999px;
+      padding: .35rem .8rem;
+      cursor: pointer;
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .icon-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--ink-soft);
+      padding: .35rem;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+    }
+    .icon-btn:hover { background: var(--line); }
+
+    /* ── Scroll area ──────────────────────────────────────────────────── */
+    .scroll-area {
+      flex: 1;
+      overflow-y: auto;
+      padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
     }
 
-    .page { max-width: 760px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
-    .updated { font-size: .72rem; color: var(--ink-faint); margin-bottom: 1rem; text-align: right; }
+    /* ── Tab panels ───────────────────────────────────────────────────── */
+    .tab-panel { display: none; padding: 1rem; }
+    .tab-panel.active { display: block; }
 
-    /* ---- Picker landing state ---- */
-    .landing { text-align: center; padding: 3.5rem 1rem; max-width: 420px; margin: 0 auto; }
-    .landing h1 { font-size: 1.35rem; margin-bottom: .6rem; }
-    .landing p { color: var(--ink-soft); font-size: .92rem; line-height: 1.55; margin-bottom: 1.5rem; }
-    .landing form { display: flex; flex-direction: column; gap: .75rem; }
-    .landing select.picker-lg {
-      font: inherit; font-size: .95rem; font-weight: 600; padding: .75rem 1rem;
-      border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+    /* ── Landing state ────────────────────────────────────────────────── */
+    .landing {
+      padding: 2.5rem 1.25rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
     }
-    .landing button {
-      font: inherit; font-size: .95rem; font-weight: 700; padding: .75rem 1rem;
-      border-radius: 12px; border: none; background: var(--accent); color: #fff; cursor: pointer;
+    .landing-head { font-size: 1.2rem; font-weight: 800; line-height: 1.3; }
+    .landing-sub { font-size: .85rem; color: var(--ink-soft); line-height: 1.55; }
+    .picker-lg {
+      font: inherit; font-size: .9rem; font-weight: 600;
+      padding: .8rem 1rem; border-radius: 14px;
+      border: 1.5px solid var(--line); background: var(--surface); color: var(--ink);
+      width: 100%; appearance: none; cursor: pointer;
+    }
+    .btn-primary {
+      font: inherit; font-size: .95rem; font-weight: 800;
+      padding: .85rem 1rem; border-radius: 14px; border: none;
+      background: var(--accent); color: #fff; cursor: pointer; width: 100%;
+    }
+    .btn-primary:active { opacity: .88; }
+
+    /* ── Updated stamp ────────────────────────────────────────────────── */
+    .stamp {
+      font-size: .68rem; color: var(--ink-faint);
+      text-align: right; padding: .25rem 0 .6rem;
     }
 
-    /* ---- Hero banner ---- */
+    /* ── Hero card ────────────────────────────────────────────────────── */
     .hero {
-      border-radius: 20px; padding: 1.4rem 1.5rem 1.6rem; margin-bottom: 1.1rem;
-      color: #fff; position: relative; overflow: hidden;
+      border-radius: 20px;
+      padding: 1.25rem 1.25rem 1.4rem;
+      margin-bottom: .85rem;
+      position: relative;
+      overflow: hidden;
     }
-    .hero.low     { background: linear-gradient(160deg, #86b654, var(--risk-low)); }
-    .hero.moderate{ background: linear-gradient(160deg, #e6c25a, var(--risk-moderate)); color: #3a2c04; }
-    .hero.high    { background: linear-gradient(160deg, #e6934c, var(--risk-high)); color: #3a1f04; }
-    .hero.extreme { background: linear-gradient(160deg, #d9584a, var(--risk-extreme)); }
-    .hero.clear   { background: linear-gradient(160deg, #86b654, var(--risk-low)); }
-    .hero-badge {
-      display: inline-flex; align-items: center; gap: .4rem;
-      background: rgba(255,255,255,.5); padding: .3rem .75rem; border-radius: 999px;
-      font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
-    }
-    .hero-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-    .hero h2 { font-size: 1.55rem; font-weight: 800; margin: .6rem 0 .45rem; letter-spacing: -.01em; }
-    .hero p { font-size: .92rem; line-height: 1.55; max-width: 46ch; }
-    .hero .country { font-size: .78rem; font-weight: 700; opacity: .85; margin-bottom: .3rem; }
+    .hero.level-low      { background: linear-gradient(150deg,#7cbf44,#4a7a20); color:#fff; }
+    .hero.level-moderate { background: linear-gradient(150deg,#f0c84a,#b87c14); color:#2c1e04; }
+    .hero.level-high     { background: linear-gradient(150deg,#f09050,#a84f10); color:#fff; }
+    .hero.level-extreme  { background: linear-gradient(150deg,#e05848,#901e14); color:#fff; }
+    .hero.level-clear    { background: linear-gradient(150deg,#7cbf44,#4a7a20); color:#fff; }
 
-    .action-label {
-      font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
-      color: var(--ink-faint); margin: 1.2rem 0 .6rem;
+    .risk-badge {
+      display: inline-flex; align-items: center; gap: .35rem;
+      background: rgba(255,255,255,.28); backdrop-filter: blur(4px);
+      border-radius: 999px; padding: .25rem .65rem;
+      font-size: .65rem; font-weight: 900; text-transform: uppercase; letter-spacing: .07em;
     }
-    .action-list { list-style: none; display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1.4rem; }
-    .action-list li {
-      background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
-      padding: .7rem .9rem; font-size: .85rem; display: flex; gap: .6rem; align-items: flex-start;
+    .risk-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .hero-hazard {
+      font-size: 1.45rem; font-weight: 900; margin: .55rem 0 .4rem;
+      letter-spacing: -.015em; line-height: 1.15;
     }
-    .action-list li::before { content: "✓"; color: var(--accent); font-weight: 800; flex-shrink: 0; }
+    .hero-text { font-size: .85rem; line-height: 1.55; opacity: .92; }
+    .hero-updated { font-size: .68rem; opacity: .7; margin-top: .75rem; }
 
-    .advisory-note {
-      background: var(--accent-soft); border-radius: 12px; padding: .8rem 1rem;
-      font-size: .82rem; color: var(--ink); margin-bottom: 1.2rem; line-height: 1.5;
-    }
-    .advisory-note strong { color: var(--accent); }
-
-    /* ---- Hazard grid ---- */
-    .hazard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; margin-bottom: 1.4rem; }
-    @media (max-width: 460px) { .hazard-grid { grid-template-columns: 1fr; } }
-    .hazard-card {
-      background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
-      padding: .85rem .95rem;
-    }
-    .hazard-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: .4rem; }
-    .hazard-name { font-size: .86rem; font-weight: 700; }
-    .chip {
-      font-size: .64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
-      padding: .2rem .55rem; border-radius: 999px;
-    }
-    .chip.low      { background: var(--risk-low-soft); color: #3d5a1f; }
-    .chip.moderate { background: var(--risk-moderate-soft); color: #7a5c11; }
-    .chip.high     { background: var(--risk-high-soft); color: #7c4111; }
-    .chip.extreme  { background: var(--risk-extreme-soft); color: #7a1f16; }
-    .hazard-sub { font-size: .74rem; color: var(--ink-soft); line-height: 1.45; }
-
-    /* ---- Map ---- */
+    /* ── Action tips ──────────────────────────────────────────────────── */
     .section-label {
-      font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
-      color: var(--ink-faint); margin: 1.4rem 0 .6rem;
+      font-size: .65rem; font-weight: 900; text-transform: uppercase;
+      letter-spacing: .09em; color: var(--ink-faint);
+      margin: 1.1rem 0 .55rem;
     }
-    #status-map { height: 340px; border-radius: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
-    .map-footnote { font-size: .72rem; color: var(--ink-faint); margin-top: .5rem; }
-
-    /* ---- Prepare (static, generic) ---- */
-    .prepare-list { list-style: none; display: flex; flex-direction: column; gap: .5rem; }
-    .prepare-list li {
+    .tip-list { list-style: none; display: flex; flex-direction: column; gap: .45rem; }
+    .tip-list li {
       background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
-      padding: .7rem .9rem; font-size: .85rem;
+      padding: .65rem .85rem; font-size: .82rem; line-height: 1.45;
+      display: flex; gap: .55rem; align-items: flex-start;
+    }
+    .tip-check { color: var(--accent); font-weight: 900; flex-shrink: 0; margin-top: .05rem; }
+
+    /* ── Advisory note ────────────────────────────────────────────────── */
+    .advisory {
+      background: var(--accent-bg); border-radius: 12px;
+      padding: .75rem .9rem; font-size: .8rem; line-height: 1.5;
+      color: var(--ink); margin-bottom: .85rem;
+    }
+    .advisory strong { color: var(--accent); }
+
+    /* ── Hazard cards grid ────────────────────────────────────────────── */
+    .hazard-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: .55rem; margin-bottom: .85rem;
+    }
+    .hazard-card {
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 14px; padding: .8rem .85rem;
+      border-left: 4px solid transparent;
+    }
+    .hazard-card.level-low      { border-left-color: var(--risk-low); }
+    .hazard-card.level-moderate { border-left-color: var(--risk-moderate); }
+    .hazard-card.level-high     { border-left-color: var(--risk-high); }
+    .hazard-card.level-extreme  { border-left-color: var(--risk-extreme); }
+    .hazard-head {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: .3rem;
+    }
+    .hazard-name { font-size: .82rem; font-weight: 700; }
+    .level-chip {
+      font-size: .6rem; font-weight: 900; text-transform: uppercase;
+      letter-spacing: .04em; padding: .15rem .5rem; border-radius: 999px;
+    }
+    .level-chip.level-low      { background: var(--risk-low-bg); color: var(--risk-low); }
+    .level-chip.level-moderate { background: var(--risk-moderate-bg); color: var(--risk-moderate); }
+    .level-chip.level-high     { background: var(--risk-high-bg); color: var(--risk-high); }
+    .level-chip.level-extreme  { background: var(--risk-extreme-bg); color: var(--risk-extreme); }
+    .hazard-sub { font-size: .73rem; color: var(--ink-soft); line-height: 1.4; }
+
+    /* ── Map ──────────────────────────────────────────────────────────── */
+    #status-map { height: 260px; border-radius: 16px; background: var(--line); }
+    .map-note { font-size: .68rem; color: var(--ink-faint); margin-top: .4rem; }
+
+    /* ── Prepare tab ──────────────────────────────────────────────────── */
+    .prep-intro { font-size: .85rem; color: var(--ink-soft); line-height: 1.55; margin-bottom: .85rem; }
+    .prep-list { list-style: none; display: flex; flex-direction: column; gap: .45rem; }
+    .prep-list li {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+      padding: .65rem .85rem; font-size: .82rem; line-height: 1.45;
+    }
+    .prep-cat {
+      font-size: .62rem; font-weight: 900; text-transform: uppercase;
+      letter-spacing: .07em; color: var(--ink-faint); margin: 1rem 0 .5rem;
     }
 
-    footer {
-      text-align: center; padding: 2rem 1rem 1rem; font-size: .78rem; color: var(--ink-faint);
-      border-top: 1px solid var(--line); margin-top: 1.5rem;
+    /* ── Language tab ─────────────────────────────────────────────────── */
+    .lang-intro { font-size: .85rem; color: var(--ink-soft); line-height: 1.55; margin-bottom: 1rem; }
+    .lang-grid { display: flex; flex-direction: column; gap: .5rem; }
+    .lang-btn {
+      font: inherit; font-size: .88rem; font-weight: 600;
+      background: var(--surface); border: 1.5px solid var(--line);
+      border-radius: 12px; padding: .75rem 1rem;
+      cursor: pointer; color: var(--ink); text-align: left;
+      display: flex; align-items: center; justify-content: space-between;
     }
-    footer a { color: var(--ink-soft); }
+    .lang-btn.current { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+    .lang-btn:active { opacity: .8; }
+
+    /* ── Bottom nav ───────────────────────────────────────────────────── */
+    .bottom-nav {
+      position: sticky;
+      bottom: 0;
+      height: var(--nav-h);
+      background: var(--surface);
+      border-top: 1px solid var(--line);
+      display: flex;
+      align-items: stretch;
+      z-index: 500;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      flex-shrink: 0;
+    }
+    .nav-btn {
+      flex: 1; background: none; border: none; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: .25rem;
+      color: var(--ink-faint); font-size: .65rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .04em;
+      transition: color .15s;
+    }
+    .nav-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.7; }
+    .nav-btn.active { color: var(--accent); }
+    .nav-btn.active svg { stroke-width: 2.2; }
+
+    /* ── Footer ───────────────────────────────────────────────────────── */
+    .pub-footer {
+      font-size: .68rem; color: var(--ink-faint); text-align: center;
+      padding: .85rem 1rem; border-top: 1px solid var(--line);
+    }
+    .pub-footer a { color: var(--ink-faint); }
+
+    @media (prefers-color-scheme: dark) {
+      [data-theme="dark"] body { background: #080e0d; }
+    }
   </style>
 </head>
 <body>
 
-<div class="topbar">
-  <div class="brand">RIMES <span>Public Alerts</span></div>
-  <div class="topbar-controls">
-    <form method="get" action="/status" style="display:contents;">
-      {% if has_country %}<input type="hidden" name="lang" value="{{ lang }}">{% endif %}
-      <select class="picker" name="country" onchange="this.form.submit()">
-        <option value="">Select country…</option>
-        {% for iso2, name in country_list %}
-        <option value="{{ iso2 }}" {% if has_country and iso2 == country_iso2 %}selected{% endif %}>{{ name }}</option>
-        {% endfor %}
-      </select>
-    </form>
-    <form method="get" action="/status" style="display:contents;">
-      {% if has_country %}<input type="hidden" name="country" value="{{ country_iso2 }}">{% endif %}
-      <select class="picker" name="lang" onchange="this.form.submit()">
-        {% for code, name in supported_languages.items() %}
-        <option value="{{ code }}" {% if code == lang %}selected{% endif %}>{{ name }}</option>
-        {% endfor %}
-      </select>
-    </form>
-  </div>
-</div>
+<div class="shell">
 
-{% if not has_country %}
-<div class="landing">
-  <h1>Check hazard conditions where you are</h1>
-  <p>Pick your country to see current flood, storm, drought, and other hazard risk — in plain language, no login needed.</p>
-  <form method="get" action="/status">
-    <select class="picker-lg" name="country" required>
-      <option value="" disabled selected>Select your country</option>
-      {% for iso2, name in country_list %}
-      <option value="{{ iso2 }}">{{ name }}</option>
-      {% endfor %}
-    </select>
-    <button type="submit">View conditions</button>
-  </form>
-</div>
-
-{% else %}
-<div class="page">
-  <div class="updated">Updated {{ updated_at }} · refreshes every 5 min</div>
-
-  {% if hero %}
-  <div class="hero {{ hero.level }}">
-    <div class="country">{{ country_name }}</div>
-    <span class="hero-badge"><span class="dot"></span> {{ hero.level_label }} risk</span>
-    <h2>{{ hero.hazard_name }}</h2>
-    <p>{{ hero.status_text }}</p>
-  </div>
-  {% if hero.tips %}
-  <div class="action-label">What to do now</div>
-  <ul class="action-list">
-    {% for tip in hero.tips %}<li>{{ tip }}</li>{% endfor %}
-  </ul>
-  {% endif %}
-  {% else %}
-  <div class="hero clear">
-    <div class="country">{{ country_name }}</div>
-    <span class="hero-badge"><span class="dot"></span> All clear</span>
-    <h2>No active hazards</h2>
-    <p>Conditions are currently calm. Monitored hazards for this area are shown below.</p>
-  </div>
-  {% endif %}
-
-  {% if regional_advisories %}
-  <div class="advisory-note">
-    <strong>Regional watch:</strong>
-    {% for adv in regional_advisories %}{{ adv.hazard_name }}{{ ", " if not loop.last }}{% endfor %}
-    condition{{ 's' if regional_advisories | length != 1 }} active in the wider region, not yet localised to a specific country.
-  </div>
-  {% endif %}
-
-  {% if hazard_cards %}
-  <div class="section-label">Other conditions</div>
-  <div class="hazard-grid">
-    {% for card in hazard_cards %}
-    <div class="hazard-card">
-      <div class="hazard-top">
-        <span class="hazard-name">{{ card.hazard_name }}</span>
-        <span class="chip {{ card.level }}">{{ card.level_label }}</span>
-      </div>
-      <div class="hazard-sub">{{ card.status_text }}</div>
+  <!-- ── Top bar ─────────────────────────────────────────────────────── -->
+  <div class="topbar">
+    <div class="brand">RIMES <em>Alerts</em></div>
+    <div class="loc-form">
+      {% if has_country %}
+      <form method="get" action="/status" style="display:contents">
+        <input type="hidden" name="lang" value="{{ lang }}">
+        <select class="loc-chip" name="country" onchange="this.form.submit()" aria-label="Country">
+          {% for iso2, name in country_list %}
+          <option value="{{ iso2 }}" {% if iso2 == country_iso2 %}selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      {% else %}
+      <form method="get" action="/status" style="display:contents">
+        <select class="loc-chip" name="country" onchange="this.form.submit()" aria-label="Country">
+          <option value="" selected disabled>Choose country</option>
+          {% for iso2, name in country_list %}
+          <option value="{{ iso2 }}">{{ name }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      {% endif %}
     </div>
-    {% endfor %}
   </div>
-  {% endif %}
 
-  <div class="section-label" id="map">Map</div>
-  <div id="status-map"></div>
-  {% if not has_geometry %}
-  <div class="map-footnote">Detailed boundary unavailable for {{ country_name }} — showing approximate location.</div>
-  {% endif %}
+  <!-- ── Landing (no country selected) ─────────────────────────────── -->
+  {% if not has_country %}
+  <div class="scroll-area">
+    <div class="landing">
+      <div class="landing-head">Check hazard conditions where you are</div>
+      <div class="landing-sub">
+        Select your country to see current flood, storm, drought, and other
+        hazard risk — in plain language, no login needed.
+      </div>
+      <form method="get" action="/status">
+        <select class="picker-lg" name="country" required>
+          <option value="" disabled selected>Select your country</option>
+          {% for iso2, name in country_list %}
+          <option value="{{ iso2 }}">{{ name }}</option>
+          {% endfor %}
+        </select>
+        <div style="height:.65rem"></div>
+        <button class="btn-primary" type="submit">View conditions</button>
+      </form>
+    </div>
+    <div class="pub-footer">
+      Powered by <strong>RIMES IBF System</strong> &nbsp;·&nbsp;
+      <a href="/login">Staff login</a>
+    </div>
+  </div>
 
-  <div class="section-label" id="prepare">Prepare</div>
-  <ul class="prepare-list">
-    <li>Save local emergency numbers and a family contact plan</li>
-    <li>Keep a basic emergency kit: water, torch, first aid, important documents</li>
-    <li>Know your nearest evacuation route and shelter</li>
-  </ul>
-</div>
-{% endif %}
+  {% else %}
 
-<footer>
-  Powered by <strong>RIMES IBF System</strong> &nbsp;·&nbsp;
-  <a href="/login">Staff login</a>
-</footer>
+  <!-- ── Main tab area ──────────────────────────────────────────────── -->
+  <div class="scroll-area" id="main-scroll">
+
+    <!-- Tab: Alerts ───────────────────────────────────────────────── -->
+    <div class="tab-panel active" id="panel-alerts">
+      <div class="stamp">{{ updated_at }} · refreshes every 5 min</div>
+
+      {% if hero %}
+      <div class="hero level-{{ hero.level }}">
+        <span class="risk-badge"><span class="dot"></span> {{ hero.level_label }} risk</span>
+        <div class="hero-hazard">{{ hero.hazard_name }}</div>
+        <div class="hero-text">{{ hero.status_text }}</div>
+        <div class="hero-updated">{{ country_name }} · {{ updated_at }}</div>
+      </div>
+
+      {% if hero.tips %}
+      <div class="section-label">What to do now</div>
+      <ul class="tip-list">
+        {% for tip in hero.tips %}
+        <li><span class="tip-check">&#10003;</span>{{ tip }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      {% else %}
+      <div class="hero level-clear">
+        <span class="risk-badge"><span class="dot"></span> All clear</span>
+        <div class="hero-hazard">No active hazards</div>
+        <div class="hero-text">Conditions are currently calm. Monitored hazards for {{ country_name }} are shown below.</div>
+        <div class="hero-updated">{{ country_name }} · {{ updated_at }}</div>
+      </div>
+      {% endif %}
+
+      {% if regional_advisories %}
+      <div class="advisory" style="margin-top:.85rem">
+        <strong>Regional watch:</strong>
+        {% for adv in regional_advisories %}{{ adv.hazard_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+        condition{{ 's' if regional_advisories|length != 1 }} active in the wider region, not yet localised here.
+      </div>
+      {% endif %}
+
+      {% if hazard_cards %}
+      <div class="section-label" style="margin-top:1rem">Other conditions</div>
+      <div class="hazard-grid">
+        {% for card in hazard_cards %}
+        <div class="hazard-card level-{{ card.level }}">
+          <div class="hazard-head">
+            <span class="hazard-name">{{ card.hazard_name }}</span>
+            <span class="level-chip level-{{ card.level }}">{{ card.level_label }}</span>
+          </div>
+          <div class="hazard-sub">{{ card.status_text }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="section-label">Risk map</div>
+      <div id="status-map"></div>
+      {% if not has_geometry %}
+      <div class="map-note">Detailed boundary unavailable for {{ country_name }} — showing approximate location.</div>
+      {% endif %}
+    </div>
+
+    <!-- Tab: Prepare ──────────────────────────────────────────────── -->
+    <div class="tab-panel" id="panel-prepare">
+      <div style="height:.25rem"></div>
+      <div class="prep-intro">
+        These steps can reduce harm before a hazard strikes — keep them in mind year-round,
+        not only during warnings.
+      </div>
+
+      <div class="prep-cat">Home and family</div>
+      <ul class="prep-list">
+        <li>Store at least three days of safe drinking water (one litre per person per day)</li>
+        <li>Keep a charged phone, a torch, and spare batteries at home</li>
+        <li>Put key documents (ID, insurance, medical records) in a waterproof bag</li>
+        <li>Agree on a family meeting point if you get separated</li>
+      </ul>
+
+      <div class="prep-cat">Know your area</div>
+      <ul class="prep-list">
+        <li>Find your nearest evacuation shelter and know two routes to reach it</li>
+        <li>Save local emergency numbers in your phone</li>
+        <li>Learn whether your home is in a flood zone, on a steep slope, or near the coast</li>
+      </ul>
+
+      <div class="prep-cat">Community</div>
+      <ul class="prep-list">
+        <li>Check on elderly or unwell neighbours after a hazard warning</li>
+        <li>Share alert information with those who may not have phone access</li>
+        <li>Keep livestock supplies and fodder stocked ahead of forecasted events</li>
+      </ul>
+    </div>
+
+    <!-- Tab: Language ─────────────────────────────────────────────── -->
+    <div class="tab-panel" id="panel-language">
+      <div style="height:.25rem"></div>
+      <div class="lang-intro">
+        Hazard descriptions and action advice will appear in your chosen language.
+      </div>
+      <form method="get" action="/status" class="lang-grid">
+        <input type="hidden" name="country" value="{{ country_iso2 }}">
+        {% for code, name in supported_languages.items() %}
+        <button type="submit" name="lang" value="{{ code }}"
+          class="lang-btn {% if code == lang %}current{% endif %}">
+          <span>{{ name }}</span>
+          {% if code == lang %}<span style="font-size:.8rem">&#10003;</span>{% endif %}
+        </button>
+        {% endfor %}
+      </form>
+      <div class="pub-footer" style="margin-top:1.5rem;border:none;padding:0;">
+        <a href="/login">Staff login</a>
+      </div>
+    </div>
+
+  </div><!-- /scroll-area -->
+
+  <!-- ── Bottom nav ──────────────────────────────────────────────────── -->
+  <nav class="bottom-nav" role="navigation" aria-label="Main">
+    <button class="nav-btn active" id="nav-alerts" onclick="showTab('alerts')" type="button">
+      <svg viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+      Alerts
+    </button>
+    <button class="nav-btn" id="nav-prepare" onclick="showTab('prepare')" type="button">
+      <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+      Prepare
+    </button>
+    <button class="nav-btn" id="nav-language" onclick="showTab('language')" type="button">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+      Language
+    </button>
+  </nav>
+
+  {% endif %}<!-- /has_country -->
+
+</div><!-- /shell -->
 
 {% if has_country %}
 <script src="/static/leaflet.js"></script>
 <script>
-const map = L.map('status-map', { zoomControl: true });
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
-}).addTo(map);
-
-map.createPane('adminBoundaries');
-map.getPane('adminBoundaries').style.zIndex = 350;
-
 const countryName = {{ country_name | tojson }};
 const fallbackCentroid = {{ fallback_centroid_json | safe }};
-let fitted = false;
 
-fetch('/static/countries.geojson').then(r => r.json()).then(function(gj) {
-  L.geoJSON(gj, { style: { color: '#333', weight: 1, fillOpacity: 0 }, pane: 'adminBoundaries',
-    onEachFeature: function(feat, layer) { layer.bindTooltip(feat.properties.name, {sticky: true}); }
+/* ── Tab switching ─────────────────────────────────────────────── */
+let mapReady = false;
+function showTab(tab) {
+  ['alerts','prepare','language'].forEach(t => {
+    document.getElementById('panel-' + t).classList.toggle('active', t === tab);
+    document.getElementById('nav-' + t).classList.toggle('active', t === tab);
+  });
+  if (tab === 'alerts' && !mapReady) { initMap(); mapReady = true; }
+  document.getElementById('main-scroll').scrollTop = 0;
+}
+
+/* ── Leaflet map ───────────────────────────────────────────────── */
+function initMap() {
+  const map = L.map('status-map', { zoomControl: true, attributionControl: true });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com">CARTO</a>',
+    maxZoom: 18,
   }).addTo(map);
 
-  const mine = gj.features.find(f => f.properties.name === countryName);
-  if (mine) {
-    const highlight = L.geoJSON(mine, { style: { color: '#0f6e7a', weight: 2.5, fillColor: '#0f6e7a', fillOpacity: 0.08 } }).addTo(map);
-    map.fitBounds(highlight.getBounds(), { padding: [20, 20] });
-    fitted = true;
-  } else if (fallbackCentroid) {
-    L.marker(fallbackCentroid).addTo(map).bindPopup(countryName);
-    map.setView(fallbackCentroid, 7);
-    fitted = true;
-  }
-  if (!fitted) map.setView([10, 10], 2);
-}).catch(function() {
-  if (fallbackCentroid) { map.setView(fallbackCentroid, 7); } else { map.setView([10, 10], 2); }
-});
+  fetch('/static/countries.geojson').then(r => r.json()).then(function(gj) {
+    L.geoJSON(gj, {
+      style: { color: '#4a7a6a', weight: 0.8, fillOpacity: 0 },
+    }).addTo(map);
 
-fetch('/static/admin1_states.geojson').then(r => r.json()).then(function(gj) {
-  L.geoJSON(gj, { style: { color: '#888', weight: 0.5, dashArray: '3 3', fillOpacity: 0 }, pane: 'adminBoundaries',
-    onEachFeature: function(feat, layer) { layer.bindTooltip(feat.properties.name + ', ' + feat.properties.admin, {sticky: true}); }
-  }).addTo(map);
-}).catch(function(){});
+    const mine = gj.features.find(function(f) { return f.properties.name === countryName; });
+    if (mine) {
+      const hl = L.geoJSON(mine, {
+        style: { color: '#0a6b76', weight: 2, fillColor: '#0a6b76', fillOpacity: 0.1 },
+      }).addTo(map);
+      map.fitBounds(hl.getBounds(), { padding: [16, 16] });
+    } else if (fallbackCentroid) {
+      L.marker(fallbackCentroid).addTo(map).bindPopup(countryName);
+      map.setView(fallbackCentroid, 6);
+    } else {
+      map.setView([10, 85], 3);
+    }
+  }).catch(function() {
+    if (fallbackCentroid) { map.setView(fallbackCentroid, 6); }
+    else { map.setView([10, 85], 3); }
+  });
+
+  fetch('/static/admin1_states.geojson').then(r => r.json()).then(function(gj) {
+    L.geoJSON(gj, { style: { color: '#6a9a8a', weight: 0.5, dashArray: '3 3', fillOpacity: 0 } }).addTo(map);
+  }).catch(function(){});
+}
+
+/* Init map immediately on Alerts tab (default active) */
+initMap();
+mapReady = true;
 </script>
 {% endif %}
 </body>
