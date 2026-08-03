@@ -834,6 +834,7 @@ const RISK_COLORS = { low:'#6f9a3c', moderate:'#d9a62e', high:'#d97b29', extreme
 
 /* ── Tab switching ─────────────────────────────────────────────── */
 let mapReady = false;
+let statusMap = null;
 function showTab(tab) {
   ['alerts','map','prepare','language'].forEach(function(t) {
     var panel = document.getElementById('panel-' + t);
@@ -841,7 +842,10 @@ function showTab(tab) {
     if (panel) panel.classList.toggle('active', t === tab);
     if (btn)   btn.classList.toggle('active', t === tab);
   });
-  if (tab === 'map' && !mapReady) { initMap(); mapReady = true; }
+  if (tab === 'map') {
+    if (!mapReady) { initMap(); mapReady = true; }
+    else if (statusMap) { setTimeout(function(){ statusMap.invalidateSize(); }, 50); }
+  }
   var scroll = document.getElementById('main-scroll');
   if (scroll) scroll.scrollTop = 0;
 }
@@ -852,6 +856,7 @@ function initAlertsMap() {
   if (alertsMap) return;
   alertsMap = L.map('alerts-map', { zoomControl: false, attributionControl: false, scrollWheelZoom: false });
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 18 }).addTo(alertsMap);
+  setTimeout(function(){ alertsMap.invalidateSize(); }, 50);
 
   fetch('/static/countries.geojson').then(function(r) { return r.json(); }).then(function(gj) {
     L.geoJSON(gj, { style: { color: '#4a7a6a', weight: 0.6, fillOpacity: 0 } }).addTo(alertsMap);
@@ -905,41 +910,41 @@ function placeHazardMarkers(centroid, r) {
   });
 }
 
-/* ── Leaflet map ───────────────────────────────────────────────── */
+/* ── Leaflet map (Map tab) ─────────────────────────────────────── */
 function initMap() {
-  var map = L.map('status-map', { zoomControl: true, attributionControl: true });
+  statusMap = L.map('status-map', { zoomControl: true, attributionControl: true });
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com">CARTO</a>',
     maxZoom: 18,
-  }).addTo(map);
+  }).addTo(statusMap);
 
   fetch('/static/countries.geojson').then(function(r) { return r.json(); }).then(function(gj) {
     L.geoJSON(gj, {
       style: { color: '#4a7a6a', weight: 0.8, fillOpacity: 0 },
-    }).addTo(map);
+    }).addTo(statusMap);
 
     var mine = gj.features.find(function(f) { return f.properties.name === countryName; });
     if (mine) {
       var hl = L.geoJSON(mine, {
         style: { color: '#0f6e7a', weight: 2, fillColor: '#0f6e7a', fillOpacity: 0.1 },
-      }).addTo(map);
-      map.fitBounds(hl.getBounds(), { padding: [16, 16] });
+      }).addTo(statusMap);
+      statusMap.fitBounds(hl.getBounds(), { padding: [16, 16] });
     } else if (fallbackCentroid) {
       L.circleMarker(fallbackCentroid, {
         radius: 9, color: '#0f6e7a', weight: 2.5,
         fillColor: '#0f6e7a', fillOpacity: 0.25,
-      }).addTo(map).bindPopup(countryName);
-      map.setView(fallbackCentroid, 6);
+      }).addTo(statusMap).bindPopup(countryName);
+      statusMap.setView(fallbackCentroid, 6);
     } else {
-      map.setView([10, 85], 3);
+      statusMap.setView([10, 85], 3);
     }
   }).catch(function() {
-    if (fallbackCentroid) { map.setView(fallbackCentroid, 6); }
-    else { map.setView([10, 85], 3); }
+    if (fallbackCentroid) { statusMap.setView(fallbackCentroid, 6); }
+    else { statusMap.setView([10, 85], 3); }
   });
 
   fetch('/static/admin1_states.geojson').then(function(r) { return r.json(); }).then(function(gj) {
-    L.geoJSON(gj, { style: { color: '#6a9a8a', weight: 0.5, dashArray: '3 3', fillOpacity: 0 } }).addTo(map);
+    L.geoJSON(gj, { style: { color: '#6a9a8a', weight: 0.5, dashArray: '3 3', fillOpacity: 0 } }).addTo(statusMap);
   }).catch(function(){});
 
   fetch('/map/layers/glofas-raster').then(async function(r) {
@@ -951,19 +956,14 @@ function initMap() {
     if (isNaN(lMin) || isNaN(lMax) || isNaN(nMin) || isNaN(nMax)) return;
     var buf = await r.arrayBuffer();
     var url = URL.createObjectURL(new Blob([buf], {type: 'image/png'}));
-    L.imageOverlay(url, [[lMin, nMin], [lMax, nMax]], {opacity: 0.82}).addTo(map);
+    L.imageOverlay(url, [[lMin, nMin], [lMax, nMax]], {opacity: 0.82}).addTo(statusMap);
     var legend = document.getElementById('map-legend');
     if (legend) { legend.hidden = false; legend.style.display = ''; }
   }).catch(function(){});
 }
 
-/* Alerts tab is active on load — init its map immediately */
-initAlertsMap();
-
-/* Pre-load Map tab in background */
-setTimeout(function() {
-  if (!mapReady) { initMap(); mapReady = true; }
-}, 1200);
+/* Defer one animation frame so the browser has laid out #alerts-map */
+requestAnimationFrame(function() { initAlertsMap(); });
 
 /* ── Freshness counter ─────────────────────────────────────────── */
 (function() {
