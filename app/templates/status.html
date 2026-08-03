@@ -391,14 +391,11 @@
   {% if not has_country %}
   <div class="scroll-area">
     <div class="landing">
-      <div class="landing-head">Check hazard conditions where you are</div>
-      <div class="landing-sub">
-        Select your country to see current flood, storm, drought, and other
-        hazard risk — in plain language, no login needed.
-      </div>
+      <div class="landing-head">{{ copy.ui.landing_heading }}</div>
+      <div class="landing-sub">{{ copy.ui.landing_body }}</div>
       <button class="picker-trigger" type="button" onclick="openSearch()">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        Search for your country
+        {{ copy.ui.landing_search }}
       </button>
     </div>
     <div class="pub-footer">
@@ -418,14 +415,14 @@
 
       {% if hero %}
       <div class="hero level-{{ hero.level }}">
-        <span class="risk-badge"><span class="dot"></span> {{ hero.level_label }} risk</span>
+        <span class="risk-badge"><span class="dot"></span> {{ hero.level_label }} {{ copy.ui.risk_suffix }}</span>
         <div class="hero-hazard">{{ hero.hazard_name }}</div>
         <div class="hero-text">{{ hero.status_text }}</div>
         <div class="hero-updated">{{ country_name }} · {{ updated_at }}</div>
       </div>
 
       {% if hero.tips %}
-      <div class="section-label">What to do now</div>
+      <div class="section-label">{{ copy.ui.section_what_to_do }}</div>
       <ul class="tip-list">
         {% for tip in hero.tips %}
         <li><span class="tip-check">&#10003;</span>{{ tip }}</li>
@@ -435,23 +432,23 @@
 
       {% else %}
       <div class="hero level-clear">
-        <span class="risk-badge"><span class="dot"></span> All clear</span>
-        <div class="hero-hazard">Conditions are calm</div>
-        <div class="hero-text">No active hazard warnings for {{ country_name }} right now. Stay alert — conditions can change quickly. Check back during any severe weather.</div>
+        <span class="risk-badge"><span class="dot"></span> {{ copy.ui.all_clear_badge }}</span>
+        <div class="hero-hazard">{{ copy.ui.all_clear_heading }}</div>
+        <div class="hero-text">{{ copy.ui.all_clear_body.replace('{country}', country_name) }}</div>
         <div class="hero-updated">{{ country_name }} · {{ updated_at }}</div>
       </div>
       {% endif %}
 
       {% if regional_advisories %}
       <div class="advisory" style="margin-top:.85rem">
-        <strong>Regional watch:</strong>
+        <strong>{{ copy.ui.regional_watch_label }}:</strong>
         {% for adv in regional_advisories %}{{ adv.hazard_name }}{% if not loop.last %}, {% endif %}{% endfor %}
-        condition{{ 's' if regional_advisories|length != 1 }} active in the wider region, not yet localised here.
+        {{ copy.ui.regional_watch_body_s if regional_advisories|length == 1 else copy.ui.regional_watch_body_pl }}
       </div>
       {% endif %}
 
       {% if hazard_cards %}
-      <div class="section-label" style="margin-top:1rem">Other conditions</div>
+      <div class="section-label" style="margin-top:1rem">{{ copy.ui.section_other_conditions }}</div>
       <div class="hazard-grid">
         {% for card in hazard_cards %}
         <div class="hazard-card level-{{ card.level }}">
@@ -465,55 +462,49 @@
       </div>
       {% endif %}
 
-      <div class="section-label">Risk map</div>
+      <div class="section-label">{{ copy.ui.section_risk_map }}</div>
       <div id="status-map"></div>
       <div id="map-legend" hidden style="display:flex;align-items:center;gap:6px;padding:5px 2px 0;font-size:.7rem;color:var(--ink-faint);">
-        <span>River discharge:</span>
+        <span>{{ copy.ui.river_discharge }}:</span>
         <div style="width:100px;height:8px;border-radius:2px;background:linear-gradient(to right,#b4ebff,#50c8f0,#1482d2,#0a468f,#020c37);flex-shrink:0;"></div>
         <span>low</span><span style="margin-left:auto">high</span>
       </div>
       {% if not has_geometry %}
-      <div class="map-note">Detailed boundary unavailable for {{ country_name }} — showing approximate location.</div>
+      <div class="map-note">{{ copy.ui.map_no_boundary.replace('{country}', country_name) }}</div>
       {% endif %}
     </div>
 
     <!-- Tab: Prepare ──────────────────────────────────────────────── -->
     <div class="tab-panel" id="panel-prepare">
       <div style="height:.25rem"></div>
-      <div class="prep-intro">
-        These steps can reduce harm before a hazard strikes — keep them in mind year-round,
-        not only during warnings.
-      </div>
+      <div class="prep-intro">{{ copy.ui.prepare_intro }}</div>
 
-      <div class="prep-cat">Home and family</div>
+      <div class="prep-cat">{{ copy.ui.prepare_cat_home }}</div>
       <ul class="prep-list">
-        <li>Store at least three days of safe drinking water (one litre per person per day)</li>
-        <li>Keep a charged phone, a torch, and spare batteries at home</li>
-        <li>Put key documents (ID, insurance, medical records) in a waterproof bag</li>
-        <li>Agree on a family meeting point if you get separated</li>
+        {% for tip in copy.prepare_tips.home %}
+        <li>{{ tip }}</li>
+        {% endfor %}
       </ul>
 
-      <div class="prep-cat">Know your area</div>
+      <div class="prep-cat">{{ copy.ui.prepare_cat_area }}</div>
       <ul class="prep-list">
-        <li>Find your nearest evacuation shelter and know two routes to reach it</li>
-        <li>Save local emergency numbers in your phone</li>
-        <li>Learn whether your home is in a flood zone, on a steep slope, or near the coast</li>
+        {% for tip in copy.prepare_tips.area %}
+        <li>{{ tip }}</li>
+        {% endfor %}
       </ul>
 
-      <div class="prep-cat">Community</div>
+      <div class="prep-cat">{{ copy.ui.prepare_cat_community }}</div>
       <ul class="prep-list">
-        <li>Check on elderly or unwell neighbours after a hazard warning</li>
-        <li>Share alert information with those who may not have phone access</li>
-        <li>Keep livestock supplies and fodder stocked ahead of forecasted events</li>
+        {% for tip in copy.prepare_tips.community %}
+        <li>{{ tip }}</li>
+        {% endfor %}
       </ul>
     </div>
 
     <!-- Tab: Language ─────────────────────────────────────────────── -->
     <div class="tab-panel" id="panel-language">
       <div style="height:.25rem"></div>
-      <div class="lang-intro">
-        Hazard descriptions and action advice will appear in your chosen language.
-      </div>
+      <div class="lang-intro">{{ copy.ui.lang_intro }}</div>
       <form method="get" action="/status" class="lang-grid">
         <input type="hidden" name="country" value="{{ country_iso2 }}">
         {% for code, name in supported_languages.items() %}
@@ -535,15 +526,15 @@
   <nav class="bottom-nav" role="navigation" aria-label="Main">
     <button class="nav-btn active" id="nav-alerts" onclick="showTab('alerts')" type="button">
       <svg viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-      Alerts
+      {{ copy.ui.tab_alerts }}
     </button>
     <button class="nav-btn" id="nav-prepare" onclick="showTab('prepare')" type="button">
       <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-      Prepare
+      {{ copy.ui.tab_prepare }}
     </button>
     <button class="nav-btn" id="nav-language" onclick="showTab('language')" type="button">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-      Language
+      {{ copy.ui.tab_language }}
     </button>
   </nav>
 
@@ -707,13 +698,16 @@ mapReady = true;
 (function() {
   var raw = {{ updated_at | tojson }};
   var ts = new Date(raw.replace(' UTC', 'Z').replace(' ', 'T'));
+  var I18N_JUST = {{ copy.ui.refresh_just | tojson }};
+  var I18N_1MIN = {{ copy.ui.refresh_1min | tojson }};
+  var I18N_NMIN = {{ copy.ui.refresh_nmin | tojson }};
   function tick() {
     var diffMin = Math.round((Date.now() - ts.getTime()) / 60000);
     var el = document.getElementById('freshness-stamp');
     if (!el) return;
-    if (diffMin < 1)       el.textContent = 'Just updated · refreshes every 5 min';
-    else if (diffMin === 1) el.textContent = 'Updated 1 min ago · refreshes every 5 min';
-    else                   el.textContent = 'Updated ' + diffMin + ' min ago · refreshes every 5 min';
+    if (diffMin < 1)        el.textContent = I18N_JUST;
+    else if (diffMin === 1) el.textContent = I18N_1MIN;
+    else                    el.textContent = I18N_NMIN.replace('{n}', diffMin);
   }
   tick();
   setInterval(tick, 30000);
