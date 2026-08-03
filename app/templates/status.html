@@ -271,6 +271,31 @@
     .hazard-name { font-size: .82rem; font-weight: 700; }
     .hazard-sub  { font-size: .72rem; color: var(--ink-soft); line-height: 1.4; }
 
+    /* ── Conditions tiles ────────────────────────────────────────────── */
+    .cond-row {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: .5rem; margin-bottom: .35rem;
+    }
+    .cond-tile {
+      background: var(--surface); border: 1px solid var(--line);
+      border-radius: 14px; padding: .75rem .7rem;
+      box-shadow: var(--shadow-card);
+      display: flex; flex-direction: column; gap: .1rem;
+    }
+    .cond-icon {
+      width: 28px; height: 28px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: .3rem; flex-shrink: 0;
+    }
+    .cond-icon svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .cond-icon-blue { background: #dbeafe; color: #1d4ed8; }
+    .cond-icon-teal { background: var(--accent-soft); color: var(--accent); }
+    .cond-label { font-size: .62rem; font-weight: 700; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .05em; }
+    .cond-value { font-size: 1.1rem; font-weight: 800; color: var(--ink); line-height: 1.15; margin-top: .15rem; font-variant-numeric: tabular-nums; }
+    .cond-unit  { font-size: .6rem; color: var(--ink-faint); margin-top: .05rem; }
+    .cond-sub   { font-size: .62rem; color: var(--ink-soft); margin-top: .25rem; line-height: 1.3; }
+    .cond-note  { font-size: .63rem; color: var(--ink-faint); margin-bottom: .75rem; }
+
     /* ── Map preview card (Alerts tab) ───────────────────────────────── */
     .map-card {
       border: 1px solid var(--line);
@@ -580,8 +605,53 @@
       </div>
       {% endif %}
 
+      <!-- Conditions data tiles -->
+      {% if glofas_data or obs_data or spi_data %}
+      <div class="section-label" style="margin-top:1rem">{{ copy.ui.section_conditions }}</div>
+      <div class="cond-row">
+
+        {% if glofas_data %}
+        <div class="cond-tile">
+          <div class="cond-icon cond-icon-blue">
+            <svg viewBox="0 0 24 24"><path d="M2 15c1.5 1.2 3 1.2 4.5 0s3-1.2 4.5 0 3 1.2 4.5 0 3-1.2 4.5 0"/><path d="M2 19c1.5 1.2 3 1.2 4.5 0s3-1.2 4.5 0 3 1.2 4.5 0 3-1.2 4.5 0"/><path d="M12 2v9M8 7l4 4 4-4"/></svg>
+          </div>
+          <div class="cond-label">{{ copy.ui.cond_glofas_label }}</div>
+          <div class="cond-value">{{ "{:,}".format(glofas_data.discharge_max) }}</div>
+          <div class="cond-unit">{{ copy.ui.cond_glofas_unit }}</div>
+          <div class="cond-sub">{{ copy.ui.cond_glofas_sub.replace('{n}', glofas_data.lead_days | string) }}</div>
+        </div>
+        {% endif %}
+
+        {% if obs_data %}
+        <div class="cond-tile">
+          <div class="cond-icon cond-icon-teal">
+            <svg viewBox="0 0 24 24"><path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/><line x1="8" y1="16" x2="8.01" y2="16"/><line x1="8" y1="20" x2="8.01" y2="20"/><line x1="12" y1="18" x2="12.01" y2="18"/><line x1="12" y1="22" x2="12.01" y2="22"/><line x1="16" y1="16" x2="16.01" y2="16"/><line x1="16" y1="20" x2="16.01" y2="20"/></svg>
+          </div>
+          <div class="cond-label">{{ copy.ui.cond_rain_label }}</div>
+          <div class="cond-value">{{ obs_data.precip_7day }}</div>
+          <div class="cond-unit">{{ copy.ui.cond_rain_unit }}</div>
+          <div class="cond-sub">{{ copy.ui.cond_rain_sub.replace('{date}', obs_data.latest_date) }}</div>
+        </div>
+        {% endif %}
+
+        {% if spi_data %}
+        <div class="cond-tile">
+          <div class="cond-icon" style="background:{{ spi_data.color }}22;color:{{ spi_data.color }}">
+            <svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          </div>
+          <div class="cond-label">{{ copy.ui.cond_spi_label }}</div>
+          <div class="cond-value" style="color:{{ spi_data.color }}">{{ spi_data.value }}</div>
+          <div class="cond-unit">{{ copy.ui.cond_spi_unit }}</div>
+          <div class="cond-sub">{{ spi_data.label }}</div>
+        </div>
+        {% endif %}
+
+      </div>
+      <div class="cond-note">{{ copy.ui.cond_regional_note }}</div>
+      {% endif %}
+
       <!-- Map preview card -->
-      <div class="section-label">{{ copy.ui.section_risk_map }}</div>
+      <div class="section-label" style="margin-top:1rem">{{ copy.ui.section_risk_map }}</div>
       <div class="map-card">
         <div class="map-preview-bg">
           <span class="map-preview-label">{{ country_name }}</span>

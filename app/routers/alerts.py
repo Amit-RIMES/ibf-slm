@@ -13,8 +13,12 @@ from app.core.geo_risk import (
     compute_country_risk, get_regional_advisories, has_boundary_geometry, microstate_centroid,
 )
 from app.core.i18n import SUPPORTED_LANGUAGES, get_public_copy
+from app.core.spi import spi_category
 from app.models.alert_recipient import AlertRecipient
 from app.models.forecast import ForecastUpload
+from app.models.glofas import GlofasRecord
+from app.models.observed_rainfall import ObservedRainfall
+from app.models.spi import SPIRecord
 from app.models.trigger import Trigger, TriggerActivation
 from app.routers.forecasts import COUNTRY_NAMES
 
@@ -300,6 +304,49 @@ async def public_status(
     risk = await compute_country_risk(db, country, country_name)
     regional = await get_regional_advisories(db)
 
+    # ── Observed conditions data ─────────────────────────────────────
+    glofas_row = (await db.execute(
+        select(GlofasRecord).order_by(GlofasRecord.forecast_date.desc()).limit(1)
+    )).scalar_one_or_none()
+
+    obs_rows = (await db.execute(
+        select(ObservedRainfall).order_by(ObservedRainfall.obs_date.desc()).limit(7)
+    )).scalars().all()
+
+    spi_row = (await db.execute(
+        select(SPIRecord).where(SPIRecord.timescale == 3)
+        .order_by(SPIRecord.year.desc(), SPIRecord.month.desc()).limit(1)
+    )).scalar_one_or_none()
+
+    glofas_data = None
+    if glofas_row:
+        glofas_data = {
+            "discharge_mean": round(glofas_row.discharge_mean),
+            "discharge_max":  round(glofas_row.discharge_max),
+            "forecast_date":  glofas_row.forecast_date.strftime("%d %b %Y"),
+            "lead_days":      glofas_row.lead_days,
+        }
+
+    obs_data = None
+    if obs_rows:
+        total_7d = sum(r.precip_mean for r in obs_rows)
+        obs_data = {
+            "precip_7day": round(total_7d, 1),
+            "precip_max":  round(max(r.precip_max for r in obs_rows), 1),
+            "latest_date": obs_rows[0].obs_date.strftime("%d %b %Y"),
+            "n_days":      len(obs_rows),
+        }
+
+    spi_label, spi_color = spi_category(spi_row.spi_value if spi_row else None)
+    spi_data = None
+    if spi_row and spi_row.spi_value is not None:
+        spi_data = {
+            "value":   round(spi_row.spi_value, 2),
+            "label":   spi_label,
+            "color":   spi_color,
+            "month":   datetime(spi_row.year, spi_row.month, 1).strftime("%b %Y"),
+        }
+
     hazard_cards = []
     for hazard_type, info in risk.items():
         hazard_cards.append({
@@ -339,6 +386,9 @@ async def public_status(
             "has_geometry": has_geometry,
             "fallback_centroid_json": json.dumps(fallback_centroid) if fallback_centroid else "null",
             "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            "glofas_data": glofas_data,
+            "obs_data": obs_data,
+            "spi_data": spi_data,
         },
     )
 
