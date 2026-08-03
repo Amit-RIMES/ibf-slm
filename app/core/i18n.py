@@ -398,3 +398,368 @@ def build_impact_summary(T: dict[str, str], n_impacts: int, days: int,
     if total_affected:
         base = base.rstrip(".") + f", {T['affecting']} {total_affected:,} {T['people']}."
     return base
+
+
+# ── Public status page copy ────────────────────────────────────────────────
+#
+# Kept separate from _TRANSLATIONS (a flat key->string map) because this is a
+# genuine matrix — hazard x risk-level x language — better expressed as
+# nested dicts than flattened keys like "flood_high_status".
+
+PUBLIC_RISK_LABELS: dict[str, dict[str, str]] = {
+    "en": {"low": "Low", "moderate": "Moderate", "high": "High", "extreme": "Extreme"},
+    "fr": {"low": "Faible", "moderate": "Modéré", "high": "Élevé", "extreme": "Extrême"},
+    "es": {"low": "Bajo", "moderate": "Moderado", "high": "Alto", "extreme": "Extremo"},
+    "pt": {"low": "Baixo", "moderate": "Moderado", "high": "Alto", "extreme": "Extremo"},
+    "id": {"low": "Rendah", "moderate": "Sedang", "high": "Tinggi", "extreme": "Ekstrem"},
+}
+
+PUBLIC_HAZARD_NAMES: dict[str, dict[str, str]] = {
+    "en": {"flood": "Flood", "storm": "Storm", "drought": "Drought", "landslide": "Landslide",
+           "heatwave": "Heatwave", "cyclone": "Cyclone", "other": "Hazard"},
+    "fr": {"flood": "Inondation", "storm": "Tempête", "drought": "Sécheresse", "landslide": "Glissement de terrain",
+           "heatwave": "Vague de chaleur", "cyclone": "Cyclone", "other": "Aléa"},
+    "es": {"flood": "Inundación", "storm": "Tormenta", "drought": "Sequía", "landslide": "Deslizamiento de tierra",
+           "heatwave": "Ola de calor", "cyclone": "Ciclón", "other": "Amenaza"},
+    "pt": {"flood": "Inundação", "storm": "Tempestade", "drought": "Seca", "landslide": "Deslizamento de terra",
+           "heatwave": "Onda de calor", "cyclone": "Ciclone", "other": "Perigo"},
+    "id": {"flood": "Banjir", "storm": "Badai", "drought": "Kekeringan", "landslide": "Tanah Longsor",
+           "heatwave": "Gelombang Panas", "cyclone": "Siklon", "other": "Bahaya"},
+}
+
+PUBLIC_STATUS_TEXT: dict[str, dict[str, dict[str, str]]] = {
+    "en": {
+        "flood": {
+            "extreme": "Severe flooding is occurring or imminent. Rivers and low-lying areas are at serious risk.",
+            "high": "Heavy rain is expected to raise river levels. Low-lying and riverside areas may flood.",
+            "moderate": "Recent flooding has affected this area. Conditions are being watched closely.",
+            "low": "River and rainfall levels are being monitored. No flood risk at this time.",
+        },
+        "storm": {
+            "extreme": "A severe storm is active with dangerous winds and rain. Take shelter now.",
+            "high": "Strong winds and heavy rain are expected in the next day or two.",
+            "moderate": "This area was recently affected by a storm. Some risk of further impact remains.",
+            "low": "Storm conditions are being monitored. No significant storm risk at this time.",
+        },
+        "drought": {
+            "extreme": "Severe drought conditions are affecting water and food supplies.",
+            "high": "Rainfall has been well below normal for an extended period. Water and crops may be affected.",
+            "moderate": "This area has recently experienced drought impacts.",
+            "low": "Rainfall is being monitored. Conditions are currently near normal.",
+        },
+        "landslide": {
+            "extreme": "Landslides are occurring or highly likely. Steep and saturated slopes are dangerous.",
+            "high": "Heavy rain has saturated slopes. Landslides are possible on steep ground.",
+            "moderate": "This area has recently experienced landslide impacts.",
+            "low": "Slope and rainfall conditions are being monitored. No landslide risk at this time.",
+        },
+        "heatwave": {
+            "extreme": "Dangerously high temperatures are affecting this area. Heat illness risk is severe.",
+            "high": "Very high temperatures are expected. Limit outdoor activity and stay hydrated.",
+            "moderate": "This area has recently experienced extreme heat impacts.",
+            "low": "Temperatures are being monitored. No heat risk at this time.",
+        },
+        "cyclone": {
+            "extreme": "A severe cyclone is active. Follow evacuation guidance from local authorities.",
+            "high": "A cyclone is approaching. Strong winds and heavy rain are expected.",
+            "moderate": "This area was recently affected by a cyclone. Some risk of further impact remains.",
+            "low": "Cyclone conditions are being monitored. No cyclone risk at this time.",
+        },
+        "other": {
+            "extreme": "A severe hazard is active in this area.",
+            "high": "An elevated hazard risk has been detected in this area.",
+            "moderate": "This area has recently experienced a hazard impact.",
+            "low": "Conditions are being monitored. No significant risk at this time.",
+        },
+    },
+    "fr": {
+        "flood": {
+            "extreme": "Des inondations graves se produisent ou sont imminentes. Les rivières et les zones basses sont en grave danger.",
+            "high": "De fortes pluies devraient faire monter le niveau des rivières. Les zones basses et riveraines pourraient être inondées.",
+            "moderate": "Cette zone a récemment été touchée par des inondations. La situation est surveillée de près.",
+            "low": "Le niveau des rivières et des précipitations est surveillé. Aucun risque d'inondation actuellement.",
+        },
+        "storm": {
+            "extreme": "Une tempête sévère est en cours, avec des vents et des pluies dangereux. Mettez-vous à l'abri immédiatement.",
+            "high": "Des vents forts et de fortes pluies sont attendus dans les un à deux prochains jours.",
+            "moderate": "Cette zone a récemment été touchée par une tempête. Un risque d'impact supplémentaire subsiste.",
+            "low": "Les conditions orageuses sont surveillées. Aucun risque important actuellement.",
+        },
+        "drought": {
+            "extreme": "Une sécheresse sévère affecte l'approvisionnement en eau et en nourriture.",
+            "high": "Les précipitations sont bien inférieures à la normale depuis longtemps. L'eau et les cultures pourraient être affectées.",
+            "moderate": "Cette zone a récemment subi les effets d'une sécheresse.",
+            "low": "Les précipitations sont surveillées. Les conditions sont actuellement proches de la normale.",
+        },
+        "landslide": {
+            "extreme": "Des glissements de terrain se produisent ou sont très probables. Les pentes raides et saturées sont dangereuses.",
+            "high": "De fortes pluies ont saturé les pentes. Des glissements de terrain sont possibles sur les terrains escarpés.",
+            "moderate": "Cette zone a récemment subi les effets d'un glissement de terrain.",
+            "low": "Les conditions des pentes et des précipitations sont surveillées. Aucun risque actuellement.",
+        },
+        "heatwave": {
+            "extreme": "Des températures dangereusement élevées affectent cette zone. Le risque de maladie liée à la chaleur est sévère.",
+            "high": "Des températures très élevées sont attendues. Limitez les activités extérieures et hydratez-vous.",
+            "moderate": "Cette zone a récemment subi une chaleur extrême.",
+            "low": "Les températures sont surveillées. Aucun risque lié à la chaleur actuellement.",
+        },
+        "cyclone": {
+            "extreme": "Un cyclone sévère est actif. Suivez les consignes d'évacuation des autorités locales.",
+            "high": "Un cyclone approche. Des vents forts et de fortes pluies sont attendus.",
+            "moderate": "Cette zone a récemment été touchée par un cyclone. Un risque d'impact supplémentaire subsiste.",
+            "low": "Les conditions cycloniques sont surveillées. Aucun risque de cyclone actuellement.",
+        },
+        "other": {
+            "extreme": "Un aléa sévère est actif dans cette zone.",
+            "high": "Un risque élevé a été détecté dans cette zone.",
+            "moderate": "Cette zone a récemment subi un impact.",
+            "low": "La situation est surveillée. Aucun risque important actuellement.",
+        },
+    },
+    "es": {
+        "flood": {
+            "extreme": "Se están produciendo inundaciones graves o son inminentes. Los ríos y las zonas bajas corren grave riesgo.",
+            "high": "Se espera que las fuertes lluvias eleven el nivel de los ríos. Las zonas bajas y ribereñas podrían inundarse.",
+            "moderate": "Esta zona se vio afectada recientemente por inundaciones. La situación se sigue de cerca.",
+            "low": "Se están monitoreando los niveles de los ríos y las lluvias. Sin riesgo de inundación por el momento.",
+        },
+        "storm": {
+            "extreme": "Hay una tormenta severa activa con vientos y lluvias peligrosos. Busque refugio ahora.",
+            "high": "Se esperan vientos fuertes y lluvias intensas en el próximo día o dos.",
+            "moderate": "Esta zona fue afectada recientemente por una tormenta. Persiste cierto riesgo de nuevo impacto.",
+            "low": "Se están monitoreando las condiciones de tormenta. Sin riesgo significativo por el momento.",
+        },
+        "drought": {
+            "extreme": "Condiciones severas de sequía están afectando el suministro de agua y alimentos.",
+            "high": "Las lluvias han estado muy por debajo de lo normal durante un período prolongado. El agua y los cultivos podrían verse afectados.",
+            "moderate": "Esta zona ha sufrido recientemente impactos de sequía.",
+            "low": "Se están monitoreando las lluvias. Las condiciones son actualmente cercanas a lo normal.",
+        },
+        "landslide": {
+            "extreme": "Se están produciendo deslizamientos de tierra o son muy probables. Las laderas empinadas y saturadas son peligrosas.",
+            "high": "Las fuertes lluvias han saturado las laderas. Son posibles deslizamientos de tierra en terreno empinado.",
+            "moderate": "Esta zona ha sufrido recientemente impactos de deslizamientos de tierra.",
+            "low": "Se están monitoreando las laderas y las lluvias. Sin riesgo por el momento.",
+        },
+        "heatwave": {
+            "extreme": "Temperaturas peligrosamente altas están afectando esta zona. El riesgo de enfermedad por calor es severo.",
+            "high": "Se esperan temperaturas muy altas. Limite la actividad al aire libre y manténgase hidratado.",
+            "moderate": "Esta zona ha sufrido recientemente impactos de calor extremo.",
+            "low": "Se están monitoreando las temperaturas. Sin riesgo de calor por el momento.",
+        },
+        "cyclone": {
+            "extreme": "Hay un ciclón severo activo. Siga las indicaciones de evacuación de las autoridades locales.",
+            "high": "Se aproxima un ciclón. Se esperan vientos fuertes y lluvias intensas.",
+            "moderate": "Esta zona fue afectada recientemente por un ciclón. Persiste cierto riesgo de nuevo impacto.",
+            "low": "Se están monitoreando las condiciones ciclónicas. Sin riesgo de ciclón por el momento.",
+        },
+        "other": {
+            "extreme": "Hay una amenaza severa activa en esta zona.",
+            "high": "Se ha detectado un riesgo elevado en esta zona.",
+            "moderate": "Esta zona ha sufrido recientemente un impacto.",
+            "low": "Se está monitoreando la situación. Sin riesgo importante por el momento.",
+        },
+    },
+    "pt": {
+        "flood": {
+            "extreme": "Está a ocorrer ou é iminente uma inundação grave. Rios e áreas baixas estão em sério risco.",
+            "high": "Espera-se que a chuva forte eleve o nível dos rios. Áreas baixas e ribeirinhas podem inundar.",
+            "moderate": "Esta área foi recentemente afetada por inundações. A situação está a ser acompanhada de perto.",
+            "low": "Os níveis dos rios e da chuva estão a ser monitorizados. Sem risco de inundação neste momento.",
+        },
+        "storm": {
+            "extreme": "Uma tempestade severa está ativa, com ventos e chuva perigosos. Procure abrigo agora.",
+            "high": "Ventos fortes e chuva intensa são esperados no próximo dia ou dois.",
+            "moderate": "Esta área foi recentemente afetada por uma tempestade. Algum risco de novo impacto permanece.",
+            "low": "As condições de tempestade estão a ser monitorizadas. Sem risco significativo neste momento.",
+        },
+        "drought": {
+            "extreme": "Condições severas de seca estão a afetar o abastecimento de água e alimentos.",
+            "high": "A chuva tem estado bem abaixo do normal por um período prolongado. Água e colheitas podem ser afetadas.",
+            "moderate": "Esta área sofreu recentemente impactos de seca.",
+            "low": "A chuva está a ser monitorizada. As condições estão atualmente próximas do normal.",
+        },
+        "landslide": {
+            "extreme": "Estão a ocorrer deslizamentos de terra ou são altamente prováveis. Encostas íngremes e saturadas são perigosas.",
+            "high": "A chuva forte saturou as encostas. Deslizamentos de terra são possíveis em terreno íngreme.",
+            "moderate": "Esta área sofreu recentemente impactos de deslizamento de terra.",
+            "low": "As condições das encostas e da chuva estão a ser monitorizadas. Sem risco neste momento.",
+        },
+        "heatwave": {
+            "extreme": "Temperaturas perigosamente altas estão a afetar esta área. O risco de doença por calor é severo.",
+            "high": "Temperaturas muito altas são esperadas. Limite a atividade ao ar livre e mantenha-se hidratado.",
+            "moderate": "Esta área sofreu recentemente impactos de calor extremo.",
+            "low": "As temperaturas estão a ser monitorizadas. Sem risco de calor neste momento.",
+        },
+        "cyclone": {
+            "extreme": "Um ciclone severo está ativo. Siga as orientações de evacuação das autoridades locais.",
+            "high": "Um ciclone está a aproximar-se. Ventos fortes e chuva intensa são esperados.",
+            "moderate": "Esta área foi recentemente afetada por um ciclone. Algum risco de novo impacto permanece.",
+            "low": "As condições cíclónicas estão a ser monitorizadas. Sem risco de ciclone neste momento.",
+        },
+        "other": {
+            "extreme": "Um perigo severo está ativo nesta área.",
+            "high": "Foi detetado um risco elevado nesta área.",
+            "moderate": "Esta área sofreu recentemente um impacto.",
+            "low": "A situação está a ser monitorizada. Sem risco significativo neste momento.",
+        },
+    },
+    "id": {
+        "flood": {
+            "extreme": "Banjir parah sedang terjadi atau akan segera terjadi. Sungai dan daerah dataran rendah dalam risiko serius.",
+            "high": "Hujan lebat diperkirakan akan menaikkan permukaan sungai. Daerah dataran rendah dan tepi sungai berisiko banjir.",
+            "moderate": "Daerah ini baru-baru ini terkena dampak banjir. Kondisi terus dipantau dengan ketat.",
+            "low": "Permukaan sungai dan curah hujan sedang dipantau. Tidak ada risiko banjir saat ini.",
+        },
+        "storm": {
+            "extreme": "Badai parah sedang aktif dengan angin dan hujan berbahaya. Segera cari perlindungan.",
+            "high": "Angin kencang dan hujan lebat diperkirakan terjadi dalam satu hingga dua hari ke depan.",
+            "moderate": "Daerah ini baru-baru ini terkena dampak badai. Masih ada risiko dampak lanjutan.",
+            "low": "Kondisi badai sedang dipantau. Tidak ada risiko badai signifikan saat ini.",
+        },
+        "drought": {
+            "extreme": "Kondisi kekeringan parah sedang memengaruhi pasokan air dan pangan.",
+            "high": "Curah hujan telah jauh di bawah normal dalam waktu yang lama. Air dan hasil pertanian dapat terpengaruh.",
+            "moderate": "Daerah ini baru-baru ini mengalami dampak kekeringan.",
+            "low": "Curah hujan sedang dipantau. Kondisi saat ini mendekati normal.",
+        },
+        "landslide": {
+            "extreme": "Tanah longsor sedang terjadi atau sangat mungkin terjadi. Lereng curam dan jenuh air berbahaya.",
+            "high": "Hujan lebat telah membuat lereng jenuh air. Tanah longsor mungkin terjadi di daerah curam.",
+            "moderate": "Daerah ini baru-baru ini mengalami dampak tanah longsor.",
+            "low": "Kondisi lereng dan curah hujan sedang dipantau. Tidak ada risiko tanah longsor saat ini.",
+        },
+        "heatwave": {
+            "extreme": "Suhu yang sangat tinggi dan berbahaya sedang memengaruhi daerah ini. Risiko penyakit akibat panas sangat serius.",
+            "high": "Suhu yang sangat tinggi diperkirakan terjadi. Batasi aktivitas di luar ruangan dan tetap terhidrasi.",
+            "moderate": "Daerah ini baru-baru ini mengalami dampak panas ekstrem.",
+            "low": "Suhu sedang dipantau. Tidak ada risiko panas saat ini.",
+        },
+        "cyclone": {
+            "extreme": "Siklon parah sedang aktif. Ikuti panduan evakuasi dari pihak berwenang setempat.",
+            "high": "Siklon sedang mendekat. Angin kencang dan hujan lebat diperkirakan terjadi.",
+            "moderate": "Daerah ini baru-baru ini terkena dampak siklon. Masih ada risiko dampak lanjutan.",
+            "low": "Kondisi siklon sedang dipantau. Tidak ada risiko siklon saat ini.",
+        },
+        "other": {
+            "extreme": "Bahaya serius sedang aktif di daerah ini.",
+            "high": "Risiko yang meningkat telah terdeteksi di daerah ini.",
+            "moderate": "Daerah ini baru-baru ini mengalami dampak bahaya.",
+            "low": "Kondisi sedang dipantau. Tidak ada risiko signifikan saat ini.",
+        },
+    },
+}
+
+PUBLIC_ACTION_TIPS: dict[str, dict[str, list[str]]] = {
+    "en": {
+        "flood": ["Move valuables and important documents to higher ground",
+                  "Avoid walking or driving through flood water",
+                  "Keep a battery radio or charged phone for updates"],
+        "storm": ["Secure loose outdoor items", "Stay indoors and away from windows",
+                  "Keep a torch and emergency supplies ready"],
+        "drought": ["Store safe drinking water where possible", "Reduce non-essential water use",
+                    "Check on vulnerable neighbours and livestock"],
+        "landslide": ["Avoid steep slopes and riverbanks after heavy rain",
+                      "Watch for cracking ground, tilting trees, or unusual sounds",
+                      "Have an evacuation route ready if you're on a slope"],
+        "heatwave": ["Drink water regularly, even if not thirsty",
+                     "Stay in shade or a cool space during peak hours",
+                     "Check on elderly or unwell family members"],
+        "cyclone": ["Secure your home and move to a safe shelter if advised",
+                    "Charge phones and keep emergency supplies ready",
+                    "Follow instructions from local authorities"],
+        "other": ["Follow guidance from local authorities", "Keep emergency contacts and supplies ready",
+                  "Stay informed through official updates"],
+    },
+    "fr": {
+        "flood": ["Déplacez les objets de valeur et documents importants en hauteur",
+                  "Évitez de marcher ou de conduire dans l'eau des inondations",
+                  "Gardez une radio à piles ou un téléphone chargé pour suivre les mises à jour"],
+        "storm": ["Sécurisez les objets extérieurs non fixés", "Restez à l'intérieur, loin des fenêtres",
+                  "Gardez une lampe torche et des fournitures d'urgence prêtes"],
+        "drought": ["Stockez de l'eau potable si possible", "Réduisez la consommation d'eau non essentielle",
+                    "Prenez des nouvelles des voisins vulnérables et du bétail"],
+        "landslide": ["Évitez les pentes raides et les berges après de fortes pluies",
+                      "Surveillez les fissures au sol, les arbres inclinés ou les bruits inhabituels",
+                      "Ayez un itinéraire d'évacuation prêt si vous êtes sur une pente"],
+        "heatwave": ["Buvez de l'eau régulièrement, même sans soif",
+                     "Restez à l'ombre ou dans un endroit frais aux heures les plus chaudes",
+                     "Prenez des nouvelles des personnes âgées ou fragiles de votre famille"],
+        "cyclone": ["Sécurisez votre logement et déplacez-vous vers un abri sûr si conseillé",
+                    "Chargez les téléphones et préparez des fournitures d'urgence",
+                    "Suivez les instructions des autorités locales"],
+        "other": ["Suivez les conseils des autorités locales", "Gardez les contacts d'urgence et fournitures prêts",
+                  "Restez informé via les mises à jour officielles"],
+    },
+    "es": {
+        "flood": ["Traslade objetos de valor y documentos importantes a un lugar más alto",
+                  "Evite caminar o conducir por el agua de la inundación",
+                  "Tenga una radio a pilas o un teléfono cargado para recibir actualizaciones"],
+        "storm": ["Asegure los objetos sueltos en el exterior", "Permanezca en interiores, lejos de las ventanas",
+                  "Tenga a mano una linterna y suministros de emergencia"],
+        "drought": ["Almacene agua potable si es posible", "Reduzca el uso de agua no esencial",
+                    "Revise a los vecinos vulnerables y al ganado"],
+        "landslide": ["Evite laderas empinadas y orillas de ríos después de lluvias fuertes",
+                      "Esté atento a grietas en el suelo, árboles inclinados o sonidos inusuales",
+                      "Tenga lista una ruta de evacuación si vive en una ladera"],
+        "heatwave": ["Beba agua con regularidad, incluso sin sed",
+                     "Permanezca a la sombra o en un lugar fresco en las horas de más calor",
+                     "Revise a los familiares mayores o enfermos"],
+        "cyclone": ["Asegure su vivienda y trasládese a un refugio seguro si se lo indican",
+                    "Cargue los teléfonos y prepare suministros de emergencia",
+                    "Siga las instrucciones de las autoridades locales"],
+        "other": ["Siga las indicaciones de las autoridades locales", "Tenga listos contactos y suministros de emergencia",
+                  "Manténgase informado a través de actualizaciones oficiales"],
+    },
+    "pt": {
+        "flood": ["Leve objetos de valor e documentos importantes para um local mais alto",
+                  "Evite andar ou conduzir na água da inundação",
+                  "Tenha um rádio a pilhas ou telemóvel carregado para atualizações"],
+        "storm": ["Prenda objetos soltos no exterior", "Permaneça dentro de casa, longe das janelas",
+                  "Tenha uma lanterna e material de emergência preparado"],
+        "drought": ["Armazene água potável se possível", "Reduza o uso de água não essencial",
+                    "Verifique vizinhos vulneráveis e o gado"],
+        "landslide": ["Evite encostas íngremes e margens de rios após chuva forte",
+                      "Preste atenção a rachaduras no solo, árvores inclinadas ou sons incomuns",
+                      "Tenha uma rota de fuga preparada se estiver numa encosta"],
+        "heatwave": ["Beba água regularmente, mesmo sem sede",
+                     "Fique à sombra ou num local fresco nas horas mais quentes",
+                     "Verifique familiares idosos ou doentes"],
+        "cyclone": ["Proteja a sua casa e desloque-se para um abrigo seguro se aconselhado",
+                    "Carregue os telemóveis e prepare material de emergência",
+                    "Siga as instruções das autoridades locais"],
+        "other": ["Siga as orientações das autoridades locais", "Tenha contactos e material de emergência preparados",
+                  "Mantenha-se informado através de atualizações oficiais"],
+    },
+    "id": {
+        "flood": ["Pindahkan barang berharga dan dokumen penting ke tempat yang lebih tinggi",
+                  "Hindari berjalan atau berkendara melalui air banjir",
+                  "Siapkan radio baterai atau ponsel terisi daya untuk pembaruan"],
+        "storm": ["Amankan benda-benda luar yang tidak terikat", "Tetap di dalam ruangan, jauh dari jendela",
+                  "Siapkan senter dan perlengkapan darurat"],
+        "drought": ["Simpan air minum yang aman jika memungkinkan", "Kurangi penggunaan air yang tidak penting",
+                    "Periksa tetangga yang rentan dan ternak"],
+        "landslide": ["Hindari lereng curam dan tepi sungai setelah hujan lebat",
+                      "Waspadai retakan tanah, pohon miring, atau suara tidak biasa",
+                      "Siapkan jalur evakuasi jika Anda berada di lereng"],
+        "heatwave": ["Minum air secara teratur, meski tidak haus",
+                     "Tetap di tempat teduh atau sejuk pada jam-jam terpanas",
+                     "Periksa anggota keluarga lansia atau yang sedang sakit"],
+        "cyclone": ["Amankan rumah Anda dan pindah ke tempat perlindungan aman jika disarankan",
+                    "Isi daya ponsel dan siapkan perlengkapan darurat",
+                    "Ikuti instruksi dari pihak berwenang setempat"],
+        "other": ["Ikuti panduan dari pihak berwenang setempat", "Siapkan kontak darurat dan perlengkapan",
+                  "Tetap dapatkan informasi melalui pembaruan resmi"],
+    },
+}
+
+
+def get_public_copy(lang: str) -> dict:
+    """Bundle of hazard names, risk labels, status text, and action tips for
+    the public status page, falling back to English for any missing piece."""
+    return {
+        "risk_labels": PUBLIC_RISK_LABELS.get(lang, PUBLIC_RISK_LABELS["en"]),
+        "hazard_names": PUBLIC_HAZARD_NAMES.get(lang, PUBLIC_HAZARD_NAMES["en"]),
+        "status_text": PUBLIC_STATUS_TEXT.get(lang, PUBLIC_STATUS_TEXT["en"]),
+        "action_tips": PUBLIC_ACTION_TIPS.get(lang, PUBLIC_ACTION_TIPS["en"]),
+    }

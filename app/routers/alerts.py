@@ -9,14 +9,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.geo_risk import (
+    compute_country_risk, get_regional_advisories, has_boundary_geometry, microstate_centroid,
+)
+from app.core.i18n import SUPPORTED_LANGUAGES, get_public_copy
 from app.models.alert_recipient import AlertRecipient
 from app.models.forecast import ForecastUpload
 from app.models.trigger import Trigger, TriggerActivation
+from app.routers.forecasts import COUNTRY_NAMES
 
 _HAZARD_COLORS = {
     "flood": "#3b82f6", "storm": "#8b5cf6", "drought": "#f59e0b",
     "landslide": "#10b981", "heatwave": "#ef4444", "cyclone": "#0ea5e9", "other": "#6b7280",
 }
+
+_RISK_COLORS = {"low": "#6f9a3c", "moderate": "#d9a62e", "high": "#d97b29", "extreme": "#c0392b"}
+_RISK_ORDER = {"extreme": 3, "high": 2, "moderate": 1, "low": 0}
+_COUNTRY_ISO2_BY_NAME = {name: iso2 for iso2, name in COUNTRY_NAMES.items()}
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -260,31 +269,78 @@ async def alert_timeline(
 
 
 @router.get("/status", response_class=HTMLResponse)
-async def public_status(request: Request, db: AsyncSession = Depends(get_db)):
-    alerts_json, activations = await _get_active_alerts(db)
+async def public_status(
+    request: Request,
+    country: str = "",
+    lang: str = "en",
+    db: AsyncSession = Depends(get_db),
+):
+    if lang not in SUPPORTED_LANGUAGES:
+        lang = "en"
+    copy = get_public_copy(lang)
 
-    # Public view: strip internal fields
-    public_alerts = [
-        {
-            "hazard_type": a["hazard_type"],
-            "triggered_at": a["triggered_at"],
-            "lat_min": a["lat_min"],
-            "lat_max": a["lat_max"],
-            "lon_min": a["lon_min"],
-            "lon_max": a["lon_max"],
-        }
-        for a in alerts_json
-    ]
+    country_list = sorted(COUNTRY_NAMES.items(), key=lambda kv: kv[1])  # [(iso2, name), ...] by name
+
+    country_name = COUNTRY_NAMES.get(country)
+    if not country_name:
+        # No (or unrecognised) country selected — picker landing state.
+        return templates.TemplateResponse(
+            request,
+            "status.html",
+            {
+                "has_country": False,
+                "country_list": country_list,
+                "lang": lang,
+                "supported_languages": SUPPORTED_LANGUAGES,
+                "copy": copy,
+                "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            },
+        )
+
+    risk = await compute_country_risk(db, country, country_name)
+    regional = await get_regional_advisories(db)
+
+    hazard_cards = []
+    for hazard_type, info in risk.items():
+        hazard_cards.append({
+            "hazard_type": hazard_type,
+            "hazard_name": copy["hazard_names"].get(hazard_type, hazard_type.title()),
+            "level": info["level"],
+            "level_label": copy["risk_labels"][info["level"]],
+            "color": _RISK_COLORS[info["level"]],
+            "status_text": copy["status_text"].get(hazard_type, {}).get(info["level"], ""),
+            "tips": copy["action_tips"].get(hazard_type, []),
+        })
+    hazard_cards.sort(key=lambda c: _RISK_ORDER[c["level"]], reverse=True)
+
+    hero = hazard_cards[0] if hazard_cards and _RISK_ORDER[hazard_cards[0]["level"]] > 0 else None
+    other_cards = hazard_cards[1:] if hero else hazard_cards
+
+    for adv in regional:
+        adv["hazard_name"] = copy["hazard_names"].get(adv["hazard_type"], adv["hazard_type"].title())
+
+    has_geometry = has_boundary_geometry(country_name)
+    fallback_centroid = None if has_geometry else microstate_centroid(country_name)
 
     return templates.TemplateResponse(
-    request,
-    "status.html",
-    {
-            "alert_count": len(public_alerts),
-            "alerts_json": json.dumps(public_alerts),
+        request,
+        "status.html",
+        {
+            "has_country": True,
+            "country_list": country_list,
+            "country_iso2": country,
+            "country_name": country_name,
+            "lang": lang,
+            "supported_languages": SUPPORTED_LANGUAGES,
+            "copy": copy,
+            "hero": hero,
+            "hazard_cards": other_cards,
+            "regional_advisories": regional,
+            "has_geometry": has_geometry,
+            "fallback_centroid_json": json.dumps(fallback_centroid) if fallback_centroid else "null",
             "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         },
-)
+    )
 
 
 # ── Alert Recipients (external email subscribers) ─────────────────────────────

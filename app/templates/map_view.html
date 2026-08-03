@@ -392,10 +392,25 @@ var map = L.map('map', {
   attributionControl: true,
 });
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
   maxZoom: 18,
 }).addTo(map);
+
+map.createPane('adminBoundaries');
+map.getPane('adminBoundaries').style.zIndex = 350;
+
+fetch('/static/countries.geojson').then(r => r.json()).then(function(gj) {
+  L.geoJSON(gj, { style: { color: '#333', weight: 1, fillOpacity: 0 }, pane: 'adminBoundaries',
+    onEachFeature: function(feat, layer) { layer.bindTooltip(feat.properties.name, {sticky: true}); }
+  }).addTo(map);
+}).catch(function(){});
+
+fetch('/static/admin1_states.geojson').then(r => r.json()).then(function(gj) {
+  L.geoJSON(gj, { style: { color: '#888', weight: 0.5, dashArray: '3 3', fillOpacity: 0 }, pane: 'adminBoundaries',
+    onEachFeature: function(feat, layer) { layer.bindTooltip(feat.properties.name + ', ' + feat.properties.admin, {sticky: true}); }
+  }).addTo(map);
+}).catch(function(){});
 
 // ── Layer groups ──────────────────────────────────────────────────────────────
 var layers = {
@@ -730,15 +745,14 @@ async function loadZonal() {
     fc.features.forEach(function(f) {
       var p = f.properties;
       var intensity = p.intensity || 0;
-      // Choropleth: blue-to-indigo scale
-      var alpha = Math.min(0.15 + intensity * 0.7, 0.85);
-      var fillColor = intensity > 0.7 ? '#1e3a8a'
-                    : intensity > 0.4 ? '#2563eb'
-                    : intensity > 0.15 ? '#60a5fa'
-                    : '#bfdbfe';
+      // Choropleth: green (low) → yellow → orange → red (high) risk scale
+      var fillColor = intensity > 0.7 ? '#c0392b'
+                    : intensity > 0.4 ? '#e08a2f'
+                    : intensity > 0.15 ? '#e8c547'
+                    : '#84a341';
       L.geoJSON(f, {
         style: function() {
-          return { color: '#0369a1', weight: 0.8, fillColor: fillColor, fillOpacity: alpha };
+          return { color: '#2d2d2d', weight: 1, fillColor: fillColor, fillOpacity: 0.82 };
         },
       })
       .bindTooltip(

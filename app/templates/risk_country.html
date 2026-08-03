@@ -146,9 +146,24 @@
 <script>
 (function () {
   const map = L.map('country-map', { zoomControl: true });
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '© OpenStreetMap contributors', maxZoom: 18,
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>', maxZoom: 18,
   }).addTo(map);
+
+  map.createPane('adminBoundaries');
+  map.getPane('adminBoundaries').style.zIndex = 350;
+
+  fetch('/static/countries.geojson').then(r => r.json()).then(function(gj) {
+    L.geoJSON(gj, { style: { color: '#333', weight: 1, fillOpacity: 0 }, pane: 'adminBoundaries',
+      onEachFeature: function(feat, layer) { layer.bindTooltip(feat.properties.name, {sticky: true}); }
+    }).addTo(map);
+  }).catch(function(){});
+
+  fetch('/static/admin1_states.geojson').then(r => r.json()).then(function(gj) {
+    L.geoJSON(gj, { style: { color: '#888', weight: 0.5, dashArray: '3 3', fillOpacity: 0 }, pane: 'adminBoundaries',
+      onEachFeature: function(feat, layer) { layer.bindTooltip(feat.properties.name + ', ' + feat.properties.admin, {sticky: true}); }
+    }).addTo(map);
+  }).catch(function(){});
 
   const mapPoints = {{ map_points_json | safe }};
   const impactPoints = {{ impact_points_json | safe }};

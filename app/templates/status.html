@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -11,221 +11,283 @@
       if (t === 'dark') document.documentElement.setAttribute('data-theme','dark');
     })();
   </script>
-  <title>IBF Alert Status — RIMES</title>
+  <title>Public Alerts — RIMES</title>
   <link rel="stylesheet" href="/static/leaflet.css" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, -apple-system, sans-serif; background: #f4f6f9; color: #1a1a2e; min-height: 100vh; }
-
-    header {
-      background: #1a1a2e; color: #fff; padding: 1.1rem 2rem;
-      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem;
+    :root {
+      --ground: #f2f6f4; --surface: #fff; --ink: #12262a; --ink-soft: #5b6c6e; --ink-faint: #93a0a1;
+      --line: #e2e9e6; --accent: #0f6e7a; --accent-soft: #e1f0ef;
+      --risk-low: #6f9a3c; --risk-low-soft: #eaf3df;
+      --risk-moderate: #d9a62e; --risk-moderate-soft: #fbf1d9;
+      --risk-high: #d97b29; --risk-high-soft: #fbe8d6;
+      --risk-extreme: #c0392b; --risk-extreme-soft: #f8dcd8;
     }
-    header .brand { font-size: 1.1rem; font-weight: 700; letter-spacing: .02em; }
-    header .brand span { color: #818cf8; }
-    header .meta { font-size: .8rem; color: #94a3b8; }
-
-    .main { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
-
-    /* Status banner */
-    .status-banner {
-      border-radius: 12px; padding: 1.25rem 1.6rem; margin-bottom: 1.5rem;
-      display: flex; align-items: center; gap: 1rem;
+    [data-theme="dark"] {
+      --ground: #0d1a1c; --surface: #14262a; --ink: #eaf1f0; --ink-soft: #a9bcbc; --ink-faint: #7f9394;
+      --line: #24393c; --accent: #3fb8c4; --accent-soft: #17383d;
     }
-    .status-banner.clear { background: #f0fdf4; border: 1px solid #86efac; }
-    .status-banner.active { background: #fef2f2; border: 1px solid #fecaca; }
-    .status-banner .icon { font-size: 1.8rem; }
-    .status-banner .label { font-size: 1.1rem; font-weight: 700; }
-    .status-banner.clear .label { color: #166534; }
-    .status-banner.active .label { color: #991b1b; }
-    .status-banner .sub { font-size: .85rem; margin-top: .2rem; }
-    .status-banner.clear .sub { color: #4ade80; }
-    .status-banner.active .sub { color: #b91c1c; }
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--ground); color: var(--ink); min-height: 100vh; }
 
-    /* Map */
-    #status-map { height: 480px; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.1); margin-bottom: 1.5rem; }
-
-    /* Alert cards */
-    .alerts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
-    .alert-card {
-      background: #fff; border-radius: 12px; padding: 1.1rem 1.25rem;
-      box-shadow: 0 1px 4px rgba(0,0,0,.07); border-left: 4px solid #e5e7eb;
+    .topbar {
+      background: var(--surface); border-bottom: 1px solid var(--line);
+      padding: .85rem 1.25rem; display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: .6rem; position: sticky; top: 0; z-index: 500;
     }
-    .alert-card .hazard { font-size: .72rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: .06em; margin-bottom: .5rem; }
-    .alert-card .region { font-size: .82rem; color: #6b7280; margin-bottom: .35rem; }
-    .alert-card .since { font-size: .78rem; color: #9ca3af; }
-
-    .hazard-flood     { border-color: #3b82f6; } .hazard-flood .hazard     { color: #1d4ed8; }
-    .hazard-storm     { border-color: #8b5cf6; } .hazard-storm .hazard     { color: #7e22ce; }
-    .hazard-drought   { border-color: #f59e0b; } .hazard-drought .hazard   { color: #92400e; }
-    .hazard-landslide { border-color: #22c55e; } .hazard-landslide .hazard { color: #166534; }
-    .hazard-heatwave  { border-color: #ef4444; } .hazard-heatwave .hazard  { color: #991b1b; }
-    .hazard-cyclone   { border-color: #06b6d4; } .hazard-cyclone .hazard   { color: #0369a1; }
-    .hazard-other     { border-color: #6b7280; } .hazard-other .hazard     { color: #374151; }
-
-    /* Legend */
-    .legend-panel {
-      position: absolute; bottom: 2rem; right: .75rem; z-index: 1000;
-      background: rgba(255,255,255,.95); border-radius: 10px; padding: .75rem 1rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,.15); font-size: .8rem; min-width: 130px;
+    .brand { font-size: 1.05rem; font-weight: 700; letter-spacing: -.01em; color: var(--ink); }
+    .brand span { color: var(--accent); }
+    .topbar-controls { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+    select.picker {
+      font: inherit; font-size: .82rem; font-weight: 600; color: var(--accent);
+      background: var(--accent-soft); border: none; border-radius: 999px;
+      padding: .4rem .9rem; cursor: pointer;
     }
-    .legend-panel .legend-title { font-weight: 700; font-size: .72rem; text-transform: uppercase;
-      letter-spacing: .06em; color: #9ca3af; margin-bottom: .5rem; }
-    .legend-item { display: flex; align-items: center; gap: .5rem; margin-bottom: .3rem; }
-    .legend-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+
+    .page { max-width: 760px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+    .updated { font-size: .72rem; color: var(--ink-faint); margin-bottom: 1rem; text-align: right; }
+
+    /* ---- Picker landing state ---- */
+    .landing { text-align: center; padding: 3.5rem 1rem; max-width: 420px; margin: 0 auto; }
+    .landing h1 { font-size: 1.35rem; margin-bottom: .6rem; }
+    .landing p { color: var(--ink-soft); font-size: .92rem; line-height: 1.55; margin-bottom: 1.5rem; }
+    .landing form { display: flex; flex-direction: column; gap: .75rem; }
+    .landing select.picker-lg {
+      font: inherit; font-size: .95rem; font-weight: 600; padding: .75rem 1rem;
+      border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+    }
+    .landing button {
+      font: inherit; font-size: .95rem; font-weight: 700; padding: .75rem 1rem;
+      border-radius: 12px; border: none; background: var(--accent); color: #fff; cursor: pointer;
+    }
+
+    /* ---- Hero banner ---- */
+    .hero {
+      border-radius: 20px; padding: 1.4rem 1.5rem 1.6rem; margin-bottom: 1.1rem;
+      color: #fff; position: relative; overflow: hidden;
+    }
+    .hero.low     { background: linear-gradient(160deg, #86b654, var(--risk-low)); }
+    .hero.moderate{ background: linear-gradient(160deg, #e6c25a, var(--risk-moderate)); color: #3a2c04; }
+    .hero.high    { background: linear-gradient(160deg, #e6934c, var(--risk-high)); color: #3a1f04; }
+    .hero.extreme { background: linear-gradient(160deg, #d9584a, var(--risk-extreme)); }
+    .hero.clear   { background: linear-gradient(160deg, #86b654, var(--risk-low)); }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: .4rem;
+      background: rgba(255,255,255,.5); padding: .3rem .75rem; border-radius: 999px;
+      font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
+    }
+    .hero-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .hero h2 { font-size: 1.55rem; font-weight: 800; margin: .6rem 0 .45rem; letter-spacing: -.01em; }
+    .hero p { font-size: .92rem; line-height: 1.55; max-width: 46ch; }
+    .hero .country { font-size: .78rem; font-weight: 700; opacity: .85; margin-bottom: .3rem; }
+
+    .action-label {
+      font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
+      color: var(--ink-faint); margin: 1.2rem 0 .6rem;
+    }
+    .action-list { list-style: none; display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1.4rem; }
+    .action-list li {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+      padding: .7rem .9rem; font-size: .85rem; display: flex; gap: .6rem; align-items: flex-start;
+    }
+    .action-list li::before { content: "✓"; color: var(--accent); font-weight: 800; flex-shrink: 0; }
+
+    .advisory-note {
+      background: var(--accent-soft); border-radius: 12px; padding: .8rem 1rem;
+      font-size: .82rem; color: var(--ink); margin-bottom: 1.2rem; line-height: 1.5;
+    }
+    .advisory-note strong { color: var(--accent); }
+
+    /* ---- Hazard grid ---- */
+    .hazard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; margin-bottom: 1.4rem; }
+    @media (max-width: 460px) { .hazard-grid { grid-template-columns: 1fr; } }
+    .hazard-card {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+      padding: .85rem .95rem;
+    }
+    .hazard-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: .4rem; }
+    .hazard-name { font-size: .86rem; font-weight: 700; }
+    .chip {
+      font-size: .64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
+      padding: .2rem .55rem; border-radius: 999px;
+    }
+    .chip.low      { background: var(--risk-low-soft); color: #3d5a1f; }
+    .chip.moderate { background: var(--risk-moderate-soft); color: #7a5c11; }
+    .chip.high     { background: var(--risk-high-soft); color: #7c4111; }
+    .chip.extreme  { background: var(--risk-extreme-soft); color: #7a1f16; }
+    .hazard-sub { font-size: .74rem; color: var(--ink-soft); line-height: 1.45; }
+
+    /* ---- Map ---- */
+    .section-label {
+      font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
+      color: var(--ink-faint); margin: 1.4rem 0 .6rem;
+    }
+    #status-map { height: 340px; border-radius: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+    .map-footnote { font-size: .72rem; color: var(--ink-faint); margin-top: .5rem; }
+
+    /* ---- Prepare (static, generic) ---- */
+    .prepare-list { list-style: none; display: flex; flex-direction: column; gap: .5rem; }
+    .prepare-list li {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+      padding: .7rem .9rem; font-size: .85rem;
+    }
 
     footer {
-      text-align: center; padding: 2rem 1rem; font-size: .8rem; color: #9ca3af; border-top: 1px solid #e5e7eb;
-      margin-top: 1rem;
+      text-align: center; padding: 2rem 1rem 1rem; font-size: .78rem; color: var(--ink-faint);
+      border-top: 1px solid var(--line); margin-top: 1.5rem;
     }
-    footer a { color: #6b7280; }
-
-    /* Dark mode */
-    [data-theme="dark"] body    { background: #0f172a; color: #e2e8f0; }
-    [data-theme="dark"] header  { background: #0f172a; border-bottom: 1px solid #334155; }
-    [data-theme="dark"] .status-banner.clear { background: #052e16 !important; border-color: #166534 !important; }
-    [data-theme="dark"] .status-banner.active { background: #450a0a !important; border-color: #7f1d1d !important; }
-    [data-theme="dark"] .alert-card { background: #1e293b !important; }
-    [data-theme="dark"] .alert-card .region { color: #94a3b8 !important; }
-    [data-theme="dark"] .alert-card .since  { color: #64748b !important; }
-    [data-theme="dark"] footer  { color: #475569; border-color: #334155; }
-    [data-theme="dark"] footer a { color: #64748b; }
-
-    @media (max-width: 700px) {
-      header { padding: .85rem 1rem; }
-      header .meta { font-size: .72rem; }
-      .main { padding: 0 .75rem; margin: 1rem auto; }
-      #status-map { height: 320px; }
-      .alerts-grid { grid-template-columns: 1fr; }
-    }
+    footer a { color: var(--ink-soft); }
   </style>
 </head>
 <body>
 
-<header>
-  <div class="brand">IBF <span>Alert Status</span> — RIMES</div>
-  <div class="meta">Last updated: {{ updated_at }} &nbsp;·&nbsp; Auto-refreshes every 5 min</div>
-</header>
-
-<div class="main">
-
-  <!-- Status banner -->
-  {% if alert_count == 0 %}
-  <div class="status-banner clear">
-    <div class="icon">✅</div>
-    <div>
-      <div class="label">All Clear</div>
-      <div class="sub">No active weather alerts at this time.</div>
-    </div>
+<div class="topbar">
+  <div class="brand">RIMES <span>Public Alerts</span></div>
+  <div class="topbar-controls">
+    <form method="get" action="/status" style="display:contents;">
+      {% if has_country %}<input type="hidden" name="lang" value="{{ lang }}">{% endif %}
+      <select class="picker" name="country" onchange="this.form.submit()">
+        <option value="">Select country…</option>
+        {% for iso2, name in country_list %}
+        <option value="{{ iso2 }}" {% if has_country and iso2 == country_iso2 %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <form method="get" action="/status" style="display:contents;">
+      {% if has_country %}<input type="hidden" name="country" value="{{ country_iso2 }}">{% endif %}
+      <select class="picker" name="lang" onchange="this.form.submit()">
+        {% for code, name in supported_languages.items() %}
+        <option value="{{ code }}" {% if code == lang %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </form>
   </div>
-  {% else %}
-  <div class="status-banner active">
-    <div class="icon">⚠️</div>
-    <div>
-      <div class="label">{{ alert_count }} Active Alert{{ 's' if alert_count != 1 else '' }}</div>
-      <div class="sub">{{ alert_count }} threshold trigger{{ 's are' if alert_count != 1 else ' is' }} currently active.</div>
-    </div>
-  </div>
-  {% endif %}
-
-  <!-- Map -->
-  <div style="position:relative;">
-    <div id="status-map"></div>
-  </div>
-
-  <!-- Alert cards -->
-  {% if alert_count > 0 %}
-  <div class="alerts-grid">
-    {% set ns = namespace(alerts=[]) %}
-    <!-- Rendered by JS below -->
-  </div>
-  <div id="alert-cards" class="alerts-grid"></div>
-  {% endif %}
-
 </div>
+
+{% if not has_country %}
+<div class="landing">
+  <h1>Check hazard conditions where you are</h1>
+  <p>Pick your country to see current flood, storm, drought, and other hazard risk — in plain language, no login needed.</p>
+  <form method="get" action="/status">
+    <select class="picker-lg" name="country" required>
+      <option value="" disabled selected>Select your country</option>
+      {% for iso2, name in country_list %}
+      <option value="{{ iso2 }}">{{ name }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit">View conditions</button>
+  </form>
+</div>
+
+{% else %}
+<div class="page">
+  <div class="updated">Updated {{ updated_at }} · refreshes every 5 min</div>
+
+  {% if hero %}
+  <div class="hero {{ hero.level }}">
+    <div class="country">{{ country_name }}</div>
+    <span class="hero-badge"><span class="dot"></span> {{ hero.level_label }} risk</span>
+    <h2>{{ hero.hazard_name }}</h2>
+    <p>{{ hero.status_text }}</p>
+  </div>
+  {% if hero.tips %}
+  <div class="action-label">What to do now</div>
+  <ul class="action-list">
+    {% for tip in hero.tips %}<li>{{ tip }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% else %}
+  <div class="hero clear">
+    <div class="country">{{ country_name }}</div>
+    <span class="hero-badge"><span class="dot"></span> All clear</span>
+    <h2>No active hazards</h2>
+    <p>Conditions are currently calm. Monitored hazards for this area are shown below.</p>
+  </div>
+  {% endif %}
+
+  {% if regional_advisories %}
+  <div class="advisory-note">
+    <strong>Regional watch:</strong>
+    {% for adv in regional_advisories %}{{ adv.hazard_name }}{{ ", " if not loop.last }}{% endfor %}
+    condition{{ 's' if regional_advisories | length != 1 }} active in the wider region, not yet localised to a specific country.
+  </div>
+  {% endif %}
+
+  {% if hazard_cards %}
+  <div class="section-label">Other conditions</div>
+  <div class="hazard-grid">
+    {% for card in hazard_cards %}
+    <div class="hazard-card">
+      <div class="hazard-top">
+        <span class="hazard-name">{{ card.hazard_name }}</span>
+        <span class="chip {{ card.level }}">{{ card.level_label }}</span>
+      </div>
+      <div class="hazard-sub">{{ card.status_text }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="section-label" id="map">Map</div>
+  <div id="status-map"></div>
+  {% if not has_geometry %}
+  <div class="map-footnote">Detailed boundary unavailable for {{ country_name }} — showing approximate location.</div>
+  {% endif %}
+
+  <div class="section-label" id="prepare">Prepare</div>
+  <ul class="prepare-list">
+    <li>Save local emergency numbers and a family contact plan</li>
+    <li>Keep a basic emergency kit: water, torch, first aid, important documents</li>
+    <li>Know your nearest evacuation route and shelter</li>
+  </ul>
+</div>
+{% endif %}
 
 <footer>
   Powered by <strong>RIMES IBF System</strong> &nbsp;·&nbsp;
   <a href="/login">Staff login</a>
 </footer>
 
+{% if has_country %}
 <script src="/static/leaflet.js"></script>
 <script>
-const alerts = {{ alerts_json | safe }};
-
-const HAZARD_COLORS = {
-  flood:     '#3b82f6',
-  storm:     '#8b5cf6',
-  drought:   '#f59e0b',
-  landslide: '#22c55e',
-  heatwave:  '#ef4444',
-  cyclone:   '#06b6d4',
-  other:     '#6b7280',
-};
-
-const map = L.map('status-map');
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '© OpenStreetMap contributors',
-  opacity: 0.65,
+const map = L.map('status-map', { zoomControl: true });
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
 }).addTo(map);
 
-if (alerts.length) {
-  const bounds = [];
-  alerts.forEach(a => {
-    const color = HAZARD_COLORS[a.hazard_type] || HAZARD_COLORS.other;
-    const rect = L.rectangle(
-      [[a.lat_min, a.lon_min], [a.lat_max, a.lon_max]],
-      { color, weight: 2, fillColor: color, fillOpacity: 0.3 }
-    );
-    const latRange = `${a.lat_min}°–${a.lat_max}°N`;
-    const lonRange = `${a.lon_min}°–${a.lon_max}°E`;
-    rect.bindPopup(`
-      <div style="font-family:system-ui;min-width:180px;">
-        <div style="font-weight:700;text-transform:capitalize;margin-bottom:.3rem;">
-          ${a.hazard_type} alert
-        </div>
-        <div style="font-size:.82rem;color:#6b7280;">${latRange}, ${lonRange}</div>
-        <div style="font-size:.78rem;color:#9ca3af;margin-top:.3rem;">Since ${a.triggered_at}</div>
-      </div>`);
-    rect.addTo(map);
-    bounds.push([a.lat_min, a.lon_min]);
-    bounds.push([a.lat_max, a.lon_max]);
-  });
-  map.fitBounds(bounds, { padding: [40, 40] });
+map.createPane('adminBoundaries');
+map.getPane('adminBoundaries').style.zIndex = 350;
 
-  // Render alert cards
-  const container = document.getElementById('alert-cards');
-  if (container) {
-    alerts.forEach(a => {
-      const color = HAZARD_COLORS[a.hazard_type] || HAZARD_COLORS.other;
-      const card = document.createElement('div');
-      card.className = `alert-card hazard-${a.hazard_type}`;
-      card.innerHTML = `
-        <div class="hazard">${a.hazard_type}</div>
-        <div class="region">${a.lat_min}°–${a.lat_max}°N, ${a.lon_min}°–${a.lon_max}°E</div>
-        <div class="since">Active since ${a.triggered_at}</div>`;
-      container.appendChild(card);
-    });
+const countryName = {{ country_name | tojson }};
+const fallbackCentroid = {{ fallback_centroid_json | safe }};
+let fitted = false;
+
+fetch('/static/countries.geojson').then(r => r.json()).then(function(gj) {
+  L.geoJSON(gj, { style: { color: '#333', weight: 1, fillOpacity: 0 }, pane: 'adminBoundaries',
+    onEachFeature: function(feat, layer) { layer.bindTooltip(feat.properties.name, {sticky: true}); }
+  }).addTo(map);
+
+  const mine = gj.features.find(f => f.properties.name === countryName);
+  if (mine) {
+    const highlight = L.geoJSON(mine, { style: { color: '#0f6e7a', weight: 2.5, fillColor: '#0f6e7a', fillOpacity: 0.08 } }).addTo(map);
+    map.fitBounds(highlight.getBounds(), { padding: [20, 20] });
+    fitted = true;
+  } else if (fallbackCentroid) {
+    L.marker(fallbackCentroid).addTo(map).bindPopup(countryName);
+    map.setView(fallbackCentroid, 7);
+    fitted = true;
   }
+  if (!fitted) map.setView([10, 10], 2);
+}).catch(function() {
+  if (fallbackCentroid) { map.setView(fallbackCentroid, 7); } else { map.setView([10, 10], 2); }
+});
 
-  // Legend
-  const legend = L.control({ position: 'bottomright' });
-  legend.onAdd = () => {
-    const div = L.DomUtil.create('div', 'legend-panel');
-    const hazards = [...new Set(alerts.map(a => a.hazard_type))];
-    div.innerHTML = '<div class="legend-title">Hazard</div>' +
-      hazards.map(h =>
-        `<div class="legend-item">
-          <div class="legend-swatch" style="background:${HAZARD_COLORS[h]||'#6b7280'};opacity:.7;"></div>
-          <span style="text-transform:capitalize;">${h}</span>
-        </div>`).join('');
-    return div;
-  };
-  legend.addTo(map);
-} else {
-  map.setView([20, 90], 4);
-}
+fetch('/static/admin1_states.geojson').then(r => r.json()).then(function(gj) {
+  L.geoJSON(gj, { style: { color: '#888', weight: 0.5, dashArray: '3 3', fillOpacity: 0 }, pane: 'adminBoundaries',
+    onEachFeature: function(feat, layer) { layer.bindTooltip(feat.properties.name + ', ' + feat.properties.admin, {sticky: true}); }
+  }).addTo(map);
+}).catch(function(){});
 </script>
+{% endif %}
 </body>
 </html>
