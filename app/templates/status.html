@@ -644,7 +644,10 @@ function initMap() {
       }).addTo(map);
       map.fitBounds(hl.getBounds(), { padding: [16, 16] });
     } else if (fallbackCentroid) {
-      L.marker(fallbackCentroid).addTo(map).bindPopup(countryName);
+      L.circleMarker(fallbackCentroid, {
+        radius: 9, color: '#0a6b76', weight: 2.5,
+        fillColor: '#0a6b76', fillOpacity: 0.25,
+      }).addTo(map).bindPopup(countryName);
       map.setView(fallbackCentroid, 6);
     } else {
       map.setView([10, 85], 3);
