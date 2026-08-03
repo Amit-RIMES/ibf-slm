@@ -314,7 +314,8 @@ async def public_status(
     )).scalars().all()
 
     spi_row = (await db.execute(
-        select(SPIRecord).where(SPIRecord.timescale == 3)
+        select(SPIRecord)
+        .where(SPIRecord.timescale == 3, SPIRecord.spi_value.is_not(None))
         .order_by(SPIRecord.year.desc(), SPIRecord.month.desc()).limit(1)
     )).scalar_one_or_none()
 
@@ -358,6 +359,30 @@ async def public_status(
             "status_text": copy["status_text"].get(hazard_type, {}).get(info["level"], ""),
             "tips": copy["action_tips"].get(hazard_type, []),
         })
+
+    # Supplement drought from SPI when no trigger-based drought card exists
+    if spi_row and spi_row.spi_value is not None:
+        spi_val = spi_row.spi_value
+        if spi_val < -2.0:
+            spi_drought_level: str | None = "extreme"
+        elif spi_val < -1.5:
+            spi_drought_level = "high"
+        elif spi_val < -1.0:
+            spi_drought_level = "moderate"
+        else:
+            spi_drought_level = None
+        if spi_drought_level and not any(c["hazard_type"] == "drought" for c in hazard_cards):
+            hazard_cards.append({
+                "hazard_type": "drought",
+                "hazard_name": copy["hazard_names"].get("drought", "Drought"),
+                "level": spi_drought_level,
+                "level_label": copy["risk_labels"][spi_drought_level],
+                "color": _RISK_COLORS[spi_drought_level],
+                "status_text": copy["status_text"].get("drought", {}).get(spi_drought_level, ""),
+                "tips": copy["action_tips"].get("drought", []),
+                "spi_derived": True,
+            })
+
     hazard_cards.sort(key=lambda c: _RISK_ORDER[c["level"]], reverse=True)
 
     hero = hazard_cards[0] if hazard_cards and _RISK_ORDER[hazard_cards[0]["level"]] > 0 else None

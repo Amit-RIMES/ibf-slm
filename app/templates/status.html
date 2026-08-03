@@ -537,7 +537,7 @@
         <svg class="hero-deco" viewBox="0 0 24 24"><path d="M2 15c1.5 1.2 3 1.2 4.5 0s3-1.2 4.5 0 3 1.2 4.5 0 3-1.2 4.5 0"/><path d="M2 19c1.5 1.2 3 1.2 4.5 0s3-1.2 4.5 0 3 1.2 4.5 0 3-1.2 4.5 0"/><path d="M12 2v9M8 7l4 4 4-4"/></svg>
         <span class="risk-badge"><span class="dot"></span> {{ hero.level_label }} {{ copy.ui.risk_suffix }}</span>
         <div class="hero-hazard">{{ hero.hazard_name }}</div>
-        <div class="hero-text">{{ hero.status_text }}</div>
+        <div class="hero-text">{% if hero.spi_derived %}SPI-3: {{ spi_data.value }} — {{ spi_data.label }}{% else %}{{ hero.status_text }}{% endif %}</div>
         <div class="hero-updated">{{ country_name }} · {{ updated_at }}</div>
       </div>
 
@@ -583,7 +583,7 @@
             <span class="level-chip level-{{ card.level }}">{{ card.level_label }}</span>
           </div>
           <div class="hazard-name">{{ card.hazard_name }}</div>
-          <div class="hazard-sub">{{ card.status_text }}</div>
+          <div class="hazard-sub">{% if card.spi_derived %}SPI-3: {{ spi_data.value }} ({{ spi_data.label }}){% else %}{{ card.status_text }}{% endif %}</div>
         </div>
         {% endfor %}
       </div>
