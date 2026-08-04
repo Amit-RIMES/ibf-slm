@@ -344,5 +344,5 @@ async def test_ecmwf_config_default_values(client: AsyncClient, admin_user, db: 
     assert cfg.enabled is False
     assert cfg.run_time == 0
     assert cfg.sync_hour == 10
-    assert cfg.lat_min == pytest.approx(0.0)
-    assert cfg.lat_max == pytest.approx(35.0)
+    assert cfg.lat_min == pytest.approx(-90.0)
+    assert cfg.lat_max == pytest.approx(90.0)

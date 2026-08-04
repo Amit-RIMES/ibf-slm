@@ -129,7 +129,7 @@ async def test_cds_config_default_values(client: AsyncClient, admin_user, db: As
     assert cfg.seas5_enabled is False
     assert cfg.era5_enabled is False
     assert cfg.glofas_enabled is False
-    assert cfg.lat_min == pytest.approx(0.0)
+    assert cfg.lat_min == pytest.approx(-90.0)
     assert "cds.climate.copernicus.eu" in cfg.api_url
 
 
@@ -335,7 +335,7 @@ async def test_era5_returns_empty_without_key():
 @pytest.mark.asyncio
 async def test_glofas_returns_none_without_key():
     from app.core.glofas_fetch import fetch_glofas
-    result = await fetch_glofas(api_url="http://example.com", api_key="")
+    result = await fetch_glofas(api_key="")
     assert result is None
 
 
