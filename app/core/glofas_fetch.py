@@ -146,19 +146,43 @@ def _process_glofas_nc(
         lats = lats[::-1]
         da = da.isel({lat_name: slice(None, None, -1)})
 
-    # Collapse non-spatial dims to get ensemble mean at final lead time
-    for dim in list(da.dims):
-        if dim not in (lat_name, lon_name):
-            da = da.mean(dim=dim)
-
-    # Subset to bbox
+    # Subset to bbox first (before the reduction below) so a narrower bbox
+    # also narrows the data actually read off disk.
     lat_mask = (lats >= lat_min) & (lats <= lat_max)
     lon_mask = (lons >= lon_min) & (lons <= lon_max)
-    sub = da.isel({lat_name: lat_mask, lon_name: lon_mask})
+    da = da.isel({lat_name: lat_mask, lon_name: lon_mask})
     lats_s = lats[lat_mask]
     lons_s = lons[lon_mask]
 
-    vals = sub.values
+    # Collapse non-spatial dims (ensemble members, lead-time steps, ...) to
+    # get the ensemble mean. A global-bbox GloFAS forecast is 50 members x 10
+    # lead times x a 3000x7200 grid — materializing that whole array at once
+    # (the previous `da.mean(dim=dim)` in a loop) needs ~40GB and OOMs. Instead,
+    # collapse the largest dim (the ensemble members) one index at a time —
+    # each iteration then only holds a single member's (small) slice in memory
+    # — and accumulate a running sum/count across members for the final mean.
+    collapse_dims = [d for d in da.dims if d not in (lat_name, lon_name)]
+    if not collapse_dims:
+        vals = da.values.astype(np.float64)
+    else:
+        outer_dim = max(collapse_dims, key=lambda d: da.sizes[d])
+        inner_dims = [d for d in collapse_dims if d != outer_dim]
+
+        acc_sum = np.zeros((len(lats_s), len(lons_s)), dtype=np.float64)
+        acc_count = np.zeros((len(lats_s), len(lons_s)), dtype=np.int64)
+        for i in range(da.sizes[outer_dim]):
+            member = da.isel({outer_dim: i})
+            for d in inner_dims:
+                member = member.mean(dim=d)
+            member_vals = member.values.astype(np.float64)
+            valid = ~np.isnan(member_vals)
+            acc_sum[valid] += member_vals[valid]
+            acc_count[valid] += 1
+
+        with np.errstate(invalid="ignore", divide="ignore"):
+            vals = acc_sum / acc_count
+        vals[acc_count == 0] = np.nan
+
     flat = vals.flatten().astype(float)
     flat_valid = flat[~np.isnan(flat) & (flat >= 0)]
 
